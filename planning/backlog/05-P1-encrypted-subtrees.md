@@ -99,3 +99,22 @@ On collapse or save, the plaintext is re-encrypted and `items` cleared from JSON
 - Consider: what happens if user forgets password? Data is lost. Document this clearly.
 - The encrypted blob should include a version tag for future algorithm changes
 - Test with large subtrees to ensure performance is acceptable
+
+### Markdown Conversion Safety
+
+Collapse/expand and export MUST be blocked when encryption is involved:
+
+| Operation | On encrypted node | On descendant of encrypted | On ancestor of encrypted |
+|-----------|-------------------|---------------------------|--------------------------|
+| `:collapse` | REFUSE | REFUSE | REFUSE |
+| `:expand` | REFUSE | REFUSE | REFUSE |
+| `:export md` | REFUSE | REFUSE | REFUSE |
+| `:import md` | ALLOW (content joins encrypted payload) | ALLOW | ALLOW |
+
+Rationale: Converting to markdown would expose plaintext that encryption
+is meant to protect. Even if the node itself isn't encrypted, its ancestor's
+encryption implies the content should stay within the encrypted boundary.
+
+Implementation: Before any collapse/expand/export, walk up the tree to check
+for encrypted ancestors, and walk down to check for encrypted descendants.
+If any are found, refuse with a clear error message.
