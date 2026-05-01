@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+echo "=== pre-commit: fmt ==="
+cargo fmt --all -- --check
+
+echo "=== pre-commit: clippy ==="
+cargo clippy --workspace --all-targets -- -D warnings
+
+echo "=== pre-commit: test ==="
+cargo test --workspace --quiet
+
+echo "=== pre-commit: OK ==="
