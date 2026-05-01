@@ -218,6 +218,9 @@ impl App {
                     self.cursor = pos;
                     self.note_scroll = 0;
                 }
+            } else if let Some(pos) = self.rows.iter().position(|r| r.file_index == fi && r.is_file_root) {
+                self.cursor = pos;
+                self.note_scroll = 0;
             }
         }
     }

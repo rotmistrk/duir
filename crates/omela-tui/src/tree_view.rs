@@ -101,17 +101,30 @@ impl StatefulWidget for TreeView<'_> {
                 style = style.add_modifier(Modifier::BOLD);
             }
 
-            if is_selected {
-                style = style.add_modifier(Modifier::REVERSED);
-            }
+            let sel_style = if is_selected {
+                style.add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default().add_modifier(Modifier::DIM)
+            };
 
             let line = Line::from(vec![
-                Span::raw(format!("{indent}{arrow}{checkbox}")),
-                Span::styled(title, style),
                 Span::styled(
-                    format!("{stats_label}{imp}"),
-                    Style::default().add_modifier(Modifier::DIM),
+                    format!("{indent}{arrow}{checkbox}"),
+                    if is_selected {
+                        Style::default().add_modifier(Modifier::REVERSED)
+                    } else {
+                        Style::default()
+                    },
                 ),
+                Span::styled(
+                    title,
+                    if is_selected {
+                        style.add_modifier(Modifier::REVERSED)
+                    } else {
+                        style
+                    },
+                ),
+                Span::styled(format!("{stats_label}{imp}"), sel_style),
             ]);
 
             let width = inner.width as usize;
