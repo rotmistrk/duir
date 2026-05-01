@@ -87,7 +87,7 @@ fn main() -> io::Result<()> {
     }
 
     // Initialize editor for the first item
-    app.sync_editor();
+    app.load_editor();
 
     if first_run {
         app.show_about = true;
@@ -258,7 +258,7 @@ fn run_loop(
 
         // Autosave tick — flush editor first so model is current
         if app.files.iter().any(|f| f.autosave && f.modified) {
-            app.flush_editor();
+            app.save_editor();
             if let Ok(storage) = FileStorage::new(storage_dir) {
                 app.save_all(&storage);
             }

@@ -235,58 +235,39 @@ impl App {
         })
     }
 
-    /// Flush current editor content to the model without switching editors.
-    pub fn flush_editor(&mut self) {
+    /// Write editor content back to the model. Called on:
+    /// 1. Tab back to tree (focus change)
+    /// 2. Before file save (:w, :wa, autosave)
+    ///
+    /// This is the ONLY place editor->model sync happens.
+    pub fn save_editor(&mut self) {
         if let Some(editor) = &self.editor {
             let content = editor.content();
             let fi = self.editor_file_index;
             let path = self.editor_path.clone();
             if path.is_empty() {
-                if fi < self.files.len() {
+                if fi < self.files.len() && self.files[fi].data.note != content {
                     self.files[fi].data.note = content;
+                    self.files[fi].modified = true;
                 }
             } else if fi < self.files.len()
                 && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+                && item.note != content
             {
                 item.note = content;
+                self.files[fi].modified = true;
             }
         }
     }
 
-    /// Save editor content back to the model, then load the new item's note.
-    pub fn sync_editor(&mut self) {
-        // Save current editor content and cache its state
-        if let Some(mut editor) = self.editor.take() {
-            if editor.dirty {
-                let content = editor.content();
-                let fi = self.editor_file_index;
-                let path = self.editor_path.clone();
-                if path.is_empty() {
-                    if fi < self.files.len() {
-                        self.files[fi].data.note = content;
-                        self.files[fi].modified = true;
-                    }
-                } else if fi < self.files.len()
-                    && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
-                {
-                    item.note = content;
-                    self.files[fi].modified = true;
-                }
-                editor.dirty = false;
-            }
-            // Cache editor state (preserves undo history, cursor, etc.)
-            let key = (self.editor_file_index, self.editor_path.clone());
-            self.editor_cache.insert(key, editor);
-        }
-
-        // Load or restore editor for new item
+    /// Load the current item's note into the editor. Called on:
+    /// 1. Tab into note pane (focus change)
+    /// 2. After commands that modify the note (:collapse, :expand)
+    pub fn load_editor(&mut self) {
+        self.editor_cache.clear();
         if let Some(row) = self.current_row().cloned() {
-            let key = (row.file_index, row.path.clone());
-            let editor = self.editor_cache.remove(&key).unwrap_or_else(|| {
-                let note = self.current_note();
-                crate::note_editor::NoteEditor::new(&note)
-            });
-            self.editor = Some(editor);
+            let note = self.current_note();
+            self.editor = Some(crate::note_editor::NoteEditor::new(&note));
             self.editor_file_index = row.file_index;
             self.editor_path = row.path;
         } else {
@@ -302,22 +283,19 @@ impl App {
         {
             self.cursor = pos;
             self.note_scroll = 0;
-            self.sync_editor();
         }
     }
-    pub fn move_up(&mut self) {
+    pub const fn move_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
             self.note_scroll = 0;
-            self.sync_editor();
         }
     }
 
-    pub fn move_down(&mut self) {
+    pub const fn move_down(&mut self) {
         if self.cursor + 1 < self.rows.len() {
             self.cursor += 1;
             self.note_scroll = 0;
-            self.sync_editor();
         }
     }
 
@@ -664,7 +642,6 @@ impl App {
     /// Execute a `:` command. Returns an optional path for file operations.
     pub fn execute_command(&mut self, storage: &dyn duir_core::TodoStorage) {
         // Flush editor content to model before any command
-        self.flush_editor();
 
         let cmd = self.command_buffer.trim().to_owned();
         self.command_active = false;
@@ -947,7 +924,7 @@ impl App {
                 item.items.clear();
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.sync_editor();
+                self.load_editor();
                 "Children collapsed to note".clone_into(&mut self.status_message);
             }
         }
@@ -983,7 +960,7 @@ impl App {
                 item.folded = false;
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.sync_editor();
+                self.load_editor();
                 "Note expanded to children".clone_into(&mut self.status_message);
             }
         }
