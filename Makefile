@@ -6,7 +6,7 @@ build:
 	cargo build --workspace --release
 
 run:
-	cargo run -p omela-tui --release
+	cargo run -p duir-tui --release
 
 check: fmt clippy test
 
@@ -23,4 +23,4 @@ clean:
 	cargo clean
 
 install:
-	cargo install --path crates/omela-tui
+	cargo install --path crates/duir-tui

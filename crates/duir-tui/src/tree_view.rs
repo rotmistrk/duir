@@ -1,4 +1,4 @@
-use omela_core::Completion;
+use duir_core::Completion;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};

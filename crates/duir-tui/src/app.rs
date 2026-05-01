@@ -1,6 +1,6 @@
-use omela_core::stats::compute_stats;
-use omela_core::tree_ops::TreePath;
-use omela_core::{Completion, TodoFile, TodoItem};
+use duir_core::stats::compute_stats;
+use duir_core::tree_ops::TreePath;
+use duir_core::{Completion, TodoFile, TodoItem};
 
 /// A flattened row in the tree view, used for rendering and navigation.
 #[derive(Debug, Clone)]
@@ -55,7 +55,7 @@ pub struct App {
     pub autosave_global: bool,
     pub editor: Option<crate::note_editor::NoteEditor<'static>>,
     pub editor_file_index: usize,
-    pub editor_path: omela_core::tree_ops::TreePath,
+    pub editor_path: duir_core::tree_ops::TreePath,
     pub command_history: Vec<String>,
     pub command_history_index: Option<usize>,
     pub note_panel_pct: u16,
@@ -187,7 +187,7 @@ impl App {
         if row.is_file_root {
             return None;
         }
-        omela_core::tree_ops::get_item(&self.files[row.file_index].data, &row.path)
+        duir_core::tree_ops::get_item(&self.files[row.file_index].data, &row.path)
     }
 
     /// Get the current note text.
@@ -218,7 +218,7 @@ impl App {
                         self.files[fi].modified = true;
                     }
                 } else if fi < self.files.len()
-                    && let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+                    && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 {
                     item.note = content;
                     self.files[fi].modified = true;
@@ -279,7 +279,7 @@ impl App {
             }
             let fi = row.file_index;
             let path = row.path.clone();
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 && !item.folded
                 && !item.items.is_empty()
             {
@@ -312,7 +312,7 @@ impl App {
             }
             let fi = row.file_index;
             let path = row.path.clone();
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 && item.folded
                 && !item.items.is_empty()
             {
@@ -329,7 +329,7 @@ impl App {
             }
             let fi = row.file_index;
             let path = row.path.clone();
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
                 item.completed = match item.completed {
                     Completion::Done => Completion::Open,
                     _ => Completion::Done,
@@ -337,7 +337,7 @@ impl App {
             }
             self.files[fi].modified = true;
             for item in &mut self.files[fi].data.items {
-                omela_core::stats::update_completion(item);
+                duir_core::stats::update_completion(item);
             }
             self.rebuild_rows();
         }
@@ -350,7 +350,7 @@ impl App {
             }
             let fi = row.file_index;
             let path = row.path.clone();
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
                 item.important = !item.important;
             }
             self.files[fi].modified = true;
@@ -370,7 +370,7 @@ impl App {
                 *last += 1;
             }
             let new_item = TodoItem::new("<new task>");
-            if omela_core::tree_ops::add_sibling(&mut self.files[fi].data, &row.path, new_item).is_ok() {
+            if duir_core::tree_ops::add_sibling(&mut self.files[fi].data, &row.path, new_item).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 self.navigate_to(fi, &new_path);
@@ -393,12 +393,12 @@ impl App {
             }
             // New child path: current path + last child index
             let child_idx =
-                omela_core::tree_ops::get_item(&self.files[fi].data, &row.path).map_or(0, |item| item.items.len());
+                duir_core::tree_ops::get_item(&self.files[fi].data, &row.path).map_or(0, |item| item.items.len());
             let mut new_path = row.path.clone();
             new_path.push(child_idx);
             let new_item = TodoItem::new("<new task>");
-            if omela_core::tree_ops::add_child(&mut self.files[fi].data, &row.path, new_item).is_ok() {
-                if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+            if duir_core::tree_ops::add_child(&mut self.files[fi].data, &row.path, new_item).is_ok() {
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                     item.folded = false;
                 }
                 self.files[fi].modified = true;
@@ -416,7 +416,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if omela_core::tree_ops::remove_item(&mut self.files[fi].data, &row.path).is_ok() {
+            if duir_core::tree_ops::remove_item(&mut self.files[fi].data, &row.path).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
             }
@@ -429,7 +429,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Ok(new_path) = omela_core::tree_ops::swap_up(&mut self.files[fi].data, &row.path) {
+            if let Ok(new_path) = duir_core::tree_ops::swap_up(&mut self.files[fi].data, &row.path) {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 // Find new position
@@ -450,7 +450,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Ok(new_path) = omela_core::tree_ops::swap_down(&mut self.files[fi].data, &row.path) {
+            if let Ok(new_path) = duir_core::tree_ops::swap_down(&mut self.files[fi].data, &row.path) {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 if let Some(pos) = self
@@ -470,7 +470,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Ok(new_path) = omela_core::tree_ops::promote(&mut self.files[fi].data, &row.path) {
+            if let Ok(new_path) = duir_core::tree_ops::promote(&mut self.files[fi].data, &row.path) {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 if let Some(pos) = self
@@ -490,7 +490,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Ok(new_path) = omela_core::tree_ops::demote(&mut self.files[fi].data, &row.path) {
+            if let Ok(new_path) = duir_core::tree_ops::demote(&mut self.files[fi].data, &row.path) {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 if let Some(pos) = self
@@ -510,7 +510,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if omela_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
+            if duir_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
             }
@@ -528,7 +528,7 @@ impl App {
             if let Some(last) = new_path.last_mut() {
                 *last += 1;
             }
-            if omela_core::tree_ops::clone_subtree(&mut self.files[fi].data, &row.path).is_ok() {
+            if duir_core::tree_ops::clone_subtree(&mut self.files[fi].data, &row.path).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 self.navigate_to(fi, &new_path);
@@ -557,7 +557,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path)
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path)
                 && item.title != self.edit_buffer
             {
                 item.title.clone_from(&self.edit_buffer);
@@ -573,7 +573,7 @@ impl App {
     }
 
     /// Execute a `:` command. Returns an optional path for file operations.
-    pub fn execute_command(&mut self, storage: &dyn omela_core::TodoStorage) {
+    pub fn execute_command(&mut self, storage: &dyn duir_core::TodoStorage) {
         let cmd = self.command_buffer.trim().to_owned();
         self.command_active = false;
         self.command_buffer.clear();
@@ -607,13 +607,44 @@ impl App {
             "collapse" => self.cmd_collapse(),
             "expand" => self.cmd_expand(),
             "autosave" => self.cmd_autosave(&parts),
+            "init" => {
+                let config = duir_core::config::Config::load();
+                match config.init_local() {
+                    Ok(()) => "Initialized .duir/ in current directory".clone_into(&mut self.status_message),
+                    Err(e) => self.status_message = format!("Init error: {e}"),
+                }
+            }
+            "config" => {
+                if parts.get(1).copied() == Some("write") {
+                    let config = duir_core::config::Config::default();
+                    let path = if duir_core::config::Config::has_local() {
+                        std::path::PathBuf::from(".duir/config.toml")
+                    } else if let Some(d) = dirs::config_dir() {
+                        d.join("duir").join("config.toml")
+                    } else {
+                        std::path::PathBuf::from(".duir/config.toml")
+                    };
+                    match config.write_to(&path) {
+                        Ok(()) => self.status_message = format!("Config written to {}", path.display()),
+                        Err(e) => self.status_message = format!("Config error: {e}"),
+                    }
+                } else {
+                    let config = duir_core::config::Config::load();
+                    self.status_message = format!(
+                        "central={} local={} autosave={}",
+                        config.storage.central.display(),
+                        config.storage.local.display(),
+                        config.editor.autosave,
+                    );
+                }
+            }
             _ => {
                 self.status_message = format!("Unknown command: {cmd}");
             }
         }
     }
 
-    fn save_current(&mut self, storage: &dyn omela_core::TodoStorage) {
+    fn save_current(&mut self, storage: &dyn duir_core::TodoStorage) {
         if let Some(row) = self.current_row().cloned() {
             let fi = row.file_index;
             let file = &mut self.files[fi];
@@ -643,10 +674,10 @@ impl App {
         }
     }
 
-    fn open_file_path(&mut self, path_str: &str, storage: &dyn omela_core::TodoStorage) {
+    fn open_file_path(&mut self, path_str: &str, storage: &dyn duir_core::TodoStorage) {
         let path = std::path::Path::new(path_str);
         if path.exists() {
-            match omela_core::file_storage::load_path(path) {
+            match duir_core::file_storage::load_path(path) {
                 Ok(data) => {
                     let name = path
                         .file_stem()
@@ -677,11 +708,11 @@ impl App {
             return;
         }
         if let Some(item) = self.current_item() {
-            let md = omela_core::markdown_export::export_subtree(item, 3);
+            let md = duir_core::markdown_export::export_subtree(item, 3);
             let path = if let Some(&fname) = parts.get(2) {
                 std::path::PathBuf::from(fname)
             } else {
-                std::env::temp_dir().join("omela-export.md")
+                std::env::temp_dir().join("duir-export.md")
             };
             match std::fs::write(&path, &md) {
                 Ok(()) => self.status_message = format!("Exported to {}", path.display()),
@@ -701,12 +732,12 @@ impl App {
         let path = std::path::Path::new(parts[2]);
         match std::fs::read_to_string(path) {
             Ok(content) => {
-                let parsed = omela_core::markdown_import::import_markdown(&content);
+                let parsed = duir_core::markdown_import::import_markdown(&content);
                 if let Some(row) = self.rows.get(self.cursor).cloned() {
                     let fi = row.file_index;
                     if row.is_file_root {
                         self.files[fi].data.items.extend(parsed.items);
-                    } else if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+                    } else if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                         item.items.extend(parsed.items);
                         item.folded = false;
                     }
@@ -728,7 +759,7 @@ impl App {
         let path = std::path::Path::new(parts[2]);
         match std::fs::read_to_string(path) {
             Ok(content) => {
-                let parsed = omela_core::markdown_import::import_markdown(&content);
+                let parsed = duir_core::markdown_import::import_markdown(&content);
                 let name = path
                     .file_stem()
                     .and_then(|s| s.to_str())
@@ -748,7 +779,7 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                 if item.items.is_empty() {
                     "No children to collapse".clone_into(&mut self.status_message);
                     return;
@@ -756,7 +787,7 @@ impl App {
                 // Export children as markdown, append to note
                 let mut md = String::new();
                 for child in &item.items {
-                    md.push_str(&omela_core::markdown_export::export_subtree(child, 3));
+                    md.push_str(&duir_core::markdown_export::export_subtree(child, 3));
                 }
                 if !item.note.is_empty() {
                     item.note.push_str("\n\n");
@@ -777,12 +808,12 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                 if item.note.trim().is_empty() {
                     "No note to expand".clone_into(&mut self.status_message);
                     return;
                 }
-                let parsed = omela_core::markdown_import::import_markdown(&item.note);
+                let parsed = duir_core::markdown_import::import_markdown(&item.note);
                 item.items.extend(parsed.items);
                 item.note.clear();
                 item.folded = false;
@@ -810,7 +841,7 @@ impl App {
         }
     }
 
-    pub fn save_all(&mut self, storage: &dyn omela_core::TodoStorage) {
+    pub fn save_all(&mut self, storage: &dyn duir_core::TodoStorage) {
         for file in &mut self.files {
             if file.modified {
                 match storage.save(&file.name, &file.data) {
@@ -839,13 +870,13 @@ impl App {
             self.rebuild_rows();
             return;
         }
-        let opts = omela_core::filter::FilterOptions {
+        let opts = duir_core::filter::FilterOptions {
             search_notes: true,
             case_sensitive: false,
         };
         let mut visible_count = 0usize;
         for file in &self.files {
-            let matches = omela_core::filter::filter_items(&file.data.items, &self.filter_text, &opts);
+            let matches = duir_core::filter::filter_items(&file.data.items, &self.filter_text, &opts);
             visible_count += matches.len();
         }
         self.status_message = format!(

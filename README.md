@@ -1,24 +1,21 @@
-# omela 🌿
+# duir 🌳
 
-Hierarchical todo tree manager with markdown notes.
+Hierarchical todo tree manager with markdown notes and vim-like editor.
 
-Terminal UI (TUI) application for managing nested task trees across multiple files,
-with cloud sync support.
+Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
+"druid" (oak-knower), and it sounds like "do it".
 
-Named after омела (mistletoe) — the plant that grows as a bush on tree branches,
-and the only thing that could kill the god Baldr.
-
-## Features (planned)
+## Features
 
 - Tree of tasks with checkboxes, importance flags, completion percentages
-- Markdown notes per item
+- Vim-like markdown note editor per item (visual mode, search, ex-commands, shell pipe)
 - Multiple files as top-level tree nodes
 - Move items between files
 - Filter/search across tree and notes
-- Export subtree as `.md`, import `.md` as subtree
+- Export subtree as `.md`, import `.md` as tree
 - JSON storage (YAML import/export supported)
-- S3 sync backend
-- Legacy import from Qt ToDo `.todo` XML files
+- Autosave (on by default)
+- Command mode (`:`) for file ops, export, collapse/expand
 
 ## Building
 
@@ -29,16 +26,23 @@ cargo build --release
 ## Running
 
 ```sh
-cargo run -p omela-tui
+cargo run -p duir-tui --release
 ```
+
+## Config
+
+- `$XDG_CONFIG_HOME/duir/config.toml` — global config
+- `~/.duirrc` — user shorthand
+- `.duir/config.toml` — project-local config
+- Data: `$XDG_DATA_HOME/duir/` (central), `.duir/` (local, opt-in via `:init`)
 
 ## Project Structure
 
 ```
 crates/
-  omela-core/    — data model, storage, markdown import/export
-  omela-tui/     — terminal UI (ratatui)
-planning/        — epics, stories, tasks (agent-driven development)
+  duir-core/    — data model, storage, markdown import/export
+  duir-tui/     — terminal UI (ratatui)
+planning/       — epics, stories, tasks (agent-driven development)
 ```
 
 ## License

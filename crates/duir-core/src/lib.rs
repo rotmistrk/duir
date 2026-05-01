@@ -1,3 +1,4 @@
+pub mod config;
 pub mod error;
 pub mod file_storage;
 pub mod filter;

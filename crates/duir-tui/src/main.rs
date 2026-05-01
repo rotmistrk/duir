@@ -19,14 +19,14 @@ use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
-use omela_core::{FileStorage, TodoStorage};
+use duir_core::{FileStorage, TodoStorage};
 
 use app::{App, Focus};
 use note_view::NoteView;
 use tree_view::TreeView;
 
 #[derive(Parser)]
-#[command(name = "omela", about = "Hierarchical todo tree manager")]
+#[command(name = "duir", about = "Hierarchical todo tree manager")]
 struct Cli {
     /// Directory containing .todo.json files
     #[arg(short, long)]
@@ -36,36 +36,33 @@ struct Cli {
     files: Vec<PathBuf>,
 }
 
-fn default_storage_dir(cli_dir: Option<&PathBuf>) -> PathBuf {
-    cli_dir
-        .cloned()
-        .unwrap_or_else(|| dirs::document_dir().unwrap_or_else(|| PathBuf::from(".")).join("omela"))
-}
-
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
-    let storage_dir = default_storage_dir(cli.dir.as_ref());
+    let config = duir_core::config::Config::load();
+
+    let storage_dir = cli.dir.clone().unwrap_or_else(|| config.storage.central.clone());
 
     let mut app = App::new();
+    app.autosave_global = config.editor.autosave;
+    app.note_panel_pct = config.ui.note_panel_pct;
 
     if cli.files.is_empty() {
-        match FileStorage::new(&storage_dir) {
-            Ok(storage) => match storage.list() {
-                Ok(names) => {
-                    for name in &names {
-                        match storage.load(name) {
-                            Ok(data) => app.add_file(name.clone(), data),
-                            Err(e) => eprintln!("Error loading {name}: {e}"),
-                        }
+        // Load from all configured storage dirs
+        for dir in &config.storage_dirs() {
+            if let Ok(storage) = FileStorage::new(dir)
+                && let Ok(names) = storage.list()
+            {
+                for name in &names {
+                    match storage.load(name) {
+                        Ok(data) => app.add_file(name.clone(), data),
+                        Err(e) => eprintln!("Error loading {name}: {e}"),
                     }
                 }
-                Err(e) => eprintln!("Error listing files: {e}"),
-            },
-            Err(e) => eprintln!("Error opening directory: {e}"),
+            }
         }
     } else {
         for path in &cli.files {
-            match omela_core::file_storage::load_path(path) {
+            match duir_core::file_storage::load_path(path) {
                 Ok(data) => {
                     let name = path
                         .file_stem()

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/omela-core", "crates/omela-tui"]
+members = ["crates/duir-core", "crates/duir-tui"]
 resolver = "2"
 
 [workspace.package]
