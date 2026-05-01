@@ -117,7 +117,10 @@ fn run_loop(
 
             let content_chunks = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                .constraints([
+                    Constraint::Percentage(100 - app.note_panel_pct),
+                    Constraint::Percentage(app.note_panel_pct),
+                ])
                 .split(main_chunks[0]);
 
             // Tree pane

@@ -133,6 +133,14 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             app.command_buffer.clear();
             true
         }
+        (KeyCode::Char(']'), false) => {
+            app.note_panel_pct = (app.note_panel_pct + 5).min(80);
+            true
+        }
+        (KeyCode::Char('['), false) => {
+            app.note_panel_pct = app.note_panel_pct.saturating_sub(5).max(20);
+            true
+        }
         (KeyCode::Char('S'), false) => {
             app.sort_children();
             true
@@ -221,21 +229,52 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Esc => {
             app.command_active = false;
             app.command_buffer.clear();
+            app.command_history_index = None;
             true
         }
         KeyCode::Enter => {
+            // Save to history before execution
+            let cmd = app.command_buffer.trim().to_owned();
+            if !cmd.is_empty() {
+                app.command_history.push(cmd);
+            }
+            app.command_history_index = None;
             // Signal that command is ready — main loop will call execute_command
+            true
+        }
+        KeyCode::Up => {
+            if !app.command_history.is_empty() {
+                let idx = app
+                    .command_history_index
+                    .map_or(app.command_history.len() - 1, |i| i.saturating_sub(1));
+                app.command_history_index = Some(idx);
+                app.command_buffer.clone_from(&app.command_history[idx]);
+            }
+            true
+        }
+        KeyCode::Down => {
+            if let Some(idx) = app.command_history_index {
+                if idx + 1 < app.command_history.len() {
+                    app.command_history_index = Some(idx + 1);
+                    app.command_buffer.clone_from(&app.command_history[idx + 1]);
+                } else {
+                    app.command_history_index = None;
+                    app.command_buffer.clear();
+                }
+            }
             true
         }
         KeyCode::Backspace => {
             if app.command_buffer.is_empty() {
                 app.command_active = false;
+                app.command_history_index = None;
             } else {
                 app.command_buffer.pop();
             }
             true
         }
         KeyCode::Char(c) => {
+            app.command_history_index = None;
             app.command_buffer.push(c);
             true
         }

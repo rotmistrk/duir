@@ -56,11 +56,15 @@ pub struct App {
     pub editor: Option<crate::note_editor::NoteEditor<'static>>,
     pub editor_file_index: usize,
     pub editor_path: omela_core::tree_ops::TreePath,
+    pub command_history: Vec<String>,
+    pub command_history_index: Option<usize>,
+    pub note_panel_pct: u16,
+    pub editor_cache: std::collections::HashMap<(usize, Vec<usize>), crate::note_editor::NoteEditor<'static>>,
 }
 
 impl App {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             files: Vec::new(),
             rows: Vec::new(),
@@ -81,6 +85,10 @@ impl App {
             editor: None,
             editor_file_index: 0,
             editor_path: vec![],
+            command_history: Vec::new(),
+            command_history_index: None,
+            note_panel_pct: 50,
+            editor_cache: std::collections::HashMap::new(),
         }
     }
 
@@ -198,30 +206,38 @@ impl App {
 
     /// Save editor content back to the model, then load the new item's note.
     pub fn sync_editor(&mut self) {
-        // Save current editor content back
-        if let Some(editor) = &self.editor
-            && editor.dirty
-        {
-            let content = editor.content();
-            let fi = self.editor_file_index;
-            let path = self.editor_path.clone();
-            if path.is_empty() {
-                if fi < self.files.len() {
-                    self.files[fi].data.note = content;
+        // Save current editor content and cache its state
+        if let Some(mut editor) = self.editor.take() {
+            if editor.dirty {
+                let content = editor.content();
+                let fi = self.editor_file_index;
+                let path = self.editor_path.clone();
+                if path.is_empty() {
+                    if fi < self.files.len() {
+                        self.files[fi].data.note = content;
+                        self.files[fi].modified = true;
+                    }
+                } else if fi < self.files.len()
+                    && let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+                {
+                    item.note = content;
                     self.files[fi].modified = true;
                 }
-            } else if fi < self.files.len()
-                && let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
-            {
-                item.note = content;
-                self.files[fi].modified = true;
+                editor.dirty = false;
             }
+            // Cache editor state (preserves undo history, cursor, etc.)
+            let key = (self.editor_file_index, self.editor_path.clone());
+            self.editor_cache.insert(key, editor);
         }
 
-        // Load new item's note
+        // Load or restore editor for new item
         if let Some(row) = self.current_row().cloned() {
-            let note = self.current_note();
-            self.editor = Some(crate::note_editor::NoteEditor::new(&note));
+            let key = (row.file_index, row.path.clone());
+            let editor = self.editor_cache.remove(&key).unwrap_or_else(|| {
+                let note = self.current_note();
+                crate::note_editor::NoteEditor::new(&note)
+            });
+            self.editor = Some(editor);
             self.editor_file_index = row.file_index;
             self.editor_path = row.path;
         } else {
@@ -586,6 +602,8 @@ impl App {
                 }
             }
             "export" => self.cmd_export(&parts),
+            "import" => self.cmd_import(&parts),
+            "open" => self.cmd_open_md(&parts),
             "collapse" => self.cmd_collapse(),
             "expand" => self.cmd_expand(),
             "autosave" => self.cmd_autosave(&parts),
@@ -653,21 +671,73 @@ impl App {
     }
 
     fn cmd_export(&mut self, parts: &[&str]) {
-        if parts.get(1).copied() != Some("md") {
-            "Usage: :export md".clone_into(&mut self.status_message);
+        // :export md [filename]
+        if parts.len() < 2 {
+            "Usage: :export md [file.md]".clone_into(&mut self.status_message);
             return;
         }
         if let Some(item) = self.current_item() {
             let md = omela_core::markdown_export::export_subtree(item, 3);
-            // Store in clipboard-like status for now; in future write to file
-            self.status_message = format!("Exported {} lines", md.lines().count());
-            // Write to a temp location
-            let path = std::env::temp_dir().join("omela-export.md");
-            if std::fs::write(&path, &md).is_ok() {
-                self.status_message = format!("Exported to {}", path.display());
+            let path = if let Some(&fname) = parts.get(2) {
+                std::path::PathBuf::from(fname)
+            } else {
+                std::env::temp_dir().join("omela-export.md")
+            };
+            match std::fs::write(&path, &md) {
+                Ok(()) => self.status_message = format!("Exported to {}", path.display()),
+                Err(e) => self.status_message = format!("Export error: {e}"),
             }
         } else {
             "No item selected".clone_into(&mut self.status_message);
+        }
+    }
+
+    fn cmd_import(&mut self, parts: &[&str]) {
+        // :import md <file.md> — import as children of current item
+        if parts.len() < 3 || parts[1] != "md" {
+            "Usage: :import md <file.md>".clone_into(&mut self.status_message);
+            return;
+        }
+        let path = std::path::Path::new(parts[2]);
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                let parsed = omela_core::markdown_import::import_markdown(&content);
+                if let Some(row) = self.rows.get(self.cursor).cloned() {
+                    let fi = row.file_index;
+                    if row.is_file_root {
+                        self.files[fi].data.items.extend(parsed.items);
+                    } else if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+                        item.items.extend(parsed.items);
+                        item.folded = false;
+                    }
+                    self.files[fi].modified = true;
+                    self.rebuild_rows();
+                    self.status_message = format!("Imported {}", path.display());
+                }
+            }
+            Err(e) => self.status_message = format!("Import error: {e}"),
+        }
+    }
+
+    fn cmd_open_md(&mut self, parts: &[&str]) {
+        // :open md <file.md> — open markdown as new top-level tree
+        if parts.len() < 3 || parts[1] != "md" {
+            "Usage: :open md <file.md>".clone_into(&mut self.status_message);
+            return;
+        }
+        let path = std::path::Path::new(parts[2]);
+        match std::fs::read_to_string(path) {
+            Ok(content) => {
+                let parsed = omela_core::markdown_import::import_markdown(&content);
+                let name = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("imported")
+                    .to_owned();
+                self.add_file(name.clone(), parsed);
+                self.status_message = format!("Opened {name} as tree");
+            }
+            Err(e) => self.status_message = format!("Open error: {e}"),
         }
     }
 

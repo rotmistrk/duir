@@ -563,6 +563,14 @@ impl NoteEditor<'_> {
             return;
         }
 
+        // Standalone !command (no range) — insert output at cursor
+        if let Some(shell_cmd) = cmd.strip_prefix('!')
+            && !shell_cmd.is_empty()
+        {
+            self.insert_shell_output(shell_cmd);
+            return;
+        }
+
         // Parse range + command
         let total_lines = self.textarea.lines().len();
         let (row, _) = self.textarea.cursor();
@@ -696,6 +704,20 @@ impl NoteEditor<'_> {
         self.status = format!("{count} substitution(s)");
     }
 
+    fn insert_shell_output(&mut self, command: &str) {
+        match std::process::Command::new("sh").arg("-c").arg(command).output() {
+            Ok(out) => {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    self.textarea.insert_str(line);
+                    self.textarea.insert_newline();
+                }
+                self.dirty = true;
+                self.status = format!("!{command}: {} line(s)", text.lines().count());
+            }
+            Err(e) => self.status = format!("Shell error: {e}"),
+        }
+    }
     fn ex_shell(&mut self, start: usize, end: usize, command: &str) {
         let lines = self.textarea.lines().to_vec();
         let total = lines.len();
