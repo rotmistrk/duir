@@ -22,8 +22,9 @@ test:
 clean:
 	cargo clean
 
-install:
-	cargo install --path crates/duir-tui
+install: build
+	sudo install -m 755 target/release/duir-tui /usr/local/bin/duir
+	@echo "Installed to /usr/local/bin/duir"
 
 install-local: build
 	mkdir -p ~/.local/bin
