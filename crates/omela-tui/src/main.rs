@@ -155,12 +155,31 @@ fn run_loop(
                 && key.modifiers.contains(KeyModifiers::CONTROL)
                 && !app.editing_title
                 && !app.filter_active
+                && !app.command_active
             {
                 if let Ok(storage) = FileStorage::new(storage_dir) {
                     app.save_all(&storage);
                 }
+            } else if app.command_active && key.code == KeyCode::Enter {
+                // Execute command with storage access
+                if let Ok(storage) = FileStorage::new(storage_dir) {
+                    app.execute_command(&storage);
+                }
             } else {
                 input::handle_key(app, key);
+            }
+        }
+
+        // Autosave tick
+        if let Ok(storage) = FileStorage::new(storage_dir) {
+            for file in &mut app.files {
+                if file.autosave && file.modified {
+                    if let Err(e) = storage.save(&file.name, &file.data) {
+                        app.status_message = format!("Autosave error: {e}");
+                    } else {
+                        file.modified = false;
+                    }
+                }
             }
         }
 
@@ -172,7 +191,15 @@ fn run_loop(
 }
 
 fn build_status_line(app: &App) -> Line<'_> {
-    if app.filter_active {
+    if app.command_active {
+        Line::from(vec![
+            Span::raw(":"),
+            Span::styled(
+                format!("{}▏", app.command_buffer),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ])
+    } else if app.filter_active {
         Line::from(vec![
             Span::raw("Filter: "),
             Span::styled(
@@ -211,7 +238,9 @@ fn build_status_line(app: &App) -> Line<'_> {
             Span::styled("^S", bold),
             Span::raw("ave "),
             Span::styled("Tab", bold),
-            Span::raw(" note"),
+            Span::raw(" note "),
+            Span::styled(":", bold),
+            Span::raw("cmd"),
         ];
         if !app.status_message.is_empty() {
             spans.push(Span::styled(

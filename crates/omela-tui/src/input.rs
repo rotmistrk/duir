@@ -4,6 +4,11 @@ use crate::app::{App, Focus};
 
 /// Handle a key event, returning true if the app should repaint.
 pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
+    // Command mode
+    if app.command_active {
+        return handle_command_key(app, key);
+    }
+
     // Filter mode input
     if app.filter_active {
         return handle_filter_key(app, key);
@@ -123,6 +128,11 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             app.filter_text.clear();
             true
         }
+        (KeyCode::Char(':'), false) => {
+            app.command_active = true;
+            app.command_buffer.clear();
+            true
+        }
         (KeyCode::Char('S'), false) => {
             app.sort_children();
             true
@@ -201,6 +211,34 @@ fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
         }
         KeyCode::Char(c) => {
             app.filter_text.push(c);
+            true
+        }
+        _ => false,
+    }
+}
+
+/// Returns true if the command needs storage access (`execute_command` should be called).
+fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc => {
+            app.command_active = false;
+            app.command_buffer.clear();
+            true
+        }
+        KeyCode::Enter => {
+            // Signal that command is ready — main loop will call execute_command
+            true
+        }
+        KeyCode::Backspace => {
+            if app.command_buffer.is_empty() {
+                app.command_active = false;
+            } else {
+                app.command_buffer.pop();
+            }
+            true
+        }
+        KeyCode::Char(c) => {
+            app.command_buffer.push(c);
             true
         }
         _ => false,
