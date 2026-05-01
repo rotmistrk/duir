@@ -463,12 +463,18 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            let has_children = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
-                .is_some_and(|item| !item.items.is_empty());
-            if has_children {
-                self.pending_delete = true;
-                "Node has children! Press y to confirm, any other key to cancel".clone_into(&mut self.status_message);
-                return;
+            if let Some(item) = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path) {
+                let needs_confirm = !item.items.is_empty() || item.completed != duir_core::Completion::Done;
+                if needs_confirm {
+                    self.pending_delete = true;
+                    let reason = if item.items.is_empty() {
+                        "not completed"
+                    } else {
+                        "has children"
+                    };
+                    self.status_message = format!("Task {reason}! Press y to confirm delete, any other key to cancel");
+                    return;
+                }
             }
             self.force_delete_current();
         }
