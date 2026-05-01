@@ -297,7 +297,7 @@ impl App {
     }
 
     /// Mark a file as modified and invalidate cipher caches for encrypted ancestors.
-    fn mark_modified(&mut self, fi: usize, path: &[usize]) {
+    pub(crate) fn mark_modified(&mut self, fi: usize, path: &[usize]) {
         self.files[fi].modified = true;
         for len in (1..=path.len()).rev() {
             let ancestor = &path[..len];
@@ -784,7 +784,7 @@ impl App {
         }
     }
 
-    fn close_current_file(&mut self) {
+    pub(crate) fn close_current_file(&mut self) {
         if let Some(row) = self.current_row().cloned() {
             let fi = row.file_index;
             if self.files[fi].modified {
@@ -837,7 +837,7 @@ impl App {
             "No item selected".clone_into(&mut self.status_message);
         }
     }
-    fn cmd_export(&mut self, parts: &[&str]) {
+    pub(crate) fn cmd_export(&mut self, parts: &[&str]) {
         // :export [filename] — suffix determines format (.md default)
         let Some(item) = self.current_item() else {
             "No item selected".clone_into(&mut self.status_message);
@@ -883,7 +883,7 @@ impl App {
         }
     }
 
-    fn cmd_import(&mut self, parts: &[&str]) {
+    pub(crate) fn cmd_import(&mut self, parts: &[&str]) {
         // :import md <file.md> — import as children of current item
         if parts.len() < 3 || parts[1] != "md" {
             "Usage: :import md <file.md>".clone_into(&mut self.status_message);
@@ -910,7 +910,7 @@ impl App {
         }
     }
 
-    fn cmd_open_md(&mut self, parts: &[&str]) {
+    pub(crate) fn cmd_open_md(&mut self, parts: &[&str]) {
         // :open md <file.md> — open markdown as new top-level tree
         if parts.len() < 3 || parts[1] != "md" {
             "Usage: :open md <file.md>".clone_into(&mut self.status_message);
@@ -1119,7 +1119,7 @@ impl App {
         }
     }
 
-    fn cmd_autosave(&mut self, parts: &[&str]) {
+    pub(crate) fn cmd_autosave(&mut self, parts: &[&str]) {
         if parts.get(1).copied() == Some("all") {
             self.autosave_global = !self.autosave_global;
             for file in &mut self.files {

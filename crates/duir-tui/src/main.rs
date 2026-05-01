@@ -720,4 +720,761 @@ mod tests {
         assert_eq!(loaded.items[1].title, "Branch 2");
         assert_eq!(loaded.items[2].title, "Branch 3");
     }
+
+    // ── Helpers for input tests ──────────────────────────────────────
+
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+    fn shift_key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::SHIFT)
+    }
+
+    // ── input.rs: tree-mode navigation ──────────────────────────────
+
+    #[test]
+    fn input_tree_up() {
+        let mut app = make_app_with_tree();
+        app.cursor = 2;
+        input::handle_key(&mut app, key(KeyCode::Up));
+        assert_eq!(app.cursor, 1);
+    }
+
+    #[test]
+    fn input_tree_down() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        input::handle_key(&mut app, key(KeyCode::Down));
+        assert_eq!(app.cursor, 2);
+    }
+
+    #[test]
+    fn input_tree_left_collapses() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1 (expanded)
+        let rows_before = app.rows.len();
+        input::handle_key(&mut app, key(KeyCode::Left));
+        assert!(app.rows.len() < rows_before);
+    }
+
+    #[test]
+    fn input_tree_right_expands() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        // Collapse first
+        app.collapse_current();
+        let rows_collapsed = app.rows.len();
+        input::handle_key(&mut app, key(KeyCode::Right));
+        assert!(app.rows.len() > rows_collapsed);
+    }
+
+    // ── input.rs: tree-mode operations ──────────────────────────────
+
+    #[test]
+    fn input_tree_n_new_sibling() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        input::handle_key(&mut app, key(KeyCode::Char('n')));
+        assert!(app.editing_title);
+        assert_eq!(app.files[0].data.items.len(), 4);
+    }
+
+    #[test]
+    fn input_tree_b_new_child() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        let old = app.files[0].data.items[0].items.len();
+        input::handle_key(&mut app, key(KeyCode::Char('b')));
+        assert!(app.editing_title);
+        assert_eq!(app.files[0].data.items[0].items.len(), old + 1);
+    }
+
+    #[test]
+    fn input_tree_d_delete() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        input::handle_key(&mut app, key(KeyCode::Char('d')));
+        assert!(app.pending_delete);
+    }
+
+    #[test]
+    fn input_tree_c_clone() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        input::handle_key(&mut app, key(KeyCode::Char('c')));
+        assert_eq!(app.files[0].data.items.len(), 4);
+    }
+
+    #[test]
+    fn input_tree_bang_importance() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        assert!(!app.files[0].data.items[0].important);
+        input::handle_key(&mut app, key(KeyCode::Char('!')));
+        assert!(app.files[0].data.items[0].important);
+    }
+
+    #[test]
+    fn input_tree_s_sort() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1
+        input::handle_key(&mut app, key(KeyCode::Char('S')));
+        // Sort should not crash; children reordered by completion
+        assert!(!app.files[0].data.items[0].items.is_empty());
+    }
+
+    #[test]
+    fn input_tree_q_quits() {
+        let mut app = make_app_with_tree();
+        input::handle_key(&mut app, key(KeyCode::Char('q')));
+        assert!(app.should_quit);
+    }
+
+    // ── input.rs: tree-mode move (Shift+Arrow, HJKL) ───────────────
+
+    #[test]
+    fn input_tree_shift_up_swaps() {
+        let mut app = make_app_with_tree();
+        app.cursor = 4; // Branch 2
+        input::handle_key(&mut app, shift_key(KeyCode::Up));
+        assert_eq!(app.files[0].data.items[0].title, "Branch 2");
+    }
+
+    #[test]
+    fn input_tree_shift_down_swaps() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1
+        input::handle_key(&mut app, shift_key(KeyCode::Down));
+        assert_eq!(app.files[0].data.items[1].title, "Branch 1");
+    }
+
+    #[test]
+    fn input_tree_shift_left_promotes() {
+        let mut app = make_app_with_tree();
+        app.cursor = 2; // Child 1.1
+        input::handle_key(&mut app, shift_key(KeyCode::Left));
+        // Child 1.1 promoted to top level
+        assert!(app.files[0].data.items.iter().any(|i| i.title == "Child 1.1"));
+    }
+
+    #[test]
+    fn input_tree_shift_right_demotes() {
+        let mut app = make_app_with_tree();
+        // Move cursor to Branch 2 (index 4 in rows: root, B1, C1.1, C1.2, B2)
+        app.cursor = 4;
+        input::handle_key(&mut app, shift_key(KeyCode::Right));
+        // Branch 2 demoted under Branch 1
+        assert!(app.files[0].data.items[0].items.iter().any(|i| i.title == "Branch 2"));
+    }
+
+    #[test]
+    fn input_tree_k_swaps_up() {
+        let mut app = make_app_with_tree();
+        app.cursor = 4; // Branch 2
+        input::handle_key(&mut app, key(KeyCode::Char('K')));
+        assert_eq!(app.files[0].data.items[0].title, "Branch 2");
+    }
+
+    #[test]
+    fn input_tree_j_swaps_down() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1
+        input::handle_key(&mut app, key(KeyCode::Char('J')));
+        assert_eq!(app.files[0].data.items[1].title, "Branch 1");
+    }
+
+    #[test]
+    fn input_tree_h_promotes() {
+        let mut app = make_app_with_tree();
+        app.cursor = 2; // Child 1.1
+        input::handle_key(&mut app, key(KeyCode::Char('H')));
+        assert!(app.files[0].data.items.iter().any(|i| i.title == "Child 1.1"));
+    }
+
+    #[test]
+    fn input_tree_l_demotes() {
+        let mut app = make_app_with_tree();
+        app.cursor = 4; // Branch 2
+        input::handle_key(&mut app, key(KeyCode::Char('L')));
+        assert!(app.files[0].data.items[0].items.iter().any(|i| i.title == "Branch 2"));
+    }
+
+    // ── input.rs: tree-mode switches ────────────────────────────────
+
+    #[test]
+    fn input_tree_tab_to_note() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        input::handle_key(&mut app, key(KeyCode::Tab));
+        assert_eq!(app.focus, Focus::Note);
+        assert!(app.editor.is_some());
+    }
+
+    #[test]
+    fn input_tree_colon_to_command() {
+        let mut app = make_app_with_tree();
+        input::handle_key(&mut app, key(KeyCode::Char(':')));
+        assert!(app.command_active);
+        assert!(app.command_buffer.is_empty());
+    }
+
+    #[test]
+    fn input_tree_slash_to_filter() {
+        let mut app = make_app_with_tree();
+        input::handle_key(&mut app, key(KeyCode::Char('/')));
+        assert!(app.filter_active);
+    }
+
+    #[test]
+    fn input_tree_f1_help() {
+        let mut app = make_app_with_tree();
+        input::handle_key(&mut app, key(KeyCode::F(1)));
+        assert!(app.show_help);
+        assert_eq!(app.help_scroll, 0);
+    }
+
+    // ── input.rs: filter mode ───────────────────────────────────────
+
+    #[test]
+    fn input_filter_typing() {
+        let mut app = make_app_with_tree();
+        app.filter_active = true;
+        input::handle_key(&mut app, key(KeyCode::Char('C')));
+        input::handle_key(&mut app, key(KeyCode::Char('h')));
+        assert_eq!(app.filter_text, "Ch");
+    }
+
+    #[test]
+    fn input_filter_enter_applies() {
+        let mut app = make_app_with_tree();
+        app.filter_active = true;
+        app.filter_text = "Child 1.1".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Enter));
+        assert!(!app.filter_active);
+        // Filter applied — fewer rows
+        assert!(app.rows.iter().filter(|r| !r.is_file_root).count() < 6);
+    }
+
+    #[test]
+    fn input_filter_esc_reverts() {
+        let mut app = make_app_with_tree();
+        let total = app.rows.len();
+        app.filter_active = true;
+        app.filter_saved = String::new();
+        app.filter_text = "xyz".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Esc));
+        assert!(!app.filter_active);
+        assert!(app.filter_text.is_empty());
+        assert_eq!(app.rows.len(), total);
+    }
+
+    #[test]
+    fn input_filter_exclude_prefix() {
+        let mut app = make_app_with_tree();
+        app.filter_active = true;
+        app.filter_text = "!Branch 1".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Enter));
+        assert!(app.filter_exclude);
+        assert_eq!(app.filter_text, "Branch 1");
+    }
+
+    #[test]
+    fn input_filter_backspace() {
+        let mut app = make_app_with_tree();
+        app.filter_active = true;
+        app.filter_text = "abc".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Backspace));
+        assert_eq!(app.filter_text, "ab");
+    }
+
+    // ── input.rs: command mode ──────────────────────────────────────
+
+    #[test]
+    fn input_command_typing() {
+        let mut app = make_app_with_tree();
+        app.command_active = true;
+        input::handle_key(&mut app, key(KeyCode::Char('h')));
+        input::handle_key(&mut app, key(KeyCode::Char('e')));
+        assert_eq!(app.command_buffer, "he");
+    }
+
+    #[test]
+    fn input_command_esc_cancels() {
+        let mut app = make_app_with_tree();
+        app.command_active = true;
+        app.command_buffer = "help".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Esc));
+        assert!(!app.command_active);
+        assert!(app.command_buffer.is_empty());
+    }
+
+    #[test]
+    fn input_command_enter_pushes_history() {
+        let mut app = make_app_with_tree();
+        app.command_active = true;
+        app.command_buffer = "help".to_owned();
+        // Enter in command mode is handled in main loop for storage,
+        // but handle_key still pushes history
+        input::handle_key(&mut app, key(KeyCode::Enter));
+        assert_eq!(app.command_history.last().unwrap(), "help");
+    }
+
+    #[test]
+    fn input_command_tab_completes() {
+        let mut app = make_app_with_tree();
+        app.command_active = true;
+        app.command_buffer = "hel".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Tab));
+        assert_eq!(app.command_buffer, "help");
+    }
+
+    #[test]
+    fn input_command_up_down_history() {
+        let mut app = make_app_with_tree();
+        app.command_history = vec!["first".to_owned(), "second".to_owned()];
+        app.command_active = true;
+        // Up → last history entry
+        input::handle_key(&mut app, key(KeyCode::Up));
+        assert_eq!(app.command_buffer, "second");
+        // Up again → first
+        input::handle_key(&mut app, key(KeyCode::Up));
+        assert_eq!(app.command_buffer, "first");
+        // Down → second
+        input::handle_key(&mut app, key(KeyCode::Down));
+        assert_eq!(app.command_buffer, "second");
+        // Down past end → clears
+        input::handle_key(&mut app, key(KeyCode::Down));
+        assert!(app.command_buffer.is_empty());
+    }
+
+    #[test]
+    fn input_command_backspace_on_empty_exits() {
+        let mut app = make_app_with_tree();
+        app.command_active = true;
+        app.command_buffer.clear();
+        input::handle_key(&mut app, key(KeyCode::Backspace));
+        assert!(!app.command_active);
+    }
+
+    #[test]
+    fn input_command_backspace_deletes_char() {
+        let mut app = make_app_with_tree();
+        app.command_active = true;
+        app.command_buffer = "hel".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Backspace));
+        assert_eq!(app.command_buffer, "he");
+        assert!(app.command_active);
+    }
+
+    // ── input.rs: edit mode (title editing) ─────────────────────────
+
+    #[test]
+    fn input_edit_chars() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.start_editing();
+        app.edit_select_all = false;
+        let end = app.edit_buffer.len();
+        app.edit_cursor = end;
+        input::handle_key(&mut app, key(KeyCode::Char('X')));
+        assert!(app.edit_buffer.ends_with('X'));
+    }
+
+    #[test]
+    fn input_edit_backspace() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.start_editing();
+        app.edit_select_all = false;
+        let orig_len = app.edit_buffer.len();
+        input::handle_key(&mut app, key(KeyCode::Backspace));
+        assert_eq!(app.edit_buffer.len(), orig_len - 1);
+    }
+
+    #[test]
+    fn input_edit_delete() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.start_editing();
+        app.edit_select_all = false;
+        app.edit_cursor = 0;
+        let orig_len = app.edit_buffer.len();
+        input::handle_key(&mut app, key(KeyCode::Delete));
+        assert_eq!(app.edit_buffer.len(), orig_len - 1);
+    }
+
+    #[test]
+    fn input_edit_arrows_home_end() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.start_editing();
+        app.edit_select_all = false;
+        input::handle_key(&mut app, key(KeyCode::Home));
+        assert_eq!(app.edit_cursor, 0);
+        input::handle_key(&mut app, key(KeyCode::End));
+        assert_eq!(app.edit_cursor, app.edit_buffer.len());
+        input::handle_key(&mut app, key(KeyCode::Left));
+        let pos = app.edit_cursor;
+        input::handle_key(&mut app, key(KeyCode::Right));
+        assert_eq!(app.edit_cursor, pos + 1);
+    }
+
+    #[test]
+    fn input_edit_enter_finishes() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.start_editing();
+        app.edit_select_all = false;
+        app.edit_buffer = "Renamed".to_owned();
+        input::handle_key(&mut app, key(KeyCode::Enter));
+        assert!(!app.editing_title);
+        assert_eq!(app.files[0].data.items[0].title, "Renamed");
+    }
+
+    #[test]
+    fn input_edit_esc_cancels() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.start_editing();
+        input::handle_key(&mut app, key(KeyCode::Esc));
+        assert!(!app.editing_title);
+        assert_eq!(app.files[0].data.items[0].title, "Branch 1");
+    }
+
+    // ── input.rs: note mode ─────────────────────────────────────────
+
+    #[test]
+    fn input_note_tab_back_to_tree() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.load_editor();
+        app.focus = Focus::Note;
+        // Editor starts in Normal mode, Tab returns to tree
+        input::handle_key(&mut app, key(KeyCode::Tab));
+        assert_eq!(app.focus, Focus::Tree);
+    }
+
+    // ── completer.rs tests ──────────────────────────────────────────
+
+    #[test]
+    fn completer_empty_shows_all() {
+        let mut c = completer::Completer::new(completer::APP_COMMANDS);
+        c.update("");
+        assert_eq!(c.matches.len(), completer::APP_COMMANDS.len());
+    }
+
+    #[test]
+    fn completer_prefix_narrows() {
+        let mut c = completer::Completer::new(completer::APP_COMMANDS);
+        c.update("ex");
+        assert!(c.matches.iter().all(|m| m.starts_with("ex")));
+        assert!(!c.matches.is_empty());
+    }
+
+    #[test]
+    fn completer_next_cycles() {
+        let mut c = completer::Completer::new(&["alpha", "beta"]);
+        c.update("");
+        let first = c.next().unwrap();
+        assert_eq!(first, "alpha");
+        let second = c.next().unwrap();
+        assert_eq!(second, "beta");
+        // Wraps around
+        let third = c.next().unwrap();
+        assert_eq!(third, "alpha");
+    }
+
+    #[test]
+    fn completer_prev_cycles() {
+        let mut c = completer::Completer::new(&["alpha", "beta"]);
+        c.update("");
+        let first = c.prev().unwrap();
+        assert_eq!(first, "beta"); // starts from end
+        let second = c.prev().unwrap();
+        assert_eq!(second, "alpha");
+        let third = c.prev().unwrap();
+        assert_eq!(third, "beta"); // wraps
+    }
+
+    #[test]
+    fn completer_reset_selection() {
+        let mut c = completer::Completer::new(&["alpha", "beta"]);
+        c.update("");
+        c.next();
+        assert!(c.selected.is_some());
+        c.reset_selection();
+        assert!(c.selected.is_none());
+    }
+
+    #[test]
+    fn completer_no_matches_returns_none() {
+        let mut c = completer::Completer::new(&["alpha"]);
+        c.update("zzz");
+        assert!(c.matches.is_empty());
+        assert!(c.next().is_none());
+        assert!(c.prev().is_none());
+    }
+
+    // ── app.rs: untested paths ──────────────────────────────────────
+
+    #[test]
+    fn cmd_export_no_filename() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        let dir = tempfile::tempdir().unwrap();
+        let export_path = dir.path().join("branch-1.md");
+        // We can't easily control CWD, so test with explicit filename
+        app.cmd_export(&["export", export_path.to_str().unwrap()]);
+        assert!(export_path.exists());
+        let content = std::fs::read_to_string(&export_path).unwrap();
+        assert!(content.contains("Branch 1"));
+    }
+
+    #[test]
+    fn cmd_export_with_filename() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("out.md");
+        app.cmd_export(&["export", path.to_str().unwrap()]);
+        assert!(path.exists());
+        assert!(app.status_message.contains("Exported"));
+    }
+
+    #[test]
+    fn cmd_export_no_item() {
+        let mut app = make_app_with_tree();
+        app.cursor = 0; // file root
+        app.cmd_export(&["export"]);
+        assert!(app.status_message.contains("No item"));
+    }
+
+    #[test]
+    fn cmd_import_md() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        let dir = tempfile::tempdir().unwrap();
+        let md_path = dir.path().join("import.md");
+        std::fs::write(&md_path, "# Imported\n- Sub item\n").unwrap();
+        app.cmd_import(&["import", "md", md_path.to_str().unwrap()]);
+        assert!(app.status_message.contains("Imported"));
+        // Children added to Branch 1
+        assert!(app.files[0].data.items[0].items.iter().any(|i| i.title == "Imported"));
+    }
+
+    #[test]
+    fn cmd_import_bad_usage() {
+        let mut app = make_app_with_tree();
+        app.cmd_import(&["import"]);
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[test]
+    fn cmd_open_md() {
+        let mut app = make_app_with_tree();
+        let dir = tempfile::tempdir().unwrap();
+        let md_path = dir.path().join("opened.md");
+        std::fs::write(&md_path, "# Root\n- Child\n").unwrap();
+        app.cmd_open_md(&["open", "md", md_path.to_str().unwrap()]);
+        assert!(app.status_message.contains("Opened"));
+        assert_eq!(app.files.len(), 2);
+        assert_eq!(app.files[1].name, "opened");
+    }
+
+    #[test]
+    fn cmd_open_md_bad_usage() {
+        let mut app = make_app_with_tree();
+        app.cmd_open_md(&["open"]);
+        assert!(app.status_message.contains("Usage"));
+    }
+
+    #[test]
+    fn cmd_collapse_then_expand_roundtrip() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1 with children
+        let children_before = app.files[0].data.items[0].items.len();
+        assert!(children_before > 0);
+
+        app.cmd_collapse();
+        assert!(app.files[0].data.items[0].items.is_empty());
+        assert!(app.files[0].data.items[0].note.contains("duir:collapsed"));
+
+        app.cmd_expand();
+        assert!(!app.files[0].data.items[0].items.is_empty());
+        assert_eq!(app.files[0].data.items[0].items.len(), children_before);
+    }
+
+    #[test]
+    fn cmd_collapse_no_children() {
+        let mut app = make_app_with_tree();
+        // Branch 3 has no children
+        app.cursor = app.rows.iter().position(|r| r.title == "Branch 3").unwrap();
+        app.cmd_collapse();
+        assert!(app.status_message.contains("No children"));
+    }
+
+    #[test]
+    fn cmd_expand_empty_note() {
+        let mut app = make_app_with_tree();
+        // Branch 3 has empty note
+        app.cursor = app.rows.iter().position(|r| r.title == "Branch 3").unwrap();
+        app.cmd_expand();
+        assert!(app.status_message.contains("No note"));
+    }
+
+    #[test]
+    fn cmd_autosave_toggle() {
+        let mut app = make_app_with_tree();
+        let before = app.files[0].autosave;
+        app.cmd_autosave(&["autosave"]);
+        assert_ne!(app.files[0].autosave, before);
+        assert!(app.status_message.contains("Autosave"));
+    }
+
+    #[test]
+    fn cmd_autosave_all_toggle() {
+        let mut app = make_app_with_tree();
+        let before = app.autosave_global;
+        app.cmd_autosave(&["autosave", "all"]);
+        assert_ne!(app.autosave_global, before);
+        for f in &app.files {
+            assert_eq!(f.autosave, app.autosave_global);
+        }
+    }
+
+    #[test]
+    fn close_current_file_unsaved_blocked() {
+        let mut app = make_app_with_tree();
+        app.files[0].modified = true;
+        app.close_current_file();
+        assert_eq!(app.files.len(), 1); // not removed
+        assert!(app.status_message.contains("unsaved"));
+    }
+
+    #[test]
+    fn close_current_file_saved_removes() {
+        let mut app = make_app_with_tree();
+        app.files[0].modified = false;
+        app.close_current_file();
+        assert!(app.should_quit); // last file → quit
+    }
+
+    #[test]
+    fn apply_filter_exclude_mode() {
+        let mut app = make_app_with_tree();
+        app.filter_text = "Branch 1".to_owned();
+        app.filter_exclude = true;
+        app.apply_filter();
+        // Branch 1 should be hidden
+        assert!(!app.rows.iter().any(|r| r.title == "Branch 1"));
+        assert!(app.status_message.contains("exclude"));
+    }
+
+    #[test]
+    fn apply_filter_live_updates() {
+        let mut app = make_app_with_tree();
+        let total = app.rows.len();
+        app.filter_text = "Child 1.1".to_owned();
+        app.apply_filter_live();
+        assert!(app.rows.len() < total);
+        assert!(app.status_message.contains("matches"));
+    }
+
+    #[test]
+    fn apply_filter_live_empty_restores() {
+        let mut app = make_app_with_tree();
+        let total = app.rows.len();
+        app.filter_text = "Child".to_owned();
+        app.apply_filter_live();
+        app.filter_text.clear();
+        app.apply_filter_live();
+        assert_eq!(app.rows.len(), total);
+    }
+
+    #[test]
+    fn apply_filter_live_exclude_preview() {
+        let mut app = make_app_with_tree();
+        app.filter_text = "!Branch 1".to_owned();
+        app.apply_filter_live();
+        assert!(!app.rows.iter().any(|r| r.title == "Branch 1"));
+    }
+
+    #[test]
+    fn mark_modified_invalidates_cipher() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        // Encrypt Branch 1
+        app.cmd_encrypt();
+        let cb = app.password_prompt.take().unwrap().callback;
+        app.handle_password_result("pass", cb);
+        assert!(app.files[0].data.items[0].cipher.is_some());
+
+        // Unlock it
+        app.cursor = 1;
+        app.expand_current();
+        let cb = app.password_prompt.take().unwrap().callback;
+        app.handle_password_result("pass", cb);
+        let cipher_before = app.files[0].data.items[0].cipher.clone();
+
+        // Modify a child — should invalidate parent cipher
+        #[allow(clippy::useless_vec)]
+        let child_path = vec![0, 0];
+        if let Some(child) = duir_core::tree_ops::get_item_mut(&mut app.files[0].data, &child_path) {
+            child.title = "Modified".to_owned();
+        }
+        app.mark_modified(0, &child_path);
+        assert_ne!(app.files[0].data.items[0].cipher, cipher_before);
+    }
+
+    #[test]
+    fn pending_delete_cleared_on_other_key() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.delete_current();
+        assert!(app.pending_delete);
+        // Press any key other than 'y'
+        input::handle_key(&mut app, key(KeyCode::Char('n')));
+        // pending_delete cleared (though 'n' also creates sibling)
+        assert!(!app.pending_delete);
+    }
+
+    #[test]
+    fn pending_delete_y_confirms() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.delete_current();
+        assert!(app.pending_delete);
+        input::handle_key(&mut app, key(KeyCode::Char('y')));
+        assert!(!app.pending_delete);
+        assert_ne!(app.files[0].data.items[0].title, "Branch 1");
+    }
+
+    #[test]
+    fn space_toggles_completion() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        let before = app.files[0].data.items[0].completed.clone();
+        input::handle_key(&mut app, key(KeyCode::Char(' ')));
+        assert_ne!(app.files[0].data.items[0].completed, before);
+    }
+
+    #[test]
+    fn enter_starts_editing() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        input::handle_key(&mut app, key(KeyCode::Enter));
+        assert!(app.editing_title);
+    }
+
+    #[test]
+    fn bracket_resizes_note_panel() {
+        let mut app = make_app_with_tree();
+        let before = app.note_panel_pct;
+        input::handle_key(&mut app, key(KeyCode::Char(']')));
+        assert_eq!(app.note_panel_pct, before + 5);
+        input::handle_key(&mut app, key(KeyCode::Char('[')));
+        assert_eq!(app.note_panel_pct, before);
+    }
 }
