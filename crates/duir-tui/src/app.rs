@@ -799,24 +799,48 @@ impl App {
         }
     }
     fn cmd_export(&mut self, parts: &[&str]) {
-        // :export md [filename]
-        if parts.len() < 2 {
-            "Usage: :export md [file.md]".clone_into(&mut self.status_message);
-            return;
-        }
-        if let Some(item) = self.current_item() {
-            let md = duir_core::markdown_export::export_subtree(item, 3);
-            let path = if let Some(&fname) = parts.get(2) {
-                std::path::PathBuf::from(fname)
-            } else {
-                std::env::temp_dir().join("duir-export.md")
-            };
-            match std::fs::write(&path, &md) {
-                Ok(()) => self.status_message = format!("Exported to {}", path.display()),
-                Err(e) => self.status_message = format!("Export error: {e}"),
-            }
-        } else {
+        // :export [filename] — suffix determines format (.md default)
+        let Some(item) = self.current_item() else {
             "No item selected".clone_into(&mut self.status_message);
+            return;
+        };
+
+        let path = if let Some(&fname) = parts.get(1) {
+            std::path::PathBuf::from(fname)
+        } else {
+            // Auto-generate from item title
+            let slug: String = item
+                .title
+                .chars()
+                .map(|c| {
+                    if c.is_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '-'
+                    }
+                })
+                .collect();
+            let slug = slug.trim_matches('-').to_owned();
+            let base = if slug.is_empty() { "export".to_owned() } else { slug };
+            find_available_path(&format!("{base}.md"))
+        };
+
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
+
+        match ext {
+            "md" => {
+                let md = duir_core::markdown_export::export_subtree(item, 3);
+                match std::fs::write(&path, &md) {
+                    Ok(()) => self.status_message = format!("Exported to {}", path.display()),
+                    Err(e) => self.status_message = format!("Export error: {e}"),
+                }
+            }
+            "docx" => {
+                "docx export not yet implemented".clone_into(&mut self.status_message);
+            }
+            _ => {
+                self.status_message = format!("Unknown format: .{ext} (supported: .md)");
+            }
         }
     }
 
@@ -1157,4 +1181,21 @@ impl App {
             self.cursor = self.rows.len() - 1;
         }
     }
+}
+
+/// Find an available filename, adding .1, .2 etc before the extension if it exists.
+fn find_available_path(base: &str) -> std::path::PathBuf {
+    let path = std::path::PathBuf::from(base);
+    if !path.exists() {
+        return path;
+    }
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("export");
+    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
+    for i in 1..100 {
+        let candidate = std::path::PathBuf::from(format!("{stem}.{i}.{ext}"));
+        if !candidate.exists() {
+            return candidate;
+        }
+    }
+    std::path::PathBuf::from(format!("{stem}.99.{ext}"))
 }

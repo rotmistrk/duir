@@ -73,7 +73,7 @@ pub const APP_COMMANDS: &[&str] = &[
     "e ",
     "encrypt",
     "expand",
-    "export md ",
+    "export ",
     "help",
     "import md ",
     "init",
