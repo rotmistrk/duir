@@ -105,3 +105,66 @@ pub fn has_encrypted_in_subtree(item: &TodoItem) -> bool {
     }
     item.items.iter().any(has_encrypted_in_subtree)
 }
+
+/// Saved plaintext state of a node: (path, note, children).
+pub type SavedNodeState = (Vec<usize>, String, Vec<TodoItem>);
+
+/// Re-encrypt all unlocked nodes in a tree before saving.
+/// Returns the items that were re-encrypted so they can be restored after save.
+///
+/// # Errors
+/// Returns an error if encryption fails.
+pub fn lock_for_save<S: std::hash::BuildHasher>(
+    items: &mut [TodoItem],
+    passwords: &std::collections::HashMap<Vec<usize>, String, S>,
+    path_prefix: &[usize],
+) -> crate::Result<Vec<SavedNodeState>> {
+    let mut saved_state = Vec::new();
+
+    for (i, item) in items.iter_mut().enumerate() {
+        let mut path = path_prefix.to_vec();
+        path.push(i);
+
+        // Recurse into children first
+        let child_saved = lock_for_save(&mut item.items, passwords, &path)?;
+        saved_state.extend(child_saved);
+
+        // If this node is unlocked, re-encrypt it
+        if item.unlocked
+            && let Some(pw) = passwords.get(&path)
+        {
+            // Save current plaintext state
+            let note_backup = item.note.clone();
+            let items_backup = item.items.clone();
+
+            encrypt_item(item, pw)?;
+
+            saved_state.push((path, note_backup, items_backup));
+        }
+    }
+
+    Ok(saved_state)
+}
+
+/// Restore decrypted state after save.
+pub fn restore_after_save(items: &mut [TodoItem], saved: &[SavedNodeState]) {
+    for (path, note, children) in saved {
+        if let Some(item) = navigate_mut(items, path) {
+            item.note.clone_from(note);
+            item.items.clone_from(children);
+            item.unlocked = true;
+            item.folded = false;
+        }
+    }
+}
+
+fn navigate_mut<'a>(items: &'a mut [TodoItem], path: &[usize]) -> Option<&'a mut TodoItem> {
+    if path.is_empty() {
+        return None;
+    }
+    let mut current = items.get_mut(path[0])?;
+    for &idx in &path[1..] {
+        current = current.items.get_mut(idx)?;
+    }
+    Some(current)
+}

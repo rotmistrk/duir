@@ -707,13 +707,27 @@ impl App {
     fn save_current(&mut self, storage: &dyn duir_core::TodoStorage) {
         if let Some(row) = self.current_row().cloned() {
             let fi = row.file_index;
+            let pw_map: std::collections::HashMap<Vec<usize>, String> = self
+                .passwords
+                .iter()
+                .filter(|((f, _), _)| *f == fi)
+                .map(|((_, path), pw)| (path.clone(), pw.clone()))
+                .collect();
+
             let file = &mut self.files[fi];
-            match storage.save(&file.name, &file.data) {
-                Ok(()) => {
-                    file.modified = false;
-                    self.status_message = format!("Saved {}", file.name);
+            let saved = duir_core::crypto::lock_for_save(&mut file.data.items, &pw_map, &[]);
+            match saved {
+                Ok(saved_state) => {
+                    match storage.save(&file.name, &file.data) {
+                        Ok(()) => {
+                            file.modified = false;
+                            self.status_message = format!("Saved {}", file.name);
+                        }
+                        Err(e) => self.status_message = format!("Save error: {e}"),
+                    }
+                    duir_core::crypto::restore_after_save(&mut file.data.items, &saved_state);
                 }
-                Err(e) => self.status_message = format!("Save error: {e}"),
+                Err(e) => self.status_message = format!("Encrypt error on save: {e}"),
             }
         }
     }
@@ -1034,14 +1048,32 @@ impl App {
     }
 
     pub fn save_all(&mut self, storage: &dyn duir_core::TodoStorage) {
-        for file in &mut self.files {
+        for (fi, file) in self.files.iter_mut().enumerate() {
             if file.modified {
-                match storage.save(&file.name, &file.data) {
-                    Ok(()) => {
-                        file.modified = false;
+                // Build password map for this file (strip file_index from keys)
+                let pw_map: std::collections::HashMap<Vec<usize>, String> = self
+                    .passwords
+                    .iter()
+                    .filter(|((f, _), _)| *f == fi)
+                    .map(|((_, path), pw)| (path.clone(), pw.clone()))
+                    .collect();
+
+                // Re-encrypt unlocked nodes for save
+                let saved = duir_core::crypto::lock_for_save(&mut file.data.items, &pw_map, &[]);
+
+                match saved {
+                    Ok(saved_state) => {
+                        match storage.save(&file.name, &file.data) {
+                            Ok(()) => file.modified = false,
+                            Err(e) => {
+                                self.status_message = format!("Save error: {e}");
+                            }
+                        }
+                        // Restore decrypted state in memory
+                        duir_core::crypto::restore_after_save(&mut file.data.items, &saved_state);
                     }
                     Err(e) => {
-                        self.status_message = format!("Save error: {e}");
+                        self.status_message = format!("Encrypt error on save: {e}");
                         return;
                     }
                 }
