@@ -235,6 +235,24 @@ impl App {
         })
     }
 
+    /// Flush current editor content to the model without switching editors.
+    pub fn flush_editor(&mut self) {
+        if let Some(editor) = &self.editor {
+            let content = editor.content();
+            let fi = self.editor_file_index;
+            let path = self.editor_path.clone();
+            if path.is_empty() {
+                if fi < self.files.len() {
+                    self.files[fi].data.note = content;
+                }
+            } else if fi < self.files.len()
+                && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            {
+                item.note = content;
+            }
+        }
+    }
+
     /// Save editor content back to the model, then load the new item's note.
     pub fn sync_editor(&mut self) {
         // Save current editor content and cache its state
@@ -645,6 +663,9 @@ impl App {
 
     /// Execute a `:` command. Returns an optional path for file operations.
     pub fn execute_command(&mut self, storage: &dyn duir_core::TodoStorage) {
+        // Flush editor content to model before any command
+        self.flush_editor();
+
         let cmd = self.command_buffer.trim().to_owned();
         self.command_active = false;
         self.command_buffer.clear();
@@ -926,6 +947,7 @@ impl App {
                 item.items.clear();
                 self.files[fi].modified = true;
                 self.rebuild_rows();
+                self.sync_editor();
                 "Children collapsed to note".clone_into(&mut self.status_message);
             }
         }
@@ -961,6 +983,7 @@ impl App {
                 item.folded = false;
                 self.files[fi].modified = true;
                 self.rebuild_rows();
+                self.sync_editor();
                 "Note expanded to children".clone_into(&mut self.status_message);
             }
         }

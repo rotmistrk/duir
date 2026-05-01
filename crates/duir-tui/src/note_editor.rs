@@ -719,21 +719,19 @@ impl NoteEditor<'_> {
     }
 
     fn ex_delete(&mut self, start: usize, end: usize) {
-        let total = self.textarea.lines().len();
+        let mut lines = self.textarea.lines().to_vec();
+        let total = lines.len();
         let end = end.min(total.saturating_sub(1));
-        // Move to start, select through end, cut
-        self.textarea.move_cursor(CursorMove::Top);
-        for _ in 0..start {
-            self.textarea.move_cursor(CursorMove::Down);
+        if start > end || start >= total {
+            return;
         }
-        self.textarea.move_cursor(CursorMove::Head);
-        self.textarea.start_selection();
-        for _ in start..=end {
-            self.textarea.move_cursor(CursorMove::Down);
-        }
-        self.textarea.cut();
-        self.dirty = true;
         let count = end - start + 1;
+        lines.drain(start..=end);
+        if lines.is_empty() {
+            lines.push(String::new());
+        }
+        self.replace_all_lines(lines, start.min(total.saturating_sub(count + 1)));
+        self.dirty = true;
         self.status = format!("{count} line(s) deleted");
     }
 

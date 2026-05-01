@@ -256,16 +256,11 @@ fn run_loop(
             }
         }
 
-        // Autosave tick
-        if let Ok(storage) = FileStorage::new(storage_dir) {
-            for file in &mut app.files {
-                if file.autosave && file.modified {
-                    if let Err(e) = storage.save(&file.name, &file.data) {
-                        app.status_message = format!("Autosave error: {e}");
-                    } else {
-                        file.modified = false;
-                    }
-                }
+        // Autosave tick — flush editor first so model is current
+        if app.files.iter().any(|f| f.autosave && f.modified) {
+            app.flush_editor();
+            if let Ok(storage) = FileStorage::new(storage_dir) {
+                app.save_all(&storage);
             }
         }
 
