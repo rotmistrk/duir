@@ -147,13 +147,11 @@ fn handle_note_key(app: &mut App, key: KeyEvent) -> bool {
         && editor.mode == crate::note_editor::EditorMode::Normal
         && key.code == KeyCode::Tab
     {
-        // Save editor content back before leaving
         app.sync_editor();
         app.focus = Focus::Tree;
         return true;
     }
 
-    // Delegate to the editor
     app.editor.as_mut().is_some_and(|editor| editor.handle_key(key))
 }
 
@@ -198,7 +196,7 @@ fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
         }
         KeyCode::Enter => {
             app.filter_active = false;
-            app.status_message = format!("Filter: {}", app.filter_text);
+            app.apply_filter();
             true
         }
         KeyCode::Backspace => {

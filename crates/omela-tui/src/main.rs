@@ -136,8 +136,23 @@ fn run_loop(
             // Note pane
             let focused = app.focus == Focus::Note;
             if let Some(editor) = &mut app.editor {
-                editor.set_block(" Note", focused);
-                editor.render(frame, content_chunks[1]);
+                let has_cmdline = matches!(
+                    editor.mode,
+                    crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
+                );
+                if has_cmdline {
+                    let note_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Min(3), Constraint::Length(1)])
+                        .split(content_chunks[1]);
+                    editor.set_block(" Note", focused);
+                    editor.render(frame, note_chunks[0]);
+                    let cmd_line = editor.status_line();
+                    frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
+                } else {
+                    editor.set_block(" Note", focused);
+                    editor.render(frame, content_chunks[1]);
+                }
             } else {
                 let note_content = app.current_note();
                 let note_border_style = if focused {

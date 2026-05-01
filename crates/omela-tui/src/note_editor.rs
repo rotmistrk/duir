@@ -1,6 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders};
 use tui_textarea::{CursorMove, TextArea};
 
@@ -11,6 +12,7 @@ pub enum EditorMode {
     Insert,
     Visual,
     Command,
+    Search,
 }
 
 /// Wraps `tui_textarea::TextArea` with vim-like keybindings.
@@ -18,9 +20,9 @@ pub struct NoteEditor<'a> {
     pub textarea: TextArea<'a>,
     pub mode: EditorMode,
     pub command_buf: String,
-    pub search_buf: String,
     pub line_numbers: bool,
     pub dirty: bool,
+    pub status: String,
 }
 
 impl NoteEditor<'_> {
@@ -33,16 +35,17 @@ impl NoteEditor<'_> {
         };
         let mut textarea = TextArea::new(lines);
         textarea.set_cursor_line_style(Style::default());
-        textarea.set_line_number_style(Style::default().fg(Color::DarkGray));
         textarea.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+        textarea.set_selection_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow));
+        textarea.set_tab_length(4);
 
         Self {
             textarea,
             mode: EditorMode::Normal,
             command_buf: String::new(),
-            search_buf: String::new(),
             line_numbers: false,
             dirty: false,
+            status: String::new(),
         }
     }
 
@@ -59,17 +62,41 @@ impl NoteEditor<'_> {
         } else {
             Style::default()
         };
-        let mode_indicator = match self.mode {
-            EditorMode::Normal => " NORMAL",
-            EditorMode::Insert => " INSERT",
-            EditorMode::Visual => " VISUAL",
-            EditorMode::Command => " COMMAND",
+        let mode_str = match self.mode {
+            EditorMode::Normal => "NORMAL",
+            EditorMode::Insert => "INSERT",
+            EditorMode::Visual => "VISUAL",
+            EditorMode::Command | EditorMode::Search => "COMMAND",
         };
         let block = Block::default()
-            .title(format!("{title} [{mode_indicator}]"))
+            .title(format!("{title} [{mode_str}]"))
             .borders(Borders::ALL)
             .border_style(border_style);
         self.textarea.set_block(block);
+    }
+
+    /// Get the status/command line to render below the editor.
+    #[must_use]
+    pub fn status_line(&self) -> Line<'_> {
+        match self.mode {
+            EditorMode::Command => Line::from(vec![
+                Span::raw(":"),
+                Span::styled(&self.command_buf, Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw("▏"),
+            ]),
+            EditorMode::Search => Line::from(vec![
+                Span::raw("/"),
+                Span::styled(&self.command_buf, Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw("▏"),
+            ]),
+            _ => {
+                if self.status.is_empty() {
+                    Line::raw("")
+                } else {
+                    Line::styled(&self.status, Style::default().fg(Color::DarkGray))
+                }
+            }
+        }
     }
 
     /// Handle a key event. Returns true if consumed.
@@ -78,8 +105,21 @@ impl NoteEditor<'_> {
             EditorMode::Normal => self.handle_normal(key),
             EditorMode::Insert => self.handle_insert(key),
             EditorMode::Visual => self.handle_visual(key),
-            EditorMode::Command => self.handle_command(key),
+            EditorMode::Command | EditorMode::Search => self.handle_command_input(key),
         }
+    }
+
+    fn enter_insert(&mut self) {
+        self.mode = EditorMode::Insert;
+        self.textarea
+            .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+    }
+
+    fn enter_normal(&mut self) {
+        self.mode = EditorMode::Normal;
+        self.textarea.cancel_selection();
+        self.textarea
+            .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
     }
 
     #[allow(clippy::too_many_lines)]
@@ -87,38 +127,29 @@ impl NoteEditor<'_> {
         match key.code {
             // Mode switches
             KeyCode::Char('i') => {
-                self.mode = EditorMode::Insert;
-                self.textarea
-                    .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+                self.enter_insert();
                 true
             }
             KeyCode::Char('a') => {
-                self.mode = EditorMode::Insert;
                 self.textarea.move_cursor(CursorMove::Forward);
-                self.textarea
-                    .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+                self.enter_insert();
                 true
             }
             KeyCode::Char('A') => {
-                self.mode = EditorMode::Insert;
                 self.textarea.move_cursor(CursorMove::End);
-                self.textarea
-                    .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+                self.enter_insert();
                 true
             }
             KeyCode::Char('I') => {
-                self.mode = EditorMode::Insert;
                 self.textarea.move_cursor(CursorMove::Head);
-                self.textarea
-                    .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+                self.enter_insert();
                 true
             }
             KeyCode::Char('o') => {
                 self.textarea.move_cursor(CursorMove::End);
                 self.textarea.insert_newline();
-                self.mode = EditorMode::Insert;
-                self.textarea
-                    .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+                self.auto_indent();
+                self.enter_insert();
                 self.dirty = true;
                 true
             }
@@ -126,9 +157,7 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Head);
                 self.textarea.insert_newline();
                 self.textarea.move_cursor(CursorMove::Up);
-                self.mode = EditorMode::Insert;
-                self.textarea
-                    .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
+                self.enter_insert();
                 self.dirty = true;
                 true
             }
@@ -143,9 +172,8 @@ impl NoteEditor<'_> {
                 true
             }
             KeyCode::Char('/') => {
-                self.mode = EditorMode::Command;
+                self.mode = EditorMode::Search;
                 self.command_buf.clear();
-                self.search_buf.clear();
                 true
             }
 
@@ -198,10 +226,9 @@ impl NoteEditor<'_> {
                 true
             }
             KeyCode::Char('d') => {
-                // dd = delete line (simplified: single 'd' deletes line)
                 self.textarea.move_cursor(CursorMove::Head);
                 self.textarea.delete_line_by_end();
-                self.textarea.delete_next_char(); // delete the newline
+                self.textarea.delete_next_char();
                 self.dirty = true;
                 true
             }
@@ -234,11 +261,12 @@ impl NoteEditor<'_> {
 
     fn handle_insert(&mut self, key: KeyEvent) -> bool {
         if key.code == KeyCode::Esc {
-            self.mode = EditorMode::Normal;
-            self.textarea
-                .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+            self.enter_normal();
+        } else if key.code == KeyCode::Enter {
+            self.textarea.insert_newline();
+            self.auto_indent();
+            self.dirty = true;
         } else {
-            // Let textarea handle all insert-mode keys
             self.textarea.input(key);
             self.dirty = true;
         }
@@ -248,11 +276,9 @@ impl NoteEditor<'_> {
     fn handle_visual(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
-                self.mode = EditorMode::Normal;
-                self.textarea.cancel_selection();
+                self.enter_normal();
                 true
             }
-            // Navigation extends selection
             KeyCode::Char('h') | KeyCode::Left => {
                 self.textarea.move_cursor(CursorMove::Back);
                 true
@@ -269,15 +295,31 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Forward);
                 true
             }
+            KeyCode::Char('w') => {
+                self.textarea.move_cursor(CursorMove::WordForward);
+                true
+            }
+            KeyCode::Char('b') => {
+                self.textarea.move_cursor(CursorMove::WordBack);
+                true
+            }
+            KeyCode::Char('$') => {
+                self.textarea.move_cursor(CursorMove::End);
+                true
+            }
+            KeyCode::Char('0') => {
+                self.textarea.move_cursor(CursorMove::Head);
+                true
+            }
             KeyCode::Char('y') => {
                 self.textarea.copy();
-                self.textarea.cancel_selection();
-                self.mode = EditorMode::Normal;
+                self.enter_normal();
+                "yanked".clone_into(&mut self.status);
                 true
             }
             KeyCode::Char('d' | 'x') => {
                 self.textarea.cut();
-                self.mode = EditorMode::Normal;
+                self.enter_normal();
                 self.dirty = true;
                 true
             }
@@ -285,24 +327,26 @@ impl NoteEditor<'_> {
         }
     }
 
-    #[allow(clippy::too_many_lines)]
-    fn handle_command(&mut self, key: KeyEvent) -> bool {
+    fn handle_command_input(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
-                self.mode = EditorMode::Normal;
-                self.command_buf.clear();
+                self.enter_normal();
                 true
             }
             KeyCode::Enter => {
                 let cmd = self.command_buf.clone();
-                self.mode = EditorMode::Normal;
-                self.command_buf.clear();
-                self.execute_editor_command(&cmd);
+                let is_search = self.mode == EditorMode::Search;
+                self.enter_normal();
+                if is_search {
+                    self.execute_search(&cmd);
+                } else {
+                    self.execute_editor_command(&cmd);
+                }
                 true
             }
             KeyCode::Backspace => {
                 if self.command_buf.is_empty() {
-                    self.mode = EditorMode::Normal;
+                    self.enter_normal();
                 } else {
                     self.command_buf.pop();
                 }
@@ -310,37 +354,61 @@ impl NoteEditor<'_> {
             }
             KeyCode::Char(c) => {
                 self.command_buf.push(c);
+                // Live search preview
+                if self.mode == EditorMode::Search {
+                    self.textarea.set_search_pattern(&self.command_buf).ok();
+                }
                 true
             }
             _ => false,
         }
     }
 
+    fn execute_search(&mut self, pattern: &str) {
+        if pattern.is_empty() {
+            self.textarea.set_search_pattern("").ok();
+            return;
+        }
+        self.textarea.set_search_pattern(pattern).ok();
+        self.textarea.search_forward(false);
+        self.status = format!("/{pattern}");
+    }
+
     fn execute_editor_command(&mut self, cmd: &str) {
         let cmd = cmd.trim();
-        if let Some(pattern) = cmd.strip_prefix('/') {
-            // Search
-            self.textarea.set_search_pattern(pattern).ok();
-            self.textarea.search_forward(false);
-        } else if cmd == "set nu" || cmd == "set number" {
-            self.line_numbers = true;
-        } else if cmd == "set nonu" || cmd == "set nonumber" {
-            self.line_numbers = false;
+        match cmd {
+            "set nu" | "set number" => {
+                self.line_numbers = true;
+                "line numbers on".clone_into(&mut self.status);
+            }
+            "set nonu" | "set nonumber" => {
+                self.line_numbers = false;
+                "line numbers off".clone_into(&mut self.status);
+            }
+            _ => {
+                self.status = format!("Unknown: {cmd}");
+            }
         }
-        // More commands can be added here
+    }
+
+    fn auto_indent(&mut self) {
+        // Copy leading whitespace from the previous line
+        let (row, _) = self.textarea.cursor();
+        if row == 0 {
+            return;
+        }
+        let prev_line = self.textarea.lines().get(row - 1).cloned().unwrap_or_default();
+        let indent: String = prev_line.chars().take_while(|c| c.is_whitespace()).collect();
+        if !indent.is_empty() {
+            self.textarea.insert_str(&indent);
+        }
     }
 
     /// Render the editor into the given area.
     pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
-        self.textarea.set_line_number_style(if self.line_numbers {
-            Style::default().fg(Color::DarkGray)
-        } else {
-            Style::default()
-        });
-        // Only show line numbers if enabled
-        if !self.line_numbers {
-            // tui-textarea doesn't have a toggle, but we can set width to 0
-            // by not setting line number style — it auto-hides
+        if self.line_numbers {
+            self.textarea
+                .set_line_number_style(Style::default().fg(Color::DarkGray));
         }
         frame.render_widget(&self.textarea, area);
     }

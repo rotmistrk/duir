@@ -743,4 +743,25 @@ impl App {
     pub fn has_unsaved(&self) -> bool {
         self.files.iter().any(|f| f.modified)
     }
+
+    /// Apply the current filter text, searching titles and notes.
+    pub fn apply_filter(&mut self) {
+        if self.filter_text.is_empty() {
+            self.rebuild_rows();
+            return;
+        }
+        let opts = omela_core::filter::FilterOptions {
+            search_notes: true,
+            case_sensitive: false,
+        };
+        let mut visible_count = 0usize;
+        for file in &self.files {
+            let matches = omela_core::filter::filter_items(&file.data.items, &self.filter_text, &opts);
+            visible_count += matches.len();
+        }
+        self.status_message = format!(
+            "Filter '{}': {} matches (titles+notes)",
+            self.filter_text, visible_count
+        );
+    }
 }
