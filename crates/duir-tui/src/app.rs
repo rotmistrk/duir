@@ -82,7 +82,7 @@ pub struct App {
     pub pending_delete: bool,
     pub password_prompt: Option<crate::password::PasswordPrompt>,
     pub passwords: std::collections::HashMap<(usize, Vec<usize>), String>,
-    pub pending_crypto: Option<String>,
+    pub pending_crypto: Option<(String, crate::password::PasswordAction)>,
     pub completer: crate::completer::Completer,
 }
 
@@ -1053,11 +1053,8 @@ impl App {
     }
 
     /// Handle password prompt result.
-    pub fn handle_password_result(&mut self, password: &str) {
-        let Some(prompt) = self.password_prompt.take() else {
-            return;
-        };
-        match prompt.callback {
+    pub fn handle_password_result(&mut self, password: &str, action: crate::password::PasswordAction) {
+        match action {
             crate::password::PasswordAction::Encrypt { file_index, path } => {
                 if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
                     match duir_core::crypto::encrypt_item(item, password) {

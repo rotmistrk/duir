@@ -209,8 +209,8 @@ fn run_loop(
         })?;
 
         // Process pending crypto after redraw (so "Working..." is visible)
-        if let Some(password) = app.pending_crypto.take() {
-            app.handle_password_result(&password);
+        if let Some((password, action)) = app.pending_crypto.take() {
+            app.handle_password_result(&password, action);
         }
 
         // Block for input, with timeout only for autosave
@@ -227,11 +227,10 @@ fn run_loop(
             if let Some(prompt) = &mut app.password_prompt {
                 match prompt.handle_key(key) {
                     crate::password::PromptResult::Submitted(password) => {
-                        app.pending_crypto = Some(password);
+                        if let Some(prompt) = app.password_prompt.take() {
+                            app.pending_crypto = Some((password, prompt.callback));
+                        }
                         app.set_status("⏳ Working...", app::StatusLevel::Warning);
-                        // Don't clear password_prompt yet — continue to redraw,
-                        // then process crypto on next iteration
-                        app.password_prompt = None;
                         continue;
                     }
                     crate::password::PromptResult::Cancelled => {
@@ -501,13 +500,53 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.cmd_encrypt();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
         assert!(app.files[0].data.items[0].cipher.is_some());
         assert!(app.files[0].data.items[0].items.is_empty());
 
         app.cursor = 1;
         app.expand_current();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
+        assert!(app.files[0].data.items[0].unlocked);
+        assert_eq!(app.files[0].data.items[0].items.len(), 2);
+        assert_eq!(app.files[0].data.items[0].note, "branch1 note");
+    }
+
+    /// Tests the EXACT code path used in the real app:
+    /// prompt → stash (password, callback) → process on next iteration.
+    /// This is the path that broke TWICE due to callback being lost.
+    #[test]
+    fn encrypt_decrypt_via_pending_crypto_path() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+
+        // Encrypt via pending_crypto (real app path)
+        app.cmd_encrypt();
+        assert!(app.password_prompt.is_some());
+        let prompt = app.password_prompt.take().unwrap();
+        app.pending_crypto = Some(("pass".to_owned(), prompt.callback));
+        // Simulate: next iteration processes pending_crypto
+        let (pw, action) = app.pending_crypto.take().unwrap();
+        app.handle_password_result(&pw, action);
+
+        assert!(app.files[0].data.items[0].cipher.is_some());
+        assert!(app.files[0].data.items[0].items.is_empty());
+
+        // Decrypt via pending_crypto (real app path)
+        app.cursor = 1;
+        app.expand_current();
+        assert!(app.password_prompt.is_some());
+        let prompt = app.password_prompt.take().unwrap();
+        app.pending_crypto = Some(("pass".to_owned(), prompt.callback));
+        let (pw, action) = app.pending_crypto.take().unwrap();
+        app.handle_password_result(&pw, action);
+
         assert!(app.files[0].data.items[0].unlocked);
         assert_eq!(app.files[0].data.items[0].items.len(), 2);
         assert_eq!(app.files[0].data.items[0].note, "branch1 note");
@@ -518,12 +557,18 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.cmd_encrypt();
-        app.handle_password_result("correct");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("correct", cb);
+        }
         let cipher = app.files[0].data.items[0].cipher.clone();
 
         app.cursor = 1;
         app.expand_current();
-        app.handle_password_result("wrong");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("wrong", cb);
+        }
         assert_eq!(app.files[0].data.items[0].cipher, cipher);
         assert!(app.files[0].data.items[0].items.is_empty());
         assert_eq!(app.status_level, StatusLevel::Error);
@@ -534,10 +579,16 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.cmd_encrypt();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
         app.cursor = 1;
         app.expand_current();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
         assert!(app.files[0].data.items[0].unlocked);
 
         app.cursor = 1;
@@ -551,7 +602,10 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.cmd_encrypt();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
         app.cmd_decrypt();
         assert_eq!(app.status_level, StatusLevel::Warning);
         assert!(app.files[0].data.items[0].cipher.is_some());
@@ -562,10 +616,16 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.cmd_encrypt();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
         app.cursor = 1;
         app.expand_current();
-        app.handle_password_result("pass");
+        {
+            let cb = app.password_prompt.take().unwrap().callback;
+            app.handle_password_result("pass", cb);
+        }
 
         let dir = tempfile::tempdir().unwrap();
         let storage = duir_core::FileStorage::new(dir.path()).unwrap();
