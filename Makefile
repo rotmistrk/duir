@@ -28,5 +28,5 @@ install: build
 
 install-local: build
 	mkdir -p ~/.local/bin
-	cp target/release/duir-tui ~/.local/bin/duir
+	install -m 755 target/release/duir-tui ~/.local/bin/duir
 	@echo "Installed to ~/.local/bin/duir"
