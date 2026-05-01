@@ -23,6 +23,8 @@ pub struct NoteEditor<'a> {
     pub line_numbers: bool,
     pub dirty: bool,
     pub status: String,
+    pending_count: Option<usize>,
+    pending_op: Option<char>,
 }
 
 impl NoteEditor<'_> {
@@ -37,6 +39,7 @@ impl NoteEditor<'_> {
         textarea.set_cursor_line_style(Style::default());
         textarea.set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
         textarea.set_selection_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow));
+        textarea.set_search_style(Style::default().bg(Color::Yellow).fg(Color::Black));
         textarea.set_tab_length(4);
 
         Self {
@@ -46,16 +49,16 @@ impl NoteEditor<'_> {
             line_numbers: false,
             dirty: false,
             status: String::new(),
+            pending_count: None,
+            pending_op: None,
         }
     }
 
-    /// Get the full text content.
     #[must_use]
     pub fn content(&self) -> String {
         self.textarea.lines().join("\n")
     }
 
-    /// Set the block (border) for rendering.
     pub fn set_block(&mut self, title: &str, focused: bool) {
         let border_style = if focused {
             Style::default().add_modifier(Modifier::BOLD)
@@ -68,14 +71,14 @@ impl NoteEditor<'_> {
             EditorMode::Visual => "VISUAL",
             EditorMode::Command | EditorMode::Search => "COMMAND",
         };
-        let block = Block::default()
-            .title(format!("{title} [{mode_str}]"))
-            .borders(Borders::ALL)
-            .border_style(border_style);
-        self.textarea.set_block(block);
+        self.textarea.set_block(
+            Block::default()
+                .title(format!("{title} [{mode_str}]"))
+                .borders(Borders::ALL)
+                .border_style(border_style),
+        );
     }
 
-    /// Get the status/command line to render below the editor.
     #[must_use]
     pub fn status_line(&self) -> Line<'_> {
         match self.mode {
@@ -89,17 +92,11 @@ impl NoteEditor<'_> {
                 Span::styled(&self.command_buf, Style::default().add_modifier(Modifier::BOLD)),
                 Span::raw("▏"),
             ]),
-            _ => {
-                if self.status.is_empty() {
-                    Line::raw("")
-                } else {
-                    Line::styled(&self.status, Style::default().fg(Color::DarkGray))
-                }
-            }
+            _ if !self.status.is_empty() => Line::styled(&self.status, Style::default().fg(Color::DarkGray)),
+            _ => Line::raw(""),
         }
     }
 
-    /// Handle a key event. Returns true if consumed.
     pub fn handle_key(&mut self, key: KeyEvent) -> bool {
         match self.mode {
             EditorMode::Normal => self.handle_normal(key),
@@ -109,14 +106,22 @@ impl NoteEditor<'_> {
         }
     }
 
+    fn count(&mut self) -> usize {
+        self.pending_count.take().unwrap_or(1)
+    }
+
     fn enter_insert(&mut self) {
         self.mode = EditorMode::Insert;
+        self.pending_count = None;
+        self.pending_op = None;
         self.textarea
             .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED).fg(Color::Green));
     }
 
     fn enter_normal(&mut self) {
         self.mode = EditorMode::Normal;
+        self.pending_count = None;
+        self.pending_op = None;
         self.textarea.cancel_selection();
         self.textarea
             .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
@@ -124,7 +129,52 @@ impl NoteEditor<'_> {
 
     #[allow(clippy::too_many_lines)]
     fn handle_normal(&mut self, key: KeyEvent) -> bool {
+        // Accumulate count prefix (digits)
+        if let KeyCode::Char(c @ '1'..='9') = key.code
+            && self.pending_op.is_none()
+        {
+            let digit = (c as usize) - ('0' as usize);
+            self.pending_count = Some(self.pending_count.unwrap_or(0) * 10 + digit);
+            return true;
+        }
+        if key.code == KeyCode::Char('0') && self.pending_count.is_some() && self.pending_op.is_none() {
+            let val = self.pending_count.unwrap_or(0) * 10;
+            self.pending_count = Some(val);
+            return true;
+        }
+
+        // Handle pending operator (d, y)
+        if let Some(op) = self.pending_op {
+            self.pending_op = None;
+            return match (op, key.code) {
+                ('d', KeyCode::Char('d')) => {
+                    let n = self.count();
+                    self.delete_lines(n);
+                    true
+                }
+                ('y', KeyCode::Char('y')) => {
+                    let n = self.count();
+                    self.yank_lines(n);
+                    true
+                }
+                _ => {
+                    self.pending_count = None;
+                    false
+                }
+            };
+        }
+
         match key.code {
+            // Operators that wait for second key
+            KeyCode::Char('d') => {
+                self.pending_op = Some('d');
+                true
+            }
+            KeyCode::Char('y') => {
+                self.pending_op = Some('y');
+                true
+            }
+
             // Mode switches
             KeyCode::Char('i') => {
                 self.enter_insert();
@@ -163,6 +213,7 @@ impl NoteEditor<'_> {
             }
             KeyCode::Char('v') => {
                 self.mode = EditorMode::Visual;
+                self.pending_count = None;
                 self.textarea.start_selection();
                 true
             }
@@ -177,21 +228,33 @@ impl NoteEditor<'_> {
                 true
             }
 
-            // Navigation
+            // Navigation (with count)
             KeyCode::Char('h') | KeyCode::Left => {
-                self.textarea.move_cursor(CursorMove::Back);
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::Back);
+                }
                 true
             }
             KeyCode::Char('j') | KeyCode::Down => {
-                self.textarea.move_cursor(CursorMove::Down);
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::Down);
+                }
                 true
             }
             KeyCode::Char('k') | KeyCode::Up => {
-                self.textarea.move_cursor(CursorMove::Up);
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::Up);
+                }
                 true
             }
             KeyCode::Char('l') | KeyCode::Right => {
-                self.textarea.move_cursor(CursorMove::Forward);
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::Forward);
+                }
                 true
             }
             KeyCode::Char('0') => {
@@ -203,11 +266,17 @@ impl NoteEditor<'_> {
                 true
             }
             KeyCode::Char('w') => {
-                self.textarea.move_cursor(CursorMove::WordForward);
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::WordForward);
+                }
                 true
             }
             KeyCode::Char('b') => {
-                self.textarea.move_cursor(CursorMove::WordBack);
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::WordBack);
+                }
                 true
             }
             KeyCode::Char('g') => {
@@ -219,16 +288,12 @@ impl NoteEditor<'_> {
                 true
             }
 
-            // Editing
+            // Single-key editing (with count)
             KeyCode::Char('x') => {
-                self.textarea.delete_next_char();
-                self.dirty = true;
-                true
-            }
-            KeyCode::Char('d') => {
-                self.textarea.move_cursor(CursorMove::Head);
-                self.textarea.delete_line_by_end();
-                self.textarea.delete_next_char();
+                let n = self.count();
+                for _ in 0..n {
+                    self.textarea.delete_next_char();
+                }
                 self.dirty = true;
                 true
             }
@@ -247,6 +312,15 @@ impl NoteEditor<'_> {
                 self.dirty = true;
                 true
             }
+            KeyCode::Char('P') => {
+                // Paste before (move to line start, paste, then move up)
+                self.textarea.move_cursor(CursorMove::Head);
+                self.textarea.insert_newline();
+                self.textarea.move_cursor(CursorMove::Up);
+                self.textarea.paste();
+                self.dirty = true;
+                true
+            }
             KeyCode::Char('n') => {
                 self.textarea.search_forward(false);
                 true
@@ -255,8 +329,32 @@ impl NoteEditor<'_> {
                 self.textarea.search_back(false);
                 true
             }
-            _ => false,
+            _ => {
+                self.pending_count = None;
+                false
+            }
         }
+    }
+
+    fn delete_lines(&mut self, n: usize) {
+        for _ in 0..n {
+            self.textarea.move_cursor(CursorMove::Head);
+            self.textarea.start_selection();
+            self.textarea.move_cursor(CursorMove::Down);
+            self.textarea.cut();
+        }
+        self.dirty = true;
+    }
+
+    fn yank_lines(&mut self, n: usize) {
+        self.textarea.move_cursor(CursorMove::Head);
+        self.textarea.start_selection();
+        for _ in 0..n {
+            self.textarea.move_cursor(CursorMove::Down);
+        }
+        self.textarea.copy();
+        self.textarea.cancel_selection();
+        self.status = format!("{n} line(s) yanked");
     }
 
     fn handle_insert(&mut self, key: KeyEvent) -> bool {
@@ -311,6 +409,14 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Head);
                 true
             }
+            KeyCode::Char('G') => {
+                self.textarea.move_cursor(CursorMove::Bottom);
+                true
+            }
+            KeyCode::Char('g') => {
+                self.textarea.move_cursor(CursorMove::Top);
+                true
+            }
             KeyCode::Char('y') => {
                 self.textarea.copy();
                 self.enter_normal();
@@ -354,7 +460,6 @@ impl NoteEditor<'_> {
             }
             KeyCode::Char(c) => {
                 self.command_buf.push(c);
-                // Live search preview
                 if self.mode == EditorMode::Search {
                     self.textarea.set_search_pattern(&self.command_buf).ok();
                 }
@@ -377,13 +482,23 @@ impl NoteEditor<'_> {
     fn execute_editor_command(&mut self, cmd: &str) {
         let cmd = cmd.trim();
         match cmd {
-            "set nu" | "set number" => {
+            "set nu" | "set num" | "set number" => {
                 self.line_numbers = true;
+                self.textarea
+                    .set_line_number_style(Style::default().fg(Color::DarkGray));
                 "line numbers on".clone_into(&mut self.status);
             }
-            "set nonu" | "set nonumber" => {
+            "set nonu" | "set nonum" | "set nonumber" => {
                 self.line_numbers = false;
+                self.textarea.remove_line_number();
                 "line numbers off".clone_into(&mut self.status);
+            }
+            "set li" | "set list" => {
+                // Show whitespace — tui-textarea doesn't support this natively
+                "list mode not yet supported".clone_into(&mut self.status);
+            }
+            "set noli" | "set nolist" => {
+                "list mode not yet supported".clone_into(&mut self.status);
             }
             _ => {
                 self.status = format!("Unknown: {cmd}");
@@ -392,7 +507,6 @@ impl NoteEditor<'_> {
     }
 
     fn auto_indent(&mut self) {
-        // Copy leading whitespace from the previous line
         let (row, _) = self.textarea.cursor();
         if row == 0 {
             return;
@@ -404,12 +518,7 @@ impl NoteEditor<'_> {
         }
     }
 
-    /// Render the editor into the given area.
-    pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
-        if self.line_numbers {
-            self.textarea
-                .set_line_number_style(Style::default().fg(Color::DarkGray));
-        }
+    pub fn render(&self, frame: &mut ratatui::Frame, area: Rect) {
         frame.render_widget(&self.textarea, area);
     }
 }
