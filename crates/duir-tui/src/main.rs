@@ -77,12 +77,17 @@ fn main() -> io::Result<()> {
         }
     }
 
-    if app.files.is_empty() {
+    let first_run = app.files.is_empty();
+    if first_run {
         app.add_empty_file("todo");
     }
 
     // Initialize editor for the first item
     app.sync_editor();
+
+    if first_run {
+        app.show_about = true;
+    }
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -294,7 +299,8 @@ fn build_status_line(app: &App) -> Line<'_> {
             Span::styled("Tab", bold),
             Span::raw(" note "),
             Span::styled(":", bold),
-            Span::raw("cmd"),
+            Span::raw("cmd "),
+            Span::styled(":help", bold),
         ];
         if !app.status_message.is_empty() {
             spans.push(Span::styled(

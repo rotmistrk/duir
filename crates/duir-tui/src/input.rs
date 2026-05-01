@@ -133,6 +133,11 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             app.command_buffer.clear();
             true
         }
+        (KeyCode::F(1), false) => {
+            app.show_help = true;
+            app.help_scroll = 0;
+            true
+        }
         (KeyCode::Char(']'), false) => {
             app.note_panel_pct = (app.note_panel_pct + 5).min(80);
             true
