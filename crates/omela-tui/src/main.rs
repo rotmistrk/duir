@@ -250,6 +250,8 @@ fn build_status_line(app: &App) -> Line<'_> {
             Span::raw("ranch "),
             Span::styled("d", bold),
             Span::raw("el "),
+            Span::styled("c", bold),
+            Span::raw("lone "),
             Span::styled("!", bold),
             Span::raw("imp "),
             Span::styled("HJKL", bold),

@@ -77,7 +77,7 @@ impl App {
             filter_text: String::new(),
             command_active: false,
             command_buffer: String::new(),
-            autosave_global: false,
+            autosave_global: true,
             editor: None,
             editor_file_index: 0,
             editor_path: vec![],
@@ -497,6 +497,25 @@ impl App {
             if omela_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
+            }
+        }
+    }
+
+    pub fn clone_subtree(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.is_file_root {
+                return;
+            }
+            let fi = row.file_index;
+            // New clone path: same parent, index + 1
+            let mut new_path = row.path.clone();
+            if let Some(last) = new_path.last_mut() {
+                *last += 1;
+            }
+            if omela_core::tree_ops::clone_subtree(&mut self.files[fi].data, &row.path).is_ok() {
+                self.files[fi].modified = true;
+                self.rebuild_rows();
+                self.navigate_to(fi, &new_path);
             }
         }
     }

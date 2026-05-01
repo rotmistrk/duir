@@ -137,6 +137,10 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             app.sort_children();
             true
         }
+        (KeyCode::Char('c'), false) => {
+            app.clone_subtree();
+            true
+        }
         _ => false,
     }
 }

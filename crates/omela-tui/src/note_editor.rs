@@ -25,6 +25,8 @@ pub struct NoteEditor<'a> {
     pub status: String,
     pending_count: Option<usize>,
     pending_op: Option<char>,
+    command_history: Vec<String>,
+    history_index: Option<usize>,
 }
 
 impl NoteEditor<'_> {
@@ -51,6 +53,8 @@ impl NoteEditor<'_> {
             status: String::new(),
             pending_count: None,
             pending_op: None,
+            command_history: Vec::new(),
+            history_index: None,
         }
     }
 
@@ -215,6 +219,15 @@ impl NoteEditor<'_> {
                 self.mode = EditorMode::Visual;
                 self.pending_count = None;
                 self.textarea.start_selection();
+                true
+            }
+            KeyCode::Char('V') => {
+                // Line-wise visual: select from head of current line
+                self.mode = EditorMode::Visual;
+                self.pending_count = None;
+                self.textarea.move_cursor(CursorMove::Head);
+                self.textarea.start_selection();
+                self.textarea.move_cursor(CursorMove::End);
                 true
             }
             KeyCode::Char(':') => {
@@ -436,12 +449,19 @@ impl NoteEditor<'_> {
     fn handle_command_input(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Esc => {
+                self.history_index = None;
                 self.enter_normal();
                 true
             }
             KeyCode::Enter => {
                 let cmd = self.command_buf.clone();
                 let is_search = self.mode == EditorMode::Search;
+                // Save to history
+                if !cmd.trim().is_empty() {
+                    let entry = if is_search { format!("/{cmd}") } else { cmd.clone() };
+                    self.command_history.push(entry);
+                }
+                self.history_index = None;
                 self.enter_normal();
                 if is_search {
                     self.execute_search(&cmd);
@@ -450,8 +470,42 @@ impl NoteEditor<'_> {
                 }
                 true
             }
+            KeyCode::Up => {
+                if self.command_history.is_empty() {
+                    return true;
+                }
+                let idx = self
+                    .history_index
+                    .map_or(self.command_history.len() - 1, |i| i.saturating_sub(1));
+                self.history_index = Some(idx);
+                let entry = self.command_history[idx].clone();
+                if let Some(search) = entry.strip_prefix('/') {
+                    self.command_buf = search.to_owned();
+                } else {
+                    self.command_buf = entry;
+                }
+                true
+            }
+            KeyCode::Down => {
+                if let Some(idx) = self.history_index {
+                    if idx + 1 < self.command_history.len() {
+                        self.history_index = Some(idx + 1);
+                        let entry = self.command_history[idx + 1].clone();
+                        if let Some(search) = entry.strip_prefix('/') {
+                            self.command_buf = search.to_owned();
+                        } else {
+                            self.command_buf = entry;
+                        }
+                    } else {
+                        self.history_index = None;
+                        self.command_buf.clear();
+                    }
+                }
+                true
+            }
             KeyCode::Backspace => {
                 if self.command_buf.is_empty() {
+                    self.history_index = None;
                     self.enter_normal();
                 } else {
                     self.command_buf.pop();
@@ -459,6 +513,7 @@ impl NoteEditor<'_> {
                 true
             }
             KeyCode::Char(c) => {
+                self.history_index = None;
                 self.command_buf.push(c);
                 if self.mode == EditorMode::Search {
                     self.textarea.set_search_pattern(&self.command_buf).ok();
