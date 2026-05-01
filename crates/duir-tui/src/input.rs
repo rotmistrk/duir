@@ -31,6 +31,12 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
+    // Clear pending delete on any key except 'd'
+    if app.pending_delete && key.code != KeyCode::Char('d') {
+        app.pending_delete = false;
+        app.status_message.clear();
+    }
+
     // Shift+Arrow or HJKL: move items
     if shift && !ctrl {
         return match key.code {

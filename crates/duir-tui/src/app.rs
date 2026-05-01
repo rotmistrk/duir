@@ -64,6 +64,7 @@ pub struct App {
     pub show_help: bool,
     pub help_scroll: u16,
     pub show_about: bool,
+    pub pending_delete: bool,
     pub completer: crate::completer::Completer,
 }
 
@@ -98,6 +99,7 @@ impl App {
             show_help: false,
             help_scroll: 0,
             show_about: false,
+            pending_delete: false,
             completer: crate::completer::Completer::new(crate::completer::APP_COMMANDS),
         }
     }
@@ -426,6 +428,15 @@ impl App {
                 return;
             }
             let fi = row.file_index;
+            // Check if node has children and warn
+            let has_children = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
+                .is_some_and(|item| !item.items.is_empty());
+            if has_children && !self.pending_delete {
+                self.pending_delete = true;
+                "Node has children! Press d again to confirm delete".clone_into(&mut self.status_message);
+                return;
+            }
+            self.pending_delete = false;
             if duir_core::tree_ops::remove_item(&mut self.files[fi].data, &row.path).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
