@@ -137,10 +137,19 @@ fn handle_edit_key(app: &mut App, key: KeyEvent) -> bool {
             true
         }
         KeyCode::Backspace => {
-            app.edit_buffer.pop();
+            if app.edit_select_all {
+                app.edit_buffer.clear();
+                app.edit_select_all = false;
+            } else {
+                app.edit_buffer.pop();
+            }
             true
         }
         KeyCode::Char(c) => {
+            if app.edit_select_all {
+                app.edit_buffer.clear();
+                app.edit_select_all = false;
+            }
             app.edit_buffer.push(c);
             true
         }
