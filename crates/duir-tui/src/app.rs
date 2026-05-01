@@ -38,6 +38,15 @@ pub enum Focus {
 }
 
 /// Application state.
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum StatusLevel {
+    #[default]
+    Info,
+    Success,
+    Warning,
+    Error,
+}
 #[allow(clippy::struct_excessive_bools)]
 pub struct App {
     pub files: Vec<LoadedFile>,
@@ -47,6 +56,7 @@ pub struct App {
     pub focus: Focus,
     pub should_quit: bool,
     pub status_message: String,
+    pub status_level: StatusLevel,
     pub note_scroll: usize,
     pub editing_title: bool,
     pub edit_buffer: String,
@@ -86,6 +96,7 @@ impl App {
             focus: Focus::Tree,
             should_quit: false,
             status_message: String::new(),
+            status_level: StatusLevel::Info,
             note_scroll: 0,
             editing_title: false,
             edit_buffer: String::new(),
@@ -275,6 +286,12 @@ impl App {
         } else {
             self.editor = None;
         }
+    }
+
+    /// Set a status message with a severity level for coloring.
+    pub fn set_status(&mut self, msg: &str, level: StatusLevel) {
+        msg.clone_into(&mut self.status_message);
+        self.status_level = level;
     }
 
     fn navigate_to(&mut self, file_index: usize, path: &[usize]) {
@@ -1006,18 +1023,18 @@ impl App {
             let fi = row.file_index;
             if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                 if !item.is_encrypted() {
-                    "Node is not encrypted".clone_into(&mut self.status_message);
+                    self.set_status("Node is not encrypted", StatusLevel::Warning);
                     return;
                 }
                 if !item.unlocked {
-                    "Unlock the node first (→ to expand, enter password)".clone_into(&mut self.status_message);
+                    self.set_status("Unlock first: press → and enter password", StatusLevel::Warning);
                     return;
                 }
                 duir_core::crypto::strip_encryption(item);
                 self.passwords.remove(&(fi, row.path));
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                "Encryption removed".clone_into(&mut self.status_message);
+                self.set_status("Encryption removed", StatusLevel::Success);
             }
         }
     }
@@ -1035,7 +1052,7 @@ impl App {
                             self.passwords.insert((file_index, path), password.to_owned());
                             self.files[file_index].modified = true;
                             self.rebuild_rows();
-                            "Subtree encrypted".clone_into(&mut self.status_message);
+                            self.set_status("Subtree encrypted", StatusLevel::Success);
                         }
                         Err(e) => self.status_message = format!("Encrypt error: {e}"),
                     }
@@ -1048,9 +1065,9 @@ impl App {
                             self.passwords.insert((file_index, path), password.to_owned());
                             self.files[file_index].modified = true;
                             self.rebuild_rows();
-                            "Subtree unlocked".clone_into(&mut self.status_message);
+                            self.set_status("Subtree unlocked", StatusLevel::Success);
                         }
-                        Err(_) => "Wrong password".clone_into(&mut self.status_message),
+                        Err(_) => self.set_status("Wrong password", StatusLevel::Error),
                     }
                 }
             }
@@ -1062,7 +1079,7 @@ impl App {
                             self.passwords.insert((file_index, path), password.to_owned());
                             self.files[file_index].modified = true;
                             self.rebuild_rows();
-                            "Password changed".clone_into(&mut self.status_message);
+                            self.set_status("Password changed", StatusLevel::Success);
                         }
                         Err(e) => self.status_message = format!("Encrypt error: {e}"),
                     }
@@ -1141,7 +1158,7 @@ impl App {
                 }
             }
         }
-        "Saved".clone_into(&mut self.status_message);
+        self.set_status("Saved", StatusLevel::Success);
     }
 
     /// Check if any file has unsaved modifications.

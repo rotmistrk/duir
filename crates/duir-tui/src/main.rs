@@ -211,7 +211,6 @@ fn run_loop(
                 match prompt.handle_key(key) {
                     crate::password::PromptResult::Submitted(password) => {
                         // Show progress before blocking crypto operation
-                        app.password_prompt = None;
                         "⏳ Working...".clone_into(&mut app.status_message);
                         terminal.draw(|frame| {
                             let size = frame.area();
@@ -372,9 +371,15 @@ fn build_status_line(app: &App) -> Line<'_> {
             Span::styled(":help", bold),
         ];
         if !app.status_message.is_empty() {
+            let color = match app.status_level {
+                app::StatusLevel::Info => Color::DarkGray,
+                app::StatusLevel::Success => Color::Green,
+                app::StatusLevel::Warning => Color::Yellow,
+                app::StatusLevel::Error => Color::Red,
+            };
             spans.push(Span::styled(
                 format!("  │ {}", app.status_message),
-                Style::default().add_modifier(Modifier::DIM),
+                Style::default().fg(color),
             ));
         }
         Line::from(spans)
