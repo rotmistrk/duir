@@ -309,7 +309,16 @@ impl App {
                 && !item.folded
                 && !item.items.is_empty()
             {
-                item.folded = true;
+                // If unlocked encrypted node, re-encrypt and forget password
+                if item.unlocked {
+                    let key = (fi, path.clone());
+                    if let Some(pw) = self.passwords.get(&key) {
+                        duir_core::crypto::encrypt_item(item, pw).ok();
+                    }
+                    self.passwords.remove(&key);
+                } else {
+                    item.folded = true;
+                }
                 self.rebuild_rows();
                 return;
             }
