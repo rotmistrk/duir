@@ -196,32 +196,59 @@ fn handle_edit_key(app: &mut App, key: KeyEvent) -> bool {
             app.cancel_editing();
             true
         }
-        KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End => {
+        KeyCode::Left => {
             app.edit_select_all = false;
+            if app.edit_cursor > 0 {
+                app.edit_cursor -= 1;
+            }
+            true
+        }
+        KeyCode::Right => {
+            app.edit_select_all = false;
+            if app.edit_cursor < app.edit_buffer.len() {
+                app.edit_cursor += 1;
+            }
+            true
+        }
+        KeyCode::Home => {
+            app.edit_select_all = false;
+            app.edit_cursor = 0;
+            true
+        }
+        KeyCode::End => {
+            app.edit_select_all = false;
+            app.edit_cursor = app.edit_buffer.len();
             true
         }
         KeyCode::Backspace => {
             if app.edit_select_all {
                 app.edit_buffer.clear();
+                app.edit_cursor = 0;
                 app.edit_select_all = false;
-            } else {
-                app.edit_buffer.pop();
+            } else if app.edit_cursor > 0 {
+                app.edit_buffer.remove(app.edit_cursor - 1);
+                app.edit_cursor -= 1;
             }
             true
         }
         KeyCode::Delete => {
             if app.edit_select_all {
                 app.edit_buffer.clear();
+                app.edit_cursor = 0;
                 app.edit_select_all = false;
+            } else if app.edit_cursor < app.edit_buffer.len() {
+                app.edit_buffer.remove(app.edit_cursor);
             }
             true
         }
         KeyCode::Char(c) => {
             if app.edit_select_all {
                 app.edit_buffer.clear();
+                app.edit_cursor = 0;
                 app.edit_select_all = false;
             }
-            app.edit_buffer.push(c);
+            app.edit_buffer.insert(app.edit_cursor, c);
+            app.edit_cursor += 1;
             true
         }
         _ => false,

@@ -265,12 +265,12 @@ fn run_loop(
             }
         }
 
-        // Autosave tick — flush editor first so model is current
-        if app.files.iter().any(|f| f.autosave && f.modified) {
-            app.save_editor();
-            if let Ok(storage) = FileStorage::new(storage_dir) {
-                app.save_all(&storage);
-            }
+        // Autosave — only when tree is focused (model is guaranteed current)
+        if app.focus == Focus::Tree
+            && app.files.iter().any(|f| f.autosave && f.modified)
+            && let Ok(storage) = FileStorage::new(storage_dir)
+        {
+            app.save_all(&storage);
         }
 
         if app.should_quit {

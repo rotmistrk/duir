@@ -50,6 +50,7 @@ pub struct App {
     pub note_scroll: usize,
     pub editing_title: bool,
     pub edit_buffer: String,
+    pub edit_cursor: usize,
     pub edit_select_all: bool,
     pub filter_active: bool,
     pub filter_text: String,
@@ -88,6 +89,7 @@ impl App {
             note_scroll: 0,
             editing_title: false,
             edit_buffer: String::new(),
+            edit_cursor: 0,
             edit_select_all: false,
             filter_active: false,
             filter_text: String::new(),
@@ -609,6 +611,7 @@ impl App {
                 return;
             }
             self.edit_buffer = row.title.clone();
+            self.edit_cursor = self.edit_buffer.len();
             self.editing_title = true;
             self.edit_select_all = true;
         }

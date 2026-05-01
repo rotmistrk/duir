@@ -29,6 +29,7 @@ impl StatefulWidget for TreeView<'_> {
     type State = App;
 
     #[allow(clippy::cast_possible_truncation)]
+    #[allow(clippy::too_many_lines)]
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let inner = self.block.as_ref().map_or(area, |block| {
             let inner = block.inner(area);
@@ -84,11 +85,12 @@ impl StatefulWidget for TreeView<'_> {
                 }
             };
 
-            let prefix = format!("{indent}{arrow}{lock_icon}{checkbox}");
+            let prefix = format!("{indent}{arrow}{checkbox}{lock_icon}");
             let prefix_width = prefix.chars().count();
 
             let title = if is_selected && state.editing_title {
-                format!("{}▏", state.edit_buffer)
+                let pos = state.edit_cursor.min(state.edit_buffer.len());
+                format!("{}▏{}", &state.edit_buffer[..pos], &state.edit_buffer[pos..])
             } else {
                 row.title.clone()
             };
