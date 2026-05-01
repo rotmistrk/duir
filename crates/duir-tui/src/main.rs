@@ -210,6 +210,15 @@ fn run_loop(
             if let Some(prompt) = &mut app.password_prompt {
                 match prompt.handle_key(key) {
                     crate::password::PromptResult::Submitted(password) => {
+                        // Show progress before blocking crypto operation
+                        app.password_prompt = None;
+                        "⏳ Working...".clone_into(&mut app.status_message);
+                        terminal.draw(|frame| {
+                            let size = frame.area();
+                            let status =
+                                Paragraph::new(Line::styled(" ⏳ Working...", Style::default().fg(Color::Yellow)));
+                            frame.render_widget(status, size);
+                        })?;
                         app.handle_password_result(&password);
                     }
                     crate::password::PromptResult::Cancelled => {
