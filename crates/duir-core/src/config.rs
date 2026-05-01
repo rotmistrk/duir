@@ -25,6 +25,7 @@ pub struct StorageConfig {
 #[serde(default)]
 pub struct EditorConfig {
     pub autosave: bool,
+    pub autosave_interval_secs: u64,
     pub tab_width: u8,
     pub line_numbers: bool,
 }
@@ -50,6 +51,7 @@ impl Default for EditorConfig {
     fn default() -> Self {
         Self {
             autosave: true,
+            autosave_interval_secs: 30,
             tab_width: 4,
             line_numbers: false,
         }

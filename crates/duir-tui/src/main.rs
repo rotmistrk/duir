@@ -99,7 +99,7 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run_loop(&mut terminal, &mut app, &storage_dir);
+    let result = run_loop(&mut terminal, &mut app, &storage_dir, &config);
 
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -113,8 +113,10 @@ fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
     storage_dir: &PathBuf,
+    config: &duir_core::config::Config,
 ) -> io::Result<()> {
     let mut last_save = std::time::Instant::now();
+    let autosave_interval = config.editor.autosave_interval_secs;
     loop {
         terminal.draw(|frame| {
             let size = frame.area();
@@ -267,7 +269,7 @@ fn run_loop(
 
         // Autosave — debounced, only when tree focused, at most every 5 seconds
         if app.focus == Focus::Tree
-            && last_save.elapsed() > Duration::from_secs(5)
+            && last_save.elapsed() > Duration::from_secs(autosave_interval)
             && app.files.iter().any(|f| f.autosave && f.modified)
             && let Ok(storage) = FileStorage::new(storage_dir)
         {
