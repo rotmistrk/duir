@@ -315,6 +315,16 @@ impl NoteEditor<'_> {
                 self.dirty = true;
                 true
             }
+            KeyCode::Char('>') => {
+                let n = self.count();
+                self.indent_lines(n);
+                true
+            }
+            KeyCode::Char('<') => {
+                let n = self.count();
+                self.unindent_lines(n);
+                true
+            }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.textarea.redo();
                 self.dirty = true;
@@ -440,6 +450,16 @@ impl NoteEditor<'_> {
                 self.textarea.cut();
                 self.enter_normal();
                 self.dirty = true;
+                true
+            }
+            KeyCode::Char('>') => {
+                self.indent_selection();
+                self.enter_normal();
+                true
+            }
+            KeyCode::Char('<') => {
+                self.unindent_selection();
+                self.enter_normal();
                 true
             }
             _ => false,
@@ -752,6 +772,88 @@ impl NoteEditor<'_> {
         self.status = format!("!{command}: {out_count} line(s)");
     }
 
+    fn indent_lines(&mut self, count: usize) {
+        let (row, _) = self.textarea.cursor();
+        let total = self.textarea.lines().len();
+        let end = (row + count).min(total);
+        let mut lines = self.textarea.lines().to_vec();
+        for line in lines.iter_mut().take(end).skip(row) {
+            *line = format!("    {line}");
+        }
+        self.replace_all_lines(lines, row);
+        self.dirty = true;
+    }
+
+    fn unindent_lines(&mut self, count: usize) {
+        let (row, _) = self.textarea.cursor();
+        let total = self.textarea.lines().len();
+        let end = (row + count).min(total);
+        let mut lines = self.textarea.lines().to_vec();
+        for line in lines.iter_mut().take(end).skip(row) {
+            if line.starts_with("    ") {
+                *line = line[4..].to_owned();
+            } else if line.starts_with('\t') {
+                *line = line[1..].to_owned();
+            } else {
+                let trimmed = line.trim_start();
+                let ws = line.len() - trimmed.len();
+                if ws > 0 {
+                    *line = trimmed.to_owned();
+                }
+            }
+        }
+        self.replace_all_lines(lines, row);
+        self.dirty = true;
+    }
+
+    fn indent_selection(&mut self) {
+        if let Some(((start_row, _), (end_row, _))) = self.textarea.selection_range() {
+            let mut lines = self.textarea.lines().to_vec();
+            for line in lines.iter_mut().take(end_row + 1).skip(start_row) {
+                *line = format!("    {line}");
+            }
+            self.replace_all_lines(lines, start_row);
+            self.dirty = true;
+        }
+    }
+
+    fn unindent_selection(&mut self) {
+        if let Some(((start_row, _), (end_row, _))) = self.textarea.selection_range() {
+            let mut lines = self.textarea.lines().to_vec();
+            for line in lines.iter_mut().take(end_row + 1).skip(start_row) {
+                if line.starts_with("    ") {
+                    *line = line[4..].to_owned();
+                } else if line.starts_with('\t') {
+                    *line = line[1..].to_owned();
+                } else {
+                    let trimmed = line.trim_start();
+                    *line = trimmed.to_owned();
+                }
+            }
+            self.replace_all_lines(lines, start_row);
+            self.dirty = true;
+        }
+    }
+
+    fn replace_all_lines(&mut self, lines: Vec<String>, restore_row: usize) {
+        self.textarea = TextArea::new(lines);
+        self.textarea.set_cursor_line_style(Style::default());
+        self.textarea
+            .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+        self.textarea
+            .set_selection_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow));
+        self.textarea
+            .set_search_style(Style::default().bg(Color::Yellow).fg(Color::Black));
+        self.textarea.set_tab_length(4);
+        if self.line_numbers {
+            self.textarea
+                .set_line_number_style(Style::default().fg(Color::DarkGray));
+        }
+        self.textarea.move_cursor(CursorMove::Top);
+        for _ in 0..restore_row.min(self.textarea.lines().len().saturating_sub(1)) {
+            self.textarea.move_cursor(CursorMove::Down);
+        }
+    }
     fn auto_indent(&mut self) {
         let (row, _) = self.textarea.cursor();
         if row == 0 {
