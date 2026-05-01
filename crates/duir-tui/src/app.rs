@@ -82,6 +82,7 @@ pub struct App {
     pub pending_delete: bool,
     pub password_prompt: Option<crate::password::PasswordPrompt>,
     pub passwords: std::collections::HashMap<(usize, Vec<usize>), String>,
+    pub pending_crypto: Option<String>,
     pub completer: crate::completer::Completer,
 }
 
@@ -122,6 +123,7 @@ impl App {
             pending_delete: false,
             password_prompt: None,
             passwords: std::collections::HashMap::new(),
+            pending_crypto: None,
             completer: crate::completer::Completer::new(crate::completer::APP_COMMANDS),
         }
     }

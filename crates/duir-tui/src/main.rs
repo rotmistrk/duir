@@ -208,20 +208,22 @@ fn run_loop(
             }
         })?;
 
+        // Process pending crypto after redraw (so "Working..." is visible)
+        if let Some(password) = app.pending_crypto.take() {
+            app.handle_password_result(&password);
+        }
+
         if let Some(Event::Key(key)) = input::poll_event(Duration::from_millis(100))? {
             // Handle overlay input first
             if let Some(prompt) = &mut app.password_prompt {
                 match prompt.handle_key(key) {
                     crate::password::PromptResult::Submitted(password) => {
-                        // Show progress before blocking crypto operation
-                        "⏳ Working...".clone_into(&mut app.status_message);
-                        terminal.draw(|frame| {
-                            let size = frame.area();
-                            let status =
-                                Paragraph::new(Line::styled(" ⏳ Working...", Style::default().fg(Color::Yellow)));
-                            frame.render_widget(status, size);
-                        })?;
-                        app.handle_password_result(&password);
+                        app.pending_crypto = Some(password);
+                        app.set_status("⏳ Working...", app::StatusLevel::Warning);
+                        // Don't clear password_prompt yet — continue to redraw,
+                        // then process crypto on next iteration
+                        app.password_prompt = None;
+                        continue;
                     }
                     crate::password::PromptResult::Cancelled => {
                         app.password_prompt = None;
