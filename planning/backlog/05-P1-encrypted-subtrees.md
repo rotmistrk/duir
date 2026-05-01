@@ -118,3 +118,21 @@ encryption implies the content should stay within the encrypted boundary.
 Implementation: Before any collapse/expand/export, walk up the tree to check
 for encrypted ancestors, and walk down to check for encrypted descendants.
 If any are found, refuse with a clear error message.
+
+### Visual Indicators
+
+Tree icons for encrypted nodes:
+
+| Icon | Meaning |
+|------|---------|
+| 🔒 | Encrypted root, locked (children hidden, needs password) |
+| 🔓 | Encrypted root, unlocked (decrypted in memory) |
+| 🔐 | Collapsed node contains encrypted descendants inside |
+
+Display rules:
+- 🔒/🔓 shown on the node that IS the encryption root
+- 🔐 shown on a collapsed ancestor when it contains encrypted descendants
+  (so user knows there's encryption inside even when folded)
+- When expanded, child locks are visible directly — no need for 🔐 on parent
+- Icons appear between the expand arrow and the checkbox:
+  `▼ 🔓 ☐ Task Name`
