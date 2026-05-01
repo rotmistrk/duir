@@ -54,6 +54,7 @@ pub struct App {
     pub filter_active: bool,
     pub filter_text: String,
     pub filter_exclude: bool,
+    pub filter_saved: String,
     pub command_active: bool,
     pub command_buffer: String,
     pub autosave_global: bool,
@@ -91,6 +92,7 @@ impl App {
             filter_active: false,
             filter_text: String::new(),
             filter_exclude: false,
+            filter_saved: String::new(),
             command_active: false,
             command_buffer: String::new(),
             autosave_global: true,
@@ -1177,6 +1179,50 @@ impl App {
         let mode = if self.filter_exclude { "exclude" } else { "include" };
         self.status_message = format!("Filter '{}' ({}): {} visible", self.filter_text, mode, visible);
 
+        if self.cursor >= self.rows.len() && !self.rows.is_empty() {
+            self.cursor = self.rows.len() - 1;
+        }
+    }
+
+    /// Live filter — called on each keystroke while typing the filter.
+    pub fn apply_filter_live(&mut self) {
+        if self.filter_text.is_empty() {
+            self.rebuild_rows();
+            self.status_message.clear();
+            return;
+        }
+        // Temporarily treat ! prefix as exclude for live preview
+        let (text, exclude) = if let Some(rest) = self.filter_text.strip_prefix('!') {
+            (rest.to_owned(), true)
+        } else {
+            (self.filter_text.clone(), false)
+        };
+        if text.is_empty() {
+            self.rebuild_rows();
+            return;
+        }
+
+        self.rebuild_rows();
+        let opts = duir_core::filter::FilterOptions {
+            search_notes: true,
+            case_sensitive: false,
+        };
+        let mut match_set: std::collections::HashSet<(usize, Vec<usize>)> = std::collections::HashSet::new();
+        for (fi, file) in self.files.iter().enumerate() {
+            let matches = duir_core::filter::filter_items(&file.data.items, &text, &opts);
+            for path in matches {
+                match_set.insert((fi, path));
+            }
+        }
+        if exclude {
+            self.rows
+                .retain(|row| row.is_file_root || !match_set.contains(&(row.file_index, row.path.clone())));
+        } else {
+            self.rows
+                .retain(|row| row.is_file_root || match_set.contains(&(row.file_index, row.path.clone())));
+        }
+        let visible = self.rows.iter().filter(|r| !r.is_file_root).count();
+        self.status_message = format!("/{}: {} matches", self.filter_text, visible);
         if self.cursor >= self.rows.len() && !self.rows.is_empty() {
             self.cursor = self.rows.len() - 1;
         }

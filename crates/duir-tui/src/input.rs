@@ -136,7 +136,8 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
         }
         (KeyCode::Char('/'), false) => {
             app.filter_active = true;
-            app.filter_text.clear();
+            app.filter_saved = app.filter_text.clone();
+            // Keep current filter text for editing
             true
         }
         (KeyCode::Char(':'), false) => {
@@ -229,31 +230,42 @@ fn handle_edit_key(app: &mut App, key: KeyEvent) -> bool {
 fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Esc => {
+            // Revert to saved filter state
             app.filter_active = false;
-            app.filter_text.clear();
-            app.filter_exclude = false;
-            app.status_message.clear();
-            app.rebuild_rows(); // clear filter, show all
+            app.filter_text.clone_from(&app.filter_saved);
+            if app.filter_text.is_empty() {
+                app.filter_exclude = false;
+                app.status_message.clear();
+                app.rebuild_rows();
+            } else {
+                app.apply_filter();
+            }
             true
         }
         KeyCode::Enter => {
             app.filter_active = false;
-            // Check for ! prefix = exclude mode
             if let Some(rest) = app.filter_text.strip_prefix('!') {
                 app.filter_exclude = true;
                 app.filter_text = rest.to_owned();
             } else {
                 app.filter_exclude = false;
             }
-            app.apply_filter();
+            if app.filter_text.is_empty() {
+                app.status_message.clear();
+                app.rebuild_rows();
+            } else {
+                app.apply_filter();
+            }
             true
         }
         KeyCode::Backspace => {
             app.filter_text.pop();
+            app.apply_filter_live();
             true
         }
         KeyCode::Char(c) => {
             app.filter_text.push(c);
+            app.apply_filter_live();
             true
         }
         _ => false,

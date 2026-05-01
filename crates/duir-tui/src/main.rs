@@ -132,7 +132,12 @@ fn run_loop(
                 .split(main_chunks[0]);
 
             // Tree pane
-            let tree_title = if app.has_unsaved() { " Tree (*) " } else { " Tree " };
+            let tree_title = match (app.has_unsaved(), !app.filter_text.is_empty() && !app.filter_active) {
+                (true, true) => format!(" Tree (*) [/{}] ", app.filter_text),
+                (true, false) => " Tree (*) ".to_owned(),
+                (false, true) => format!(" Tree [/{}] ", app.filter_text),
+                (false, false) => " Tree ".to_owned(),
+            };
             let tree_border_style = if app.focus == Focus::Tree {
                 Style::default().add_modifier(Modifier::BOLD)
             } else {
