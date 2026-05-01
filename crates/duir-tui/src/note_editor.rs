@@ -27,6 +27,7 @@ pub struct NoteEditor<'a> {
     pending_op: Option<char>,
     command_history: Vec<String>,
     history_index: Option<usize>,
+    completer: crate::completer::Completer,
 }
 
 impl NoteEditor<'_> {
@@ -55,6 +56,7 @@ impl NoteEditor<'_> {
             pending_op: None,
             command_history: Vec::new(),
             history_index: None,
+            completer: crate::completer::Completer::new(crate::completer::EDITOR_COMMANDS),
         }
     }
 
@@ -86,11 +88,25 @@ impl NoteEditor<'_> {
     #[must_use]
     pub fn status_line(&self) -> Line<'_> {
         match self.mode {
-            EditorMode::Command => Line::from(vec![
-                Span::raw(":"),
-                Span::styled(&self.command_buf, Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw("▏"),
-            ]),
+            EditorMode::Command => {
+                let mut spans = vec![
+                    Span::raw(":"),
+                    Span::styled(&self.command_buf, Style::default().add_modifier(Modifier::BOLD)),
+                    Span::raw("▏"),
+                ];
+                if !self.completer.matches.is_empty() {
+                    spans.push(Span::raw("  "));
+                    for (i, m) in self.completer.matches.iter().enumerate() {
+                        let style = if self.completer.selected == Some(i) {
+                            Style::default().bg(Color::DarkGray).fg(Color::Yellow)
+                        } else {
+                            Style::default().fg(Color::DarkGray)
+                        };
+                        spans.push(Span::styled(format!(" {m} "), style));
+                    }
+                }
+                Line::from(spans)
+            }
             EditorMode::Search => Line::from(vec![
                 Span::raw("/"),
                 Span::styled(&self.command_buf, Style::default().add_modifier(Modifier::BOLD)),
@@ -470,23 +486,42 @@ impl NoteEditor<'_> {
         match key.code {
             KeyCode::Esc => {
                 self.history_index = None;
+                self.completer.matches.clear();
                 self.enter_normal();
                 true
             }
             KeyCode::Enter => {
                 let cmd = self.command_buf.clone();
                 let is_search = self.mode == EditorMode::Search;
-                // Save to history
                 if !cmd.trim().is_empty() {
                     let entry = if is_search { format!("/{cmd}") } else { cmd.clone() };
                     self.command_history.push(entry);
                 }
                 self.history_index = None;
+                self.completer.matches.clear();
                 self.enter_normal();
                 if is_search {
                     self.execute_search(&cmd);
                 } else {
                     self.execute_editor_command(&cmd);
+                }
+                true
+            }
+            KeyCode::Tab => {
+                if self.mode == EditorMode::Command {
+                    self.completer.update(&self.command_buf);
+                    if let Some(completion) = self.completer.next() {
+                        self.command_buf = completion.to_owned();
+                    }
+                }
+                true
+            }
+            KeyCode::BackTab => {
+                if self.mode == EditorMode::Command {
+                    self.completer.update(&self.command_buf);
+                    if let Some(completion) = self.completer.prev() {
+                        self.command_buf = completion.to_owned();
+                    }
                 }
                 true
             }
@@ -499,11 +534,10 @@ impl NoteEditor<'_> {
                     .map_or(self.command_history.len() - 1, |i| i.saturating_sub(1));
                 self.history_index = Some(idx);
                 let entry = self.command_history[idx].clone();
-                if let Some(search) = entry.strip_prefix('/') {
-                    self.command_buf = search.to_owned();
-                } else {
-                    self.command_buf = entry;
-                }
+                entry
+                    .strip_prefix('/')
+                    .unwrap_or(&entry)
+                    .clone_into(&mut self.command_buf);
                 true
             }
             KeyCode::Down => {
@@ -511,11 +545,10 @@ impl NoteEditor<'_> {
                     if idx + 1 < self.command_history.len() {
                         self.history_index = Some(idx + 1);
                         let entry = self.command_history[idx + 1].clone();
-                        if let Some(search) = entry.strip_prefix('/') {
-                            self.command_buf = search.to_owned();
-                        } else {
-                            self.command_buf = entry;
-                        }
+                        entry
+                            .strip_prefix('/')
+                            .unwrap_or(&entry)
+                            .clone_into(&mut self.command_buf);
                     } else {
                         self.history_index = None;
                         self.command_buf.clear();
@@ -526,9 +559,14 @@ impl NoteEditor<'_> {
             KeyCode::Backspace => {
                 if self.command_buf.is_empty() {
                     self.history_index = None;
+                    self.completer.matches.clear();
                     self.enter_normal();
                 } else {
                     self.command_buf.pop();
+                    if self.mode == EditorMode::Command {
+                        self.completer.update(&self.command_buf);
+                        self.completer.reset_selection();
+                    }
                 }
                 true
             }
@@ -537,6 +575,9 @@ impl NoteEditor<'_> {
                 self.command_buf.push(c);
                 if self.mode == EditorMode::Search {
                     self.textarea.set_search_pattern(&self.command_buf).ok();
+                } else {
+                    self.completer.update(&self.command_buf);
+                    self.completer.reset_selection();
                 }
                 true
             }

@@ -63,6 +63,7 @@ pub struct App {
     pub show_help: bool,
     pub help_scroll: u16,
     pub show_about: bool,
+    pub completer: crate::completer::Completer,
 }
 
 impl App {
@@ -95,6 +96,7 @@ impl App {
             show_help: false,
             help_scroll: 0,
             show_about: false,
+            completer: crate::completer::Completer::new(crate::completer::APP_COMMANDS),
         }
     }
 

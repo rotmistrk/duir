@@ -1,4 +1,5 @@
 mod app;
+mod completer;
 mod help;
 mod input;
 mod note_editor;
@@ -16,7 +17,7 @@ use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_ra
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
@@ -249,13 +250,26 @@ fn run_loop(
 
 fn build_status_line(app: &App) -> Line<'_> {
     if app.command_active {
-        Line::from(vec![
+        let mut spans = vec![
             Span::raw(":"),
             Span::styled(
                 format!("{}▏", app.command_buffer),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
-        ])
+        ];
+        // Show completion matches
+        if !app.completer.matches.is_empty() {
+            spans.push(Span::raw("  "));
+            for (i, m) in app.completer.matches.iter().enumerate() {
+                let style = if app.completer.selected == Some(i) {
+                    Style::default().bg(Color::DarkGray).fg(Color::Yellow)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+                spans.push(Span::styled(format!(" {m} "), style));
+            }
+        }
+        Line::from(spans)
     } else if app.filter_active {
         Line::from(vec![
             Span::raw("Filter: "),

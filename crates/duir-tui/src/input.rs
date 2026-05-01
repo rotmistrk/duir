@@ -235,16 +235,30 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
             app.command_active = false;
             app.command_buffer.clear();
             app.command_history_index = None;
+            app.completer.matches.clear();
             true
         }
         KeyCode::Enter => {
-            // Save to history before execution
             let cmd = app.command_buffer.trim().to_owned();
             if !cmd.is_empty() {
                 app.command_history.push(cmd);
             }
             app.command_history_index = None;
-            // Signal that command is ready — main loop will call execute_command
+            app.completer.matches.clear();
+            true
+        }
+        KeyCode::Tab => {
+            app.completer.update(&app.command_buffer);
+            if let Some(completion) = app.completer.next() {
+                app.command_buffer = completion.to_owned();
+            }
+            true
+        }
+        KeyCode::BackTab => {
+            app.completer.update(&app.command_buffer);
+            if let Some(completion) = app.completer.prev() {
+                app.command_buffer = completion.to_owned();
+            }
             true
         }
         KeyCode::Up => {
@@ -254,6 +268,7 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
                     .map_or(app.command_history.len() - 1, |i| i.saturating_sub(1));
                 app.command_history_index = Some(idx);
                 app.command_buffer.clone_from(&app.command_history[idx]);
+                app.completer.update(&app.command_buffer);
             }
             true
         }
@@ -267,20 +282,26 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
                     app.command_buffer.clear();
                 }
             }
+            app.completer.update(&app.command_buffer);
             true
         }
         KeyCode::Backspace => {
             if app.command_buffer.is_empty() {
                 app.command_active = false;
                 app.command_history_index = None;
+                app.completer.matches.clear();
             } else {
                 app.command_buffer.pop();
+                app.completer.update(&app.command_buffer);
+                app.completer.reset_selection();
             }
             true
         }
         KeyCode::Char(c) => {
             app.command_history_index = None;
             app.command_buffer.push(c);
+            app.completer.update(&app.command_buffer);
+            app.completer.reset_selection();
             true
         }
         _ => false,
