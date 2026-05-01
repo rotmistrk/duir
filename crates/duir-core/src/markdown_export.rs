@@ -57,6 +57,21 @@ fn format_title(item: &TodoItem) -> String {
     }
 }
 
+fn meta_comment(item: &TodoItem) -> String {
+    let mut flags = Vec::new();
+    if item.folded {
+        flags.push("folded");
+    }
+    if item.important {
+        flags.push("important");
+    }
+    if flags.is_empty() {
+        String::new()
+    } else {
+        format!(" <!-- {} -->", flags.join(" "))
+    }
+}
+
 fn render_item(buf: &mut String, item: &TodoItem, depth: usize, max_heading_depth: usize, list_indent: usize) {
     if depth <= max_heading_depth {
         render_heading(buf, item, depth, max_heading_depth);
@@ -67,7 +82,8 @@ fn render_item(buf: &mut String, item: &TodoItem, depth: usize, max_heading_dept
 
 fn render_heading(buf: &mut String, item: &TodoItem, depth: usize, max_heading_depth: usize) {
     let hashes: String = "#".repeat(depth);
-    let _ = writeln!(buf, "{hashes} {}", format_title(item));
+    let meta = meta_comment(item);
+    let _ = writeln!(buf, "{hashes} {}{meta}", format_title(item));
     if !item.note.is_empty() {
         let _ = writeln!(buf, "\n{}", item.note);
     }
@@ -86,7 +102,8 @@ fn render_heading(buf: &mut String, item: &TodoItem, depth: usize, max_heading_d
 fn render_checkbox(buf: &mut String, item: &TodoItem, max_heading_depth: usize, list_indent: usize) {
     let indent = "  ".repeat(list_indent);
     let cb = checkbox(&item.completed);
-    let _ = writeln!(buf, "{indent}- {cb} {}", format_title(item));
+    let meta = meta_comment(item);
+    let _ = writeln!(buf, "{indent}- {cb} {}{meta}", format_title(item));
     if !item.note.is_empty() {
         let _ = writeln!(buf);
         let note_indent = "  ".repeat(list_indent + 1);
@@ -136,7 +153,7 @@ mod tests {
     fn important_item_bold() {
         let i = important_item("Urgent");
         let md = export_subtree(&i, 3);
-        assert_eq!(md, "# **Urgent**\n");
+        assert_eq!(md, "# **Urgent** <!-- important -->\n");
     }
 
     #[test]

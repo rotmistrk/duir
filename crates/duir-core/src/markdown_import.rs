@@ -7,12 +7,15 @@ enum Line<'a> {
     Heading {
         level: usize,
         text: &'a str,
+        folded: bool,
+        important: bool,
     },
     Checkbox {
         depth: usize,
         state: Completion,
         text: &'a str,
         important: bool,
+        folded: bool,
     },
     Text(&'a str),
 }
@@ -39,7 +42,14 @@ fn try_parse_heading(line: &str) -> Option<Line<'_>> {
     if rest.is_empty() {
         return None;
     }
-    Some(Line::Heading { level, text: rest })
+    let (text, folded, important_meta) = strip_meta(rest);
+    let (text, important_bold) = strip_bold(text);
+    Some(Line::Heading {
+        level,
+        text,
+        folded,
+        important: important_meta || important_bold,
+    })
 }
 
 /// Try to parse a checkbox line like `- [x] text` or `  - [ ] text`.
@@ -50,52 +60,58 @@ fn try_parse_checkbox(line: &str) -> Option<Line<'_>> {
 
     let after_dash = trimmed.strip_prefix("- ")?;
 
-    if let Some(rest) = after_dash
+    let (state, rest) = if let Some(r) = after_dash
         .strip_prefix("[x] ")
         .or_else(|| after_dash.strip_prefix("[X] "))
     {
-        let (text, important) = strip_bold(rest);
-        return Some(Line::Checkbox {
-            depth,
-            state: Completion::Done,
-            text,
-            important,
-        });
-    }
-    if let Some(rest) = after_dash.strip_prefix("[ ] ") {
-        let (text, important) = strip_bold(rest);
-        return Some(Line::Checkbox {
-            depth,
-            state: Completion::Open,
-            text,
-            important,
-        });
-    }
-    if let Some(rest) = after_dash.strip_prefix("[-] ") {
-        let (text, important) = strip_bold(rest);
-        return Some(Line::Checkbox {
-            depth,
-            state: Completion::Partial,
-            text,
-            important,
-        });
-    }
-
-    // Bold item without checkbox: `- **text**`
-    if after_dash.starts_with("**") && after_dash.ends_with("**") && after_dash.len() > 4 {
-        let inner = &after_dash[2..after_dash.len() - 2];
+        (Completion::Done, r)
+    } else if let Some(r) = after_dash.strip_prefix("[ ] ") {
+        (Completion::Open, r)
+    } else if let Some(r) = after_dash.strip_prefix("[-] ") {
+        (Completion::Partial, r)
+    } else if after_dash.starts_with("**") && after_dash.ends_with("**") && after_dash.len() > 4 {
+        let (text, folded, _) = strip_meta(after_dash);
+        let inner = text
+            .strip_prefix("**")
+            .and_then(|s| s.strip_suffix("**"))
+            .unwrap_or(text);
         return Some(Line::Checkbox {
             depth,
             state: Completion::Open,
             text: inner,
             important: true,
+            folded,
         });
-    }
+    } else {
+        return None;
+    };
 
-    None
+    let (text_with_meta, folded, important_meta) = strip_meta(rest);
+    let (text, important_bold) = strip_bold(text_with_meta);
+    Some(Line::Checkbox {
+        depth,
+        state,
+        text,
+        important: important_meta || important_bold,
+        folded,
+    })
 }
 
-/// Strip bold markers from text, returning (text, bold flag).
+/// Extract `<!-- flags -->` metadata from end of line.
+/// Returns (text without meta, folded, important from meta).
+fn strip_meta(s: &str) -> (&str, bool, bool) {
+    if let Some(start) = s.rfind("<!-- ")
+        && let Some(end) = s[start..].find(" -->")
+    {
+        let flags = &s[start + 5..start + end];
+        let text = s[..start].trim_end();
+        let folded = flags.contains("folded");
+        let important = flags.contains("important");
+        return (text, folded, important);
+    }
+    (s, false, false)
+}
+
 fn strip_bold(s: &str) -> (&str, bool) {
     if s.starts_with("**") && s.ends_with("**") && s.len() > 4 {
         (&s[2..s.len() - 2], true)
@@ -133,8 +149,12 @@ pub fn import_markdown(content: &str) -> TodoFile {
     for line in content.lines() {
         let classified = classify_line(line);
         match classified {
-            Line::Heading { level, text } => {
-                // Flush checkboxes into current heading.
+            Line::Heading {
+                level,
+                text,
+                folded,
+                important,
+            } => {
                 flush_checkbox_stack(&mut checkbox_stack, &mut heading_stack, &mut file);
 
                 if !title_set {
@@ -142,10 +162,11 @@ pub fn import_markdown(content: &str) -> TodoFile {
                     title_set = true;
                 }
 
-                // Flush headings deeper or equal to this level.
                 flush_headings_to_level(&mut heading_stack, level, &mut file);
 
-                let item = TodoItem::new(text);
+                let mut item = TodoItem::new(text);
+                item.folded = folded;
+                item.important = important;
                 heading_stack.push((level, item));
                 note_target = NoteTarget::Heading;
             }
@@ -154,13 +175,14 @@ pub fn import_markdown(content: &str) -> TodoFile {
                 state,
                 text,
                 important,
+                folded,
             } => {
-                // Flush checkboxes deeper than this depth.
                 flush_checkboxes_to_depth(&mut checkbox_stack, depth);
 
                 let mut item = TodoItem::new(text);
                 item.completed = state;
                 item.important = important;
+                item.folded = folded;
                 checkbox_stack.push((depth, item));
                 note_target = NoteTarget::Checkbox;
             }
