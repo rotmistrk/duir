@@ -801,7 +801,7 @@ impl App {
                     "No children to collapse".clone_into(&mut self.status_message);
                     return;
                 }
-                // Export children as markdown, append to note
+                // Export children as markdown, append to note with marker
                 let mut md = String::new();
                 for child in &item.items {
                     md.push_str(&duir_core::markdown_export::export_subtree(child, 3));
@@ -809,6 +809,7 @@ impl App {
                 if !item.note.is_empty() {
                     item.note.push_str("\n\n");
                 }
+                item.note.push_str("<!-- duir:collapsed -->\n");
                 item.note.push_str(&md);
                 item.items.clear();
                 self.files[fi].modified = true;
@@ -819,7 +820,6 @@ impl App {
     }
 
     fn cmd_expand(&mut self) {
-        // Expand markdown note into subtree children
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
                 return;
@@ -830,9 +830,22 @@ impl App {
                     "No note to expand".clone_into(&mut self.status_message);
                     return;
                 }
-                let parsed = duir_core::markdown_import::import_markdown(&item.note);
+                let marker = "<!-- duir:collapsed -->";
+                let (keep_note, md_part) = if let Some(pos) = item.note.find(marker) {
+                    (
+                        item.note[..pos].trim_end().to_owned(),
+                        item.note[pos + marker.len()..].to_owned(),
+                    )
+                } else {
+                    (String::new(), item.note.clone())
+                };
+                let parsed = duir_core::markdown_import::import_markdown(&md_part);
+                if parsed.items.is_empty() {
+                    "No tree structure found in note".clone_into(&mut self.status_message);
+                    return;
+                }
                 item.items.extend(parsed.items);
-                item.note.clear();
+                item.note = keep_note;
                 item.folded = false;
                 self.files[fi].modified = true;
                 self.rebuild_rows();

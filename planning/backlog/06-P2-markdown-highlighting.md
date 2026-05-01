@@ -66,8 +66,8 @@ fn main() {}
 
 - [ ] 06.001 — Markdown line-by-line style parser
 - [ ] 06.002 — Integrate syntect for fenced code blocks
-- [ ] 06.003 — Two-mode rendering (view vs edit)
-- [ ] 06.004 — Auto-detect language for untagged blocks
+- [ ] 06.003 — Auto-detect language for untagged blocks
+- [ ] 06.004 — Two-mode rendering (view vs edit) — separate epic/story
 
 ## Notes
 
