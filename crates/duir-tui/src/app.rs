@@ -128,6 +128,9 @@ impl App {
 
     /// Rebuild the flattened row list from all loaded files.
     pub fn rebuild_rows(&mut self) {
+        // Invalidate editor cache — paths may have shifted
+        self.editor_cache.clear();
+
         self.rows.clear();
         for fi in 0..self.files.len() {
             let file = &self.files[fi];
