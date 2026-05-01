@@ -496,9 +496,9 @@ impl App {
                 if needs_confirm {
                     self.pending_delete = true;
                     let reason = if item.items.is_empty() {
-                        "incomplete"
+                        "incomplete task"
                     } else {
-                        "has children"
+                        "branch with children"
                     };
                     self.set_status(&format!("Delete {reason}? y/n"), StatusLevel::Warning);
                     return;
