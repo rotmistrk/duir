@@ -449,6 +449,27 @@ impl NoteEditor<'_> {
             self.textarea.insert_newline();
             self.auto_indent();
             self.dirty = true;
+        } else if key.code == KeyCode::Tab {
+            // Insert spaces to next tab stop
+            let (_, col) = self.textarea.cursor();
+            let tab_width = self.textarea.tab_length() as usize;
+            let spaces = tab_width - (col % tab_width);
+            self.textarea.insert_str(" ".repeat(spaces));
+            self.dirty = true;
+        } else if key.code == KeyCode::Backspace {
+            // If cursor is on leading whitespace, delete back to previous tab stop
+            let (row, col) = self.textarea.cursor();
+            let line = self.textarea.lines().get(row).cloned().unwrap_or_default();
+            let leading_ws = line.len() - line.trim_start().len();
+            let tab_width = self.textarea.tab_length() as usize;
+            if col > 0 && col <= leading_ws && col % tab_width == 0 {
+                for _ in 0..tab_width {
+                    self.textarea.delete_char();
+                }
+            } else {
+                self.textarea.delete_char();
+            }
+            self.dirty = true;
         } else {
             self.textarea.input(key);
             self.dirty = true;
@@ -989,9 +1010,9 @@ impl NoteEditor<'_> {
             frame.render_widget(&self.textarea, area);
         } else {
             let content = self.content();
-            let (cursor_row, _) = self.textarea.cursor();
+            let (cursor_row, cursor_col) = self.textarea.cursor();
             let block = self.textarea.block().cloned();
-            let lines = crate::markdown_view::highlight_lines(&content, cursor_row);
+            let lines = crate::markdown_view::highlight_lines(&content, cursor_row, cursor_col);
             #[allow(clippy::cast_possible_truncation)]
             let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
             let mut paragraph = ratatui::widgets::Paragraph::new(lines)
@@ -1017,21 +1038,27 @@ impl NoteEditor<'_> {
 
 /// Extract a URL from a line at the given column position.
 fn extract_url(line: &str, col: usize) -> Option<String> {
-    // Find URLs: https://... or http://...
-    let mut start = col;
-    while start > 0 && !line[..start].ends_with(|c: char| c.is_whitespace() || c == '(' || c == '<') {
-        start -= 1;
-    }
-    let rest = &line[start..];
-    // Try to find a URL starting near the cursor
+    // Find all URLs in the line, return the one containing or nearest to cursor
     for prefix in ["https://", "http://"] {
-        if let Some(pos) = rest.find(prefix) {
-            let url_start = start + pos;
+        let mut search_from = 0;
+        while let Some(pos) = line[search_from..].find(prefix) {
+            let url_start = search_from + pos;
             let url_end = line[url_start..]
                 .find(|c: char| c.is_whitespace() || c == ')' || c == '>' || c == '"' || c == '\'')
                 .map_or(line.len(), |e| url_start + e);
-            if col <= url_end {
+            if col >= url_start && col <= url_end {
                 return Some(line[url_start..url_end].to_owned());
+            }
+            search_from = url_end;
+        }
+    }
+    // Also check markdown links: [text](url)
+    if let Some(paren_start) = line.find("](") {
+        let url_start = paren_start + 2;
+        if let Some(paren_end) = line[url_start..].find(')') {
+            let url = &line[url_start..url_start + paren_end];
+            if (url.starts_with("http://") || url.starts_with("https://")) && col <= url_start + paren_end {
+                return Some(url.to_owned());
             }
         }
     }
