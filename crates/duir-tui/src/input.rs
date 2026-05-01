@@ -31,8 +31,8 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
-    // Clear pending delete on any key except 'd'
-    if app.pending_delete && key.code != KeyCode::Char('d') {
+    // Clear pending delete on any key except 'y' (confirm)
+    if app.pending_delete && key.code != KeyCode::Char('y') {
         app.pending_delete = false;
         app.status_message.clear();
     }
@@ -99,6 +99,11 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
         }
         (KeyCode::Char('d'), false) => {
             app.delete_current();
+            true
+        }
+        (KeyCode::Char('y'), false) if app.pending_delete => {
+            app.pending_delete = false;
+            app.force_delete_current();
             true
         }
         (KeyCode::Char('!'), false) => {

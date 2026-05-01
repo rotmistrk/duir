@@ -428,18 +428,27 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            // Check if node has children and warn
             let has_children = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
                 .is_some_and(|item| !item.items.is_empty());
-            if has_children && !self.pending_delete {
+            if has_children {
                 self.pending_delete = true;
-                "Node has children! Press d again to confirm delete".clone_into(&mut self.status_message);
+                "Node has children! Press y to confirm, any other key to cancel".clone_into(&mut self.status_message);
                 return;
             }
-            self.pending_delete = false;
+            self.force_delete_current();
+        }
+    }
+
+    pub fn force_delete_current(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.is_file_root {
+                return;
+            }
+            let fi = row.file_index;
             if duir_core::tree_ops::remove_item(&mut self.files[fi].data, &row.path).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
+                self.status_message.clear();
             }
         }
     }
