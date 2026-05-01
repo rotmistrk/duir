@@ -53,6 +53,9 @@ pub struct App {
     pub command_active: bool,
     pub command_buffer: String,
     pub autosave_global: bool,
+    pub editor: Option<crate::note_editor::NoteEditor<'static>>,
+    pub editor_file_index: usize,
+    pub editor_path: omela_core::tree_ops::TreePath,
 }
 
 impl App {
@@ -75,6 +78,9 @@ impl App {
             command_active: false,
             command_buffer: String::new(),
             autosave_global: false,
+            editor: None,
+            editor_file_index: 0,
+            editor_path: vec![],
         }
     }
 
@@ -190,6 +196,39 @@ impl App {
         })
     }
 
+    /// Save editor content back to the model, then load the new item's note.
+    pub fn sync_editor(&mut self) {
+        // Save current editor content back
+        if let Some(editor) = &self.editor
+            && editor.dirty
+        {
+            let content = editor.content();
+            let fi = self.editor_file_index;
+            let path = self.editor_path.clone();
+            if path.is_empty() {
+                if fi < self.files.len() {
+                    self.files[fi].data.note = content;
+                    self.files[fi].modified = true;
+                }
+            } else if fi < self.files.len()
+                && let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            {
+                item.note = content;
+                self.files[fi].modified = true;
+            }
+        }
+
+        // Load new item's note
+        if let Some(row) = self.current_row().cloned() {
+            let note = self.current_note();
+            self.editor = Some(crate::note_editor::NoteEditor::new(&note));
+            self.editor_file_index = row.file_index;
+            self.editor_path = row.path;
+        } else {
+            self.editor = None;
+        }
+    }
+
     fn navigate_to(&mut self, file_index: usize, path: &[usize]) {
         if let Some(pos) = self
             .rows
@@ -198,19 +237,22 @@ impl App {
         {
             self.cursor = pos;
             self.note_scroll = 0;
+            self.sync_editor();
         }
     }
-    pub const fn move_up(&mut self) {
+    pub fn move_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
             self.note_scroll = 0;
+            self.sync_editor();
         }
     }
 
-    pub const fn move_down(&mut self) {
+    pub fn move_down(&mut self) {
         if self.cursor + 1 < self.rows.len() {
             self.cursor += 1;
             self.note_scroll = 0;
+            self.sync_editor();
         }
     }
 

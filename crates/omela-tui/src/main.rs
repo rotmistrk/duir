@@ -1,5 +1,6 @@
 mod app;
 mod input;
+mod note_editor;
 mod note_view;
 mod tree_view;
 
@@ -82,6 +83,9 @@ fn main() -> io::Result<()> {
         app.add_empty_file("todo");
     }
 
+    // Initialize editor for the first item
+    app.sync_editor();
+
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
@@ -130,20 +134,24 @@ fn run_loop(
             frame.render_stateful_widget(TreeView::new().block(tree_block), content_chunks[0], app);
 
             // Note pane
-            let note_content = app.current_note();
-            let note_border_style = if app.focus == Focus::Note {
-                Style::default().add_modifier(Modifier::BOLD)
+            let focused = app.focus == Focus::Note;
+            if let Some(editor) = &mut app.editor {
+                editor.set_block(" Note", focused);
+                editor.render(frame, content_chunks[1]);
             } else {
-                Style::default()
-            };
-            let note_block = Block::default()
-                .title(" Note ")
-                .borders(Borders::ALL)
-                .border_style(note_border_style);
-            let note_widget = NoteView::new(&note_content)
-                .block(note_block)
-                .scroll(u16::try_from(app.note_scroll).unwrap_or(u16::MAX));
-            frame.render_widget(note_widget, content_chunks[1]);
+                let note_content = app.current_note();
+                let note_border_style = if focused {
+                    Style::default().add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                let note_block = Block::default()
+                    .title(" Note ")
+                    .borders(Borders::ALL)
+                    .border_style(note_border_style);
+                let note_widget = NoteView::new(&note_content).block(note_block).scroll(0);
+                frame.render_widget(note_widget, content_chunks[1]);
+            }
 
             // Status bar
             let status = build_status_line(app);

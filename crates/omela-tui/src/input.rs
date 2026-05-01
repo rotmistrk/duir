@@ -141,24 +141,20 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
     }
 }
 
-const fn handle_note_key(app: &mut App, key: KeyEvent) -> bool {
-    match key.code {
-        KeyCode::Up => {
-            if app.note_scroll > 0 {
-                app.note_scroll -= 1;
-            }
-            true
-        }
-        KeyCode::Down => {
-            app.note_scroll += 1;
-            true
-        }
-        KeyCode::Tab | KeyCode::Esc | KeyCode::Char('q') => {
-            app.focus = Focus::Tree;
-            true
-        }
-        _ => false,
+fn handle_note_key(app: &mut App, key: KeyEvent) -> bool {
+    // Tab in normal mode returns to tree
+    if let Some(editor) = &app.editor
+        && editor.mode == crate::note_editor::EditorMode::Normal
+        && key.code == KeyCode::Tab
+    {
+        // Save editor content back before leaving
+        app.sync_editor();
+        app.focus = Focus::Tree;
+        return true;
     }
+
+    // Delegate to the editor
+    app.editor.as_mut().is_some_and(|editor| editor.handle_key(key))
 }
 
 fn handle_edit_key(app: &mut App, key: KeyEvent) -> bool {
