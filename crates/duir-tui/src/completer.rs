@@ -17,18 +17,15 @@ impl Completer {
 
     /// Update matches based on current input prefix.
     pub fn update(&mut self, input: &str) {
-        if input.is_empty() {
-            self.matches.clear();
-            self.selected = None;
-            return;
-        }
-        self.matches = self
-            .commands
-            .iter()
-            .filter(|cmd| cmd.starts_with(input))
-            .copied()
-            .collect();
-        // Reset selection if it's out of bounds
+        self.matches = if input.is_empty() {
+            self.commands.clone()
+        } else {
+            self.commands
+                .iter()
+                .filter(|cmd| cmd.starts_with(input))
+                .copied()
+                .collect()
+        };
         if let Some(sel) = self.selected
             && sel >= self.matches.len()
         {

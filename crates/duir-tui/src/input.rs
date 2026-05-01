@@ -142,6 +142,7 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
         (KeyCode::Char(':'), false) => {
             app.command_active = true;
             app.command_buffer.clear();
+            app.completer.update("");
             true
         }
         (KeyCode::F(1), false) => {

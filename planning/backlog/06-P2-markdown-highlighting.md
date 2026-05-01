@@ -76,3 +76,10 @@ fn main() {}
 - Could make syntect optional via cargo feature flag
 - The unfocused rendered view could reuse the existing `NoteView` widget
   with enhanced markdown parsing
+
+### URL Handling
+
+- Shift+Enter on a URL in the editor opens it in the system browser
+- Use `open` (macOS), `xdg-open` (Linux), or `start` (Windows)
+- URL detection: simple regex for `https?://...` patterns
+- Also detect markdown links `[text](url)` and open the url part

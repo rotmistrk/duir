@@ -18,7 +18,7 @@ use crossterm::execute;
 use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
@@ -182,6 +182,11 @@ fn run_loop(
             let status = build_status_line(app);
             frame.render_widget(Paragraph::new(status), main_chunks[1]);
 
+            // Command palette popup (above status bar)
+            if app.command_active && !app.completer.matches.is_empty() {
+                render_palette(frame, &app.completer, main_chunks[1]);
+            }
+
             // Overlays
             if app.show_about {
                 help::render_about(frame, size);
@@ -265,28 +270,51 @@ fn run_loop(
     Ok(())
 }
 
+fn render_palette(frame: &mut ratatui::Frame, completer: &crate::completer::Completer, status_area: Rect) {
+    use ratatui::widgets::Clear;
+
+    let matches = &completer.matches;
+    let max_visible = 10.min(matches.len());
+    #[allow(clippy::cast_possible_truncation)]
+    let height = max_visible as u16;
+
+    // Position popup just above the status bar
+    let popup = Rect::new(
+        status_area.x + 1,
+        status_area.y.saturating_sub(height),
+        30.min(status_area.width),
+        height,
+    );
+
+    frame.render_widget(Clear, popup);
+
+    let lines: Vec<Line<'_>> = matches
+        .iter()
+        .take(max_visible)
+        .enumerate()
+        .map(|(i, cmd)| {
+            let style = if completer.selected == Some(i) {
+                Style::default().bg(Color::DarkGray).fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::White).bg(Color::Rgb(30, 30, 30))
+            };
+            Line::styled(format!(" {cmd}"), style)
+        })
+        .collect();
+
+    let block = Block::default().borders(Borders::NONE);
+    let paragraph = Paragraph::new(lines).block(block);
+    frame.render_widget(paragraph, popup);
+}
 fn build_status_line(app: &App) -> Line<'_> {
     if app.command_active {
-        let mut spans = vec![
+        Line::from(vec![
             Span::raw(":"),
             Span::styled(
                 format!("{}▏", app.command_buffer),
                 Style::default().add_modifier(Modifier::BOLD),
             ),
-        ];
-        // Show completion matches
-        if !app.completer.matches.is_empty() {
-            spans.push(Span::raw("  "));
-            for (i, m) in app.completer.matches.iter().enumerate() {
-                let style = if app.completer.selected == Some(i) {
-                    Style::default().bg(Color::DarkGray).fg(Color::Yellow)
-                } else {
-                    Style::default().fg(Color::DarkGray)
-                };
-                spans.push(Span::styled(format!(" {m} "), style));
-            }
-        }
-        Line::from(spans)
+        ])
     } else if app.filter_active {
         Line::from(vec![
             Span::raw("Filter: "),
