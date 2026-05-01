@@ -114,6 +114,7 @@ fn run_loop(
     app: &mut App,
     storage_dir: &PathBuf,
 ) -> io::Result<()> {
+    let mut last_save = std::time::Instant::now();
     loop {
         terminal.draw(|frame| {
             let size = frame.area();
@@ -264,12 +265,14 @@ fn run_loop(
             }
         }
 
-        // Autosave — only when tree is focused (model is guaranteed current)
+        // Autosave — debounced, only when tree focused, at most every 5 seconds
         if app.focus == Focus::Tree
+            && last_save.elapsed() > Duration::from_secs(5)
             && app.files.iter().any(|f| f.autosave && f.modified)
             && let Ok(storage) = FileStorage::new(storage_dir)
         {
             app.save_all(&storage);
+            last_save = std::time::Instant::now();
         }
 
         if app.should_quit {

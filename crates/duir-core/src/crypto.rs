@@ -129,15 +129,23 @@ pub fn lock_for_save<S: std::hash::BuildHasher>(
         let child_saved = lock_for_save(&mut item.items, passwords, &path)?;
         saved_state.extend(child_saved);
 
-        // If this node is unlocked, re-encrypt it
+        // If this node is unlocked, prepare it for save
         if item.unlocked
             && let Some(pw) = passwords.get(&path)
         {
-            // Save current plaintext state
             let note_backup = item.note.clone();
             let items_backup = item.items.clone();
 
-            encrypt_item(item, pw)?;
+            // Only re-encrypt if cipher is stale (None = invalidated by edits)
+            if item.cipher.is_none() {
+                encrypt_item(item, pw)?;
+            } else {
+                // Cipher is still valid — just clear plaintext for save
+                item.items.clear();
+                item.note.clear();
+                item.unlocked = false;
+                item.folded = true;
+            }
 
             saved_state.push((path, note_backup, items_backup));
         }
@@ -147,6 +155,7 @@ pub fn lock_for_save<S: std::hash::BuildHasher>(
 }
 
 /// Restore decrypted state after save.
+/// The cipher is kept valid since it was just written to disk.
 pub fn restore_after_save(items: &mut [TodoItem], saved: &[SavedNodeState]) {
     for (path, note, children) in saved {
         if let Some(item) = navigate_mut(items, path) {
@@ -154,7 +163,16 @@ pub fn restore_after_save(items: &mut [TodoItem], saved: &[SavedNodeState]) {
             item.items.clone_from(children);
             item.unlocked = true;
             item.folded = false;
+            // cipher stays valid — it matches the content we just saved
         }
+    }
+}
+
+/// Invalidate the cipher cache for an encrypted ancestor.
+/// Call this when any modification is made inside an unlocked encrypted subtree.
+pub fn invalidate_cipher(item: &mut TodoItem) {
+    if item.unlocked && item.cipher.is_some() {
+        item.cipher = None;
     }
 }
 

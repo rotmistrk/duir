@@ -261,14 +261,14 @@ impl App {
             if path.is_empty() {
                 if fi < self.files.len() && self.files[fi].data.note != content {
                     self.files[fi].data.note = content;
-                    self.files[fi].modified = true;
+                    self.mark_modified(fi, &path);
                 }
             } else if fi < self.files.len()
                 && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 && item.note != content
             {
                 item.note = content;
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &path);
             }
         }
     }
@@ -292,6 +292,17 @@ impl App {
     pub fn set_status(&mut self, msg: &str, level: StatusLevel) {
         msg.clone_into(&mut self.status_message);
         self.status_level = level;
+    }
+
+    /// Mark a file as modified and invalidate cipher caches for encrypted ancestors.
+    fn mark_modified(&mut self, fi: usize, path: &[usize]) {
+        self.files[fi].modified = true;
+        for len in (1..=path.len()).rev() {
+            let ancestor = &path[..len];
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &ancestor.to_vec()) {
+                duir_core::crypto::invalidate_cipher(item);
+            }
+        }
     }
 
     fn navigate_to(&mut self, file_index: usize, path: &[usize]) {
