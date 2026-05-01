@@ -69,19 +69,19 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             app.toggle_important();
             true
         }
-        (KeyCode::Up, true) => {
+        (KeyCode::Char('K'), false) => {
             app.swap_up();
             true
         }
-        (KeyCode::Down, true) => {
+        (KeyCode::Char('J'), false) => {
             app.swap_down();
             true
         }
-        (KeyCode::Left, true) => {
+        (KeyCode::Char('H'), false) => {
             app.promote();
             true
         }
-        (KeyCode::Right, true) => {
+        (KeyCode::Char('L'), false) => {
             app.demote();
             true
         }

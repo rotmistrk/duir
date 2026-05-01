@@ -202,6 +202,8 @@ fn build_status_line(app: &App) -> Line<'_> {
             Span::raw("el "),
             Span::styled("!", bold),
             Span::raw("imp "),
+            Span::styled("HJKL", bold),
+            Span::raw(" move "),
             Span::styled("S", bold),
             Span::raw("ort "),
             Span::styled("/", bold),
