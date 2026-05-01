@@ -625,6 +625,7 @@ dependencies = [
  "omela-core",
  "pretty_assertions",
  "ratatui",
+ "regex",
  "tokio",
  "tui-textarea",
 ]

@@ -481,29 +481,220 @@ impl NoteEditor<'_> {
 
     fn execute_editor_command(&mut self, cmd: &str) {
         let cmd = cmd.trim();
-        match cmd {
-            "set nu" | "set num" | "set number" => {
+
+        // :set commands
+        if let Some(rest) = cmd.strip_prefix("set ") {
+            self.execute_set(rest.trim());
+            return;
+        }
+
+        // Parse range + command
+        let total_lines = self.textarea.lines().len();
+        let (row, _) = self.textarea.cursor();
+        match parse_ex_command(cmd, row, total_lines) {
+            Some(ExCommand::Yank { start, end }) => self.ex_yank(start, end),
+            Some(ExCommand::Delete { start, end }) => self.ex_delete(start, end),
+            Some(ExCommand::Substitute {
+                start,
+                end,
+                pattern,
+                replacement,
+                flags,
+            }) => {
+                self.ex_substitute(start, end, &pattern, &replacement, &flags);
+            }
+            Some(ExCommand::Shell { start, end, command }) => {
+                self.ex_shell(start, end, &command);
+            }
+            None => {
+                self.status = format!("Unknown: {cmd}");
+            }
+        }
+    }
+
+    fn execute_set(&mut self, arg: &str) {
+        match arg {
+            "nu" | "num" | "number" => {
                 self.line_numbers = true;
                 self.textarea
                     .set_line_number_style(Style::default().fg(Color::DarkGray));
                 "line numbers on".clone_into(&mut self.status);
             }
-            "set nonu" | "set nonum" | "set nonumber" => {
+            "nonu" | "nonum" | "nonumber" => {
                 self.line_numbers = false;
                 self.textarea.remove_line_number();
                 "line numbers off".clone_into(&mut self.status);
             }
-            "set li" | "set list" => {
-                // Show whitespace — tui-textarea doesn't support this natively
+            "li" | "list" | "noli" | "nolist" => {
                 "list mode not yet supported".clone_into(&mut self.status);
             }
-            "set noli" | "set nolist" => {
-                "list mode not yet supported".clone_into(&mut self.status);
+            _ => self.status = format!("Unknown set: {arg}"),
+        }
+    }
+
+    fn ex_yank(&mut self, start: usize, end: usize) {
+        let lines = self.textarea.lines();
+        let end = end.min(lines.len().saturating_sub(1));
+        let text: String = (start..=end)
+            .filter_map(|i| lines.get(i))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n");
+        self.textarea.set_yank_text(&text);
+        let count = end - start + 1;
+        self.status = format!("{count} line(s) yanked");
+    }
+
+    fn ex_delete(&mut self, start: usize, end: usize) {
+        let total = self.textarea.lines().len();
+        let end = end.min(total.saturating_sub(1));
+        // Move to start, select through end, cut
+        self.textarea.move_cursor(CursorMove::Top);
+        for _ in 0..start {
+            self.textarea.move_cursor(CursorMove::Down);
+        }
+        self.textarea.move_cursor(CursorMove::Head);
+        self.textarea.start_selection();
+        for _ in start..=end {
+            self.textarea.move_cursor(CursorMove::Down);
+        }
+        self.textarea.cut();
+        self.dirty = true;
+        let count = end - start + 1;
+        self.status = format!("{count} line(s) deleted");
+    }
+
+    fn ex_substitute(&mut self, start: usize, end: usize, pattern: &str, replacement: &str, flags: &str) {
+        let global = flags.contains('g');
+        let re = match regex::Regex::new(pattern) {
+            Ok(r) => r,
+            Err(e) => {
+                self.status = format!("Bad regex: {e}");
+                return;
             }
-            _ => {
-                self.status = format!("Unknown: {cmd}");
+        };
+
+        let lines = self.textarea.lines().to_vec();
+        let total = lines.len();
+        let end = end.min(total.saturating_sub(1));
+        let mut count = 0usize;
+        let mut new_lines = lines.clone();
+
+        for i in start..=end {
+            if i < new_lines.len() {
+                let old = &lines[i];
+                let new = if global {
+                    re.replace_all(old, replacement).to_string()
+                } else {
+                    re.replace(old, replacement).to_string()
+                };
+                if *old != new {
+                    count += 1;
+                    new_lines[i] = new;
+                }
             }
         }
+
+        if count > 0 {
+            // Rebuild textarea with new content
+            let cursor = self.textarea.cursor();
+            self.textarea = TextArea::new(new_lines);
+            self.textarea.set_cursor_line_style(Style::default());
+            self.textarea
+                .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+            self.textarea
+                .set_selection_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow));
+            self.textarea
+                .set_search_style(Style::default().bg(Color::Yellow).fg(Color::Black));
+            self.textarea.set_tab_length(4);
+            if self.line_numbers {
+                self.textarea
+                    .set_line_number_style(Style::default().fg(Color::DarkGray));
+            }
+            // Restore cursor position
+            self.textarea.move_cursor(CursorMove::Top);
+            for _ in 0..cursor.0.min(self.textarea.lines().len().saturating_sub(1)) {
+                self.textarea.move_cursor(CursorMove::Down);
+            }
+            self.dirty = true;
+        }
+        self.status = format!("{count} substitution(s)");
+    }
+
+    fn ex_shell(&mut self, start: usize, end: usize, command: &str) {
+        let lines = self.textarea.lines().to_vec();
+        let total = lines.len();
+        let end = end.min(total.saturating_sub(1));
+
+        let input: String = (start..=end)
+            .filter_map(|i| lines.get(i))
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let output = match std::process::Command::new("sh")
+            .arg("-c")
+            .arg(command)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+        {
+            Ok(mut child) => {
+                use std::io::Write;
+                if let Some(stdin) = child.stdin.as_mut() {
+                    stdin.write_all(input.as_bytes()).ok();
+                }
+                drop(child.stdin.take());
+                match child.wait_with_output() {
+                    Ok(out) => String::from_utf8_lossy(&out.stdout).to_string(),
+                    Err(e) => {
+                        self.status = format!("Shell error: {e}");
+                        return;
+                    }
+                }
+            }
+            Err(e) => {
+                self.status = format!("Shell error: {e}");
+                return;
+            }
+        };
+
+        // Replace the range with output
+        let mut new_lines: Vec<String> = Vec::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == start {
+                for out_line in output.lines() {
+                    new_lines.push(out_line.to_owned());
+                }
+            } else if i > end || i < start {
+                new_lines.push(line.clone());
+            }
+        }
+        if new_lines.is_empty() {
+            new_lines.push(String::new());
+        }
+
+        self.textarea = TextArea::new(new_lines);
+        self.textarea.set_cursor_line_style(Style::default());
+        self.textarea
+            .set_cursor_style(Style::default().add_modifier(Modifier::REVERSED));
+        self.textarea
+            .set_selection_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow));
+        self.textarea
+            .set_search_style(Style::default().bg(Color::Yellow).fg(Color::Black));
+        self.textarea.set_tab_length(4);
+        if self.line_numbers {
+            self.textarea
+                .set_line_number_style(Style::default().fg(Color::DarkGray));
+        }
+        self.textarea.move_cursor(CursorMove::Top);
+        for _ in 0..start.min(self.textarea.lines().len().saturating_sub(1)) {
+            self.textarea.move_cursor(CursorMove::Down);
+        }
+        self.dirty = true;
+        let out_count = output.lines().count();
+        self.status = format!("!{command}: {out_count} line(s)");
     }
 
     fn auto_indent(&mut self) {
@@ -521,4 +712,140 @@ impl NoteEditor<'_> {
     pub fn render(&self, frame: &mut ratatui::Frame, area: Rect) {
         frame.render_widget(&self.textarea, area);
     }
+}
+
+/// Parsed ex-command with resolved line range.
+enum ExCommand {
+    Yank {
+        start: usize,
+        end: usize,
+    },
+    Delete {
+        start: usize,
+        end: usize,
+    },
+    Substitute {
+        start: usize,
+        end: usize,
+        pattern: String,
+        replacement: String,
+        flags: String,
+    },
+    Shell {
+        start: usize,
+        end: usize,
+        command: String,
+    },
+}
+
+/// Parse a vim ex-command string like `1,$y`, `.,+5s/foo/bar/g`, `.,.+3!sort`.
+/// `cursor_row` is 0-indexed, `total_lines` is the line count.
+fn parse_ex_command(cmd: &str, cursor_row: usize, total_lines: usize) -> Option<ExCommand> {
+    let cmd = cmd.trim();
+
+    // Split into range part and command part
+    // Find where the command starts (first alpha or !)
+    let cmd_start = cmd
+        .find(|c: char| c.is_ascii_alphabetic() || c == '!' || c == 's')
+        .unwrap_or(cmd.len());
+
+    let range_str = cmd[..cmd_start].trim();
+    let cmd_part = &cmd[cmd_start..];
+
+    let (start, end) = parse_range(range_str, cursor_row, total_lines)?;
+
+    if cmd_part.starts_with('y') {
+        return Some(ExCommand::Yank { start, end });
+    }
+    if cmd_part.starts_with('d') {
+        return Some(ExCommand::Delete { start, end });
+    }
+    if let Some(rest) = cmd_part.strip_prefix('s') {
+        return parse_substitute(rest).map(|(pattern, replacement, flags)| ExCommand::Substitute {
+            start,
+            end,
+            pattern,
+            replacement,
+            flags,
+        });
+    }
+    cmd_part.strip_prefix('!').map(|rest| ExCommand::Shell {
+        start,
+        end,
+        command: rest.to_owned(),
+    })
+}
+
+/// Parse a range like `1,$` or `.,.+5` or `%` or empty (current line).
+/// Returns 0-indexed (start, end) inclusive.
+fn parse_range(range: &str, cursor: usize, total: usize) -> Option<(usize, usize)> {
+    if range.is_empty() {
+        return Some((cursor, cursor));
+    }
+    if range == "%" {
+        return Some((0, total.saturating_sub(1)));
+    }
+
+    let parts: Vec<&str> = range.splitn(2, ',').collect();
+    match parts.len() {
+        1 => {
+            let addr = parse_address(parts[0].trim(), cursor, total)?;
+            Some((addr, addr))
+        }
+        2 => {
+            let start = parse_address(parts[0].trim(), cursor, total)?;
+            let end = parse_address(parts[1].trim(), cursor, total)?;
+            Some((start, end))
+        }
+        _ => None,
+    }
+}
+
+/// Parse a single address: `.`, `$`, a number, or `.+N`, `.-N`.
+fn parse_address(addr: &str, cursor: usize, total: usize) -> Option<usize> {
+    if addr == "." {
+        return Some(cursor);
+    }
+    if addr == "$" {
+        return Some(total.saturating_sub(1));
+    }
+    if let Ok(n) = addr.parse::<usize>() {
+        return Some(n.saturating_sub(1)); // vim is 1-indexed
+    }
+    // Relative: .+N, .-N
+    if let Some(rest) = addr.strip_prefix(".+") {
+        let offset: usize = rest.parse().ok()?;
+        return Some((cursor + offset).min(total.saturating_sub(1)));
+    }
+    if let Some(rest) = addr.strip_prefix(".-") {
+        let offset: usize = rest.parse().ok()?;
+        return Some(cursor.saturating_sub(offset));
+    }
+    // Just +N or -N relative to cursor
+    if let Some(rest) = addr.strip_prefix('+') {
+        let offset: usize = rest.parse().ok()?;
+        return Some((cursor + offset).min(total.saturating_sub(1)));
+    }
+    if let Some(rest) = addr.strip_prefix('-') {
+        let offset: usize = rest.parse().ok()?;
+        return Some(cursor.saturating_sub(offset));
+    }
+    None
+}
+
+/// Parse `s` command body: `/pattern/replacement/flags`
+fn parse_substitute(s: &str) -> Option<(String, String, String)> {
+    if s.is_empty() {
+        return None;
+    }
+    let delim = s.chars().next()?;
+    let rest = &s[delim.len_utf8()..];
+    let parts: Vec<&str> = rest.splitn(3, delim).collect();
+    if parts.len() < 2 {
+        return None;
+    }
+    let pattern = parts[0].to_owned();
+    let replacement = parts[1].to_owned();
+    let flags = parts.get(2).unwrap_or(&"").to_string();
+    Some((pattern, replacement, flags))
 }
