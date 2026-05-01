@@ -534,6 +534,7 @@ dependencies = [
 name = "duir-tui"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "clap",
  "crossterm",
  "dirs",

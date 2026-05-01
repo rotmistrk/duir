@@ -1,4 +1,5 @@
 mod app;
+mod clipboard;
 mod completer;
 mod help;
 mod input;

@@ -434,6 +434,7 @@ impl NoteEditor<'_> {
         }
         self.textarea.copy();
         self.textarea.cancel_selection();
+        self.sync_system_clipboard();
         self.status = format!("{n} line(s) yanked");
     }
 
@@ -499,12 +500,14 @@ impl NoteEditor<'_> {
             }
             KeyCode::Char('y') => {
                 self.textarea.copy();
+                self.sync_system_clipboard();
                 self.enter_normal();
                 "yanked".clone_into(&mut self.status);
                 true
             }
             KeyCode::Char('d' | 'x') => {
                 self.textarea.cut();
+                self.sync_system_clipboard();
                 self.enter_normal();
                 self.dirty = true;
                 true
@@ -706,6 +709,7 @@ impl NoteEditor<'_> {
             .collect::<Vec<_>>()
             .join("\n");
         self.textarea.set_yank_text(&text);
+        crate::clipboard::copy_to_clipboard(&text);
         let count = end - start + 1;
         self.status = format!("{count} line(s) yanked");
     }
@@ -956,6 +960,13 @@ impl NoteEditor<'_> {
         self.textarea.move_cursor(CursorMove::Top);
         for _ in 0..restore_row.min(self.textarea.lines().len().saturating_sub(1)) {
             self.textarea.move_cursor(CursorMove::Down);
+        }
+    }
+
+    fn sync_system_clipboard(&self) {
+        let text = self.textarea.yank_text();
+        if !text.is_empty() {
+            crate::clipboard::copy_to_clipboard(&text);
         }
     }
     fn auto_indent(&mut self) {
