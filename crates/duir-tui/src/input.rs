@@ -194,12 +194,23 @@ fn handle_edit_key(app: &mut App, key: KeyEvent) -> bool {
             app.cancel_editing();
             true
         }
+        KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End => {
+            app.edit_select_all = false;
+            true
+        }
         KeyCode::Backspace => {
             if app.edit_select_all {
                 app.edit_buffer.clear();
                 app.edit_select_all = false;
             } else {
                 app.edit_buffer.pop();
+            }
+            true
+        }
+        KeyCode::Delete => {
+            if app.edit_select_all {
+                app.edit_buffer.clear();
+                app.edit_select_all = false;
             }
             true
         }
