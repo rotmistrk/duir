@@ -23,6 +23,15 @@ pub fn export_subtree(item: &TodoItem, max_heading_depth: usize) -> String {
     buf
 }
 
+/// Export a subtree as markdown, redacting locked encrypted nodes.
+/// Encrypted nodes show as `🔒 [Encrypted]` without exposing content.
+#[must_use]
+pub fn export_subtree_safe(item: &TodoItem, max_heading_depth: usize) -> String {
+    let mut buf = String::new();
+    render_item_safe(&mut buf, item, 1, max_heading_depth, 0);
+    buf
+}
+
 /// Converts a [`TodoFile`] to a markdown string.
 ///
 /// The file title is rendered as a `#` heading, followed by the file note
@@ -117,6 +126,54 @@ fn render_checkbox(buf: &mut String, item: &TodoItem, max_heading_depth: usize, 
     }
 }
 
+fn render_item_safe(buf: &mut String, item: &TodoItem, depth: usize, max_heading_depth: usize, list_indent: usize) {
+    // Redact locked encrypted nodes
+    if item.is_encrypted() && !item.unlocked {
+        if depth <= max_heading_depth {
+            let hashes: String = "#".repeat(depth);
+            let _ = writeln!(buf, "{hashes} 🔒 {}", item.title);
+        } else {
+            let indent = "  ".repeat(list_indent);
+            let _ = writeln!(buf, "{indent}- 🔒 {}", item.title);
+        }
+        return;
+    }
+    // Otherwise render normally, but recurse with safe variant
+    if depth <= max_heading_depth {
+        let hashes: String = "#".repeat(depth);
+        let meta = meta_comment(item);
+        let _ = writeln!(buf, "{hashes} {}{meta}", format_title(item));
+        if !item.note.is_empty() {
+            let _ = writeln!(buf, "\n{}", item.note);
+        }
+        let children_are_checkboxes = depth >= max_heading_depth;
+        if children_are_checkboxes && !item.items.is_empty() {
+            let _ = writeln!(buf);
+        }
+        for child in &item.items {
+            if !children_are_checkboxes {
+                let _ = writeln!(buf);
+            }
+            render_item_safe(buf, child, depth + 1, max_heading_depth, 0);
+        }
+    } else {
+        let indent = "  ".repeat(list_indent);
+        let cb = checkbox(&item.completed);
+        let meta = meta_comment(item);
+        let _ = writeln!(buf, "{indent}- {cb} {}{meta}", format_title(item));
+        if !item.note.is_empty() {
+            let _ = writeln!(buf);
+            let note_indent = "  ".repeat(list_indent + 1);
+            for line in item.note.lines() {
+                let _ = writeln!(buf, "{note_indent}{line}");
+            }
+            let _ = writeln!(buf);
+        }
+        for child in &item.items {
+            render_item_safe(buf, child, max_heading_depth + 1, max_heading_depth, list_indent + 1);
+        }
+    }
+}
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {

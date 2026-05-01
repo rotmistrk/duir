@@ -87,6 +87,7 @@ pub const APP_COMMANDS: &[&str] = &[
     "qa",
     "w",
     "wa",
+    "yank",
 ];
 
 /// Editor-level commands.

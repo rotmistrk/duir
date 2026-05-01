@@ -662,6 +662,7 @@ impl App {
                 }
             }
             "export" => self.cmd_export(&parts),
+            "yank" => self.cmd_yank_tree(),
             "import" => self.cmd_import(&parts),
             "open" => self.cmd_open_md(&parts),
             "collapse" => self.cmd_collapse(),
@@ -784,6 +785,16 @@ impl App {
         }
     }
 
+    fn cmd_yank_tree(&mut self) {
+        if let Some(item) = self.current_item() {
+            let md = duir_core::markdown_export::export_subtree_safe(item, 3);
+            let lines = md.lines().count();
+            crate::clipboard::copy_to_clipboard(&md);
+            self.status_message = format!("Yanked {lines} lines to clipboard (encrypted nodes redacted)");
+        } else {
+            "No item selected".clone_into(&mut self.status_message);
+        }
+    }
     fn cmd_export(&mut self, parts: &[&str]) {
         // :export md [filename]
         if parts.len() < 2 {
