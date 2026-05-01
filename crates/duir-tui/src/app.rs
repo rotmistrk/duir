@@ -496,14 +496,11 @@ impl App {
                 if needs_confirm {
                     self.pending_delete = true;
                     let reason = if item.items.is_empty() {
-                        "not completed"
+                        "incomplete"
                     } else {
                         "has children"
                     };
-                    self.set_status(
-                        &format!("Task {reason}! Press y to confirm delete, any other key to cancel"),
-                        StatusLevel::Warning,
-                    );
+                    self.set_status(&format!("Delete {reason}? y/n"), StatusLevel::Warning);
                     return;
                 }
             }
