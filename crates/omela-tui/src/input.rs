@@ -21,8 +21,33 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
+    let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+
+    // Shift+Arrow or HJKL: move items
+    if shift && !ctrl {
+        return match key.code {
+            KeyCode::Up => {
+                app.swap_up();
+                true
+            }
+            KeyCode::Down => {
+                app.swap_down();
+                true
+            }
+            KeyCode::Left => {
+                app.promote();
+                true
+            }
+            KeyCode::Right => {
+                app.demote();
+                true
+            }
+            _ => false,
+        };
+    }
 
     match (key.code, ctrl) {
         (KeyCode::Char('q'), false) => {
