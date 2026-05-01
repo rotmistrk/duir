@@ -28,6 +28,7 @@ pub struct NoteEditor<'a> {
     command_history: Vec<String>,
     history_index: Option<usize>,
     completer: crate::completer::Completer,
+    pub viewport_height: u16,
 }
 
 impl NoteEditor<'_> {
@@ -57,6 +58,7 @@ impl NoteEditor<'_> {
             command_history: Vec::new(),
             history_index: None,
             completer: crate::completer::Completer::new(crate::completer::EDITOR_COMMANDS),
+            viewport_height: 24,
         }
     }
 
@@ -130,6 +132,10 @@ impl NoteEditor<'_> {
         self.pending_count.take().unwrap_or(1)
     }
 
+    const fn page_half(&self) -> usize {
+        (self.viewport_height as usize) / 2
+    }
+
     fn enter_insert(&mut self) {
         self.mode = EditorMode::Insert;
         self.pending_count = None;
@@ -149,6 +155,32 @@ impl NoteEditor<'_> {
 
     #[allow(clippy::too_many_lines)]
     fn handle_normal(&mut self, key: KeyEvent) -> bool {
+        // Ctrl+U / Ctrl+D for half-page scroll (before count/operator handling)
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            return match key.code {
+                KeyCode::Char('u') => {
+                    let n = self.page_half();
+                    for _ in 0..n {
+                        self.textarea.move_cursor(CursorMove::Up);
+                    }
+                    true
+                }
+                KeyCode::Char('d') => {
+                    let n = self.page_half();
+                    for _ in 0..n {
+                        self.textarea.move_cursor(CursorMove::Down);
+                    }
+                    true
+                }
+                KeyCode::Char('r') => {
+                    self.textarea.redo();
+                    self.dirty = true;
+                    true
+                }
+                _ => false,
+            };
+        }
+
         // Accumulate count prefix (digits)
         if let KeyCode::Char(c @ '1'..='9') = key.code
             && self.pending_op.is_none()
@@ -316,6 +348,20 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Bottom);
                 true
             }
+            KeyCode::PageUp => {
+                let n = self.page_half();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::Up);
+                }
+                true
+            }
+            KeyCode::PageDown => {
+                let n = self.page_half();
+                for _ in 0..n {
+                    self.textarea.move_cursor(CursorMove::Down);
+                }
+                true
+            }
 
             // Single-key editing (with count)
             KeyCode::Char('x') => {
@@ -339,11 +385,6 @@ impl NoteEditor<'_> {
             KeyCode::Char('<') => {
                 let n = self.count();
                 self.unindent_lines(n);
-                true
-            }
-            KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.textarea.redo();
-                self.dirty = true;
                 true
             }
             KeyCode::Char('p') => {
@@ -929,7 +970,8 @@ impl NoteEditor<'_> {
         }
     }
 
-    pub fn render(&self, frame: &mut ratatui::Frame, area: Rect) {
+    pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
+        self.viewport_height = area.height.saturating_sub(2); // minus borders
         frame.render_widget(&self.textarea, area);
     }
 }

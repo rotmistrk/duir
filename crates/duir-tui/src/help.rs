@@ -76,36 +76,12 @@ pub fn render_help(frame: &mut ratatui::Frame, area: Rect, scroll: u16) {
 
     let lines: Vec<Line<'_>> = HELP_TEXT
         .lines()
-        .map(|line| {
-            if line.starts_with("## ") {
-                Line::styled(line, Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD))
-            } else if line.starts_with("### ") {
-                Line::styled(line, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-            } else if line.starts_with("# ") {
-                Line::styled(
-                    line,
-                    Style::default()
-                        .fg(Color::LightCyan)
-                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                )
-            } else if line.starts_with('|') && line.contains("---") {
-                Line::styled(line, Style::default().fg(Color::DarkGray))
-            } else if line.starts_with('|') {
-                // Table row: highlight the key column
-                let parts: Vec<&str> = line.splitn(3, '|').collect();
-                if parts.len() >= 3 {
-                    Line::from(vec![
-                        Span::raw("|"),
-                        Span::styled(parts[1], Style::default().fg(Color::Green)),
-                        Span::raw("|"),
-                        Span::raw(parts[2]),
-                    ])
-                } else {
-                    Line::raw(line)
-                }
-            } else {
-                Line::raw(line)
+        .filter_map(|line| {
+            // Skip separator rows
+            if line.starts_with('|') && line.contains("---") {
+                return None;
             }
+            Some(render_help_line(line))
         })
         .collect();
 
@@ -127,4 +103,68 @@ const fn centered_rect(pct_x: u16, pct_y: u16, area: Rect) -> Rect {
     let x = area.x + (area.width.saturating_sub(w)) / 2;
     let y = area.y + (area.height.saturating_sub(h)) / 2;
     Rect::new(x, y, w, h)
+}
+
+fn render_help_line(line: &str) -> Line<'_> {
+    if let Some(h) = line.strip_prefix("### ") {
+        return Line::styled(h, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+    }
+    if let Some(h) = line.strip_prefix("## ") {
+        return Line::from(vec![
+            Span::raw(""),
+            Span::styled(h, Style::default().fg(Color::LightCyan).add_modifier(Modifier::BOLD)),
+        ]);
+    }
+    if let Some(h) = line.strip_prefix("# ") {
+        return Line::styled(
+            h,
+            Style::default()
+                .fg(Color::LightCyan)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+        );
+    }
+    if line.starts_with('|') {
+        return render_table_row(line);
+    }
+    render_inline_markup(line)
+}
+
+fn render_table_row(line: &str) -> Line<'_> {
+    let cells: Vec<&str> = line.split('|').collect();
+    // cells[0] is empty (before first |), cells[1] is key, cells[2] is action
+    if cells.len() >= 3 {
+        let key = cells[1].trim();
+        let action = cells[2].trim();
+        let key_width = 22;
+        Line::from(vec![
+            Span::styled(format!("  {key:<key_width$}"), Style::default().fg(Color::Green)),
+            Span::raw(action.to_owned()),
+        ])
+    } else {
+        Line::raw(line)
+    }
+}
+
+fn render_inline_markup(line: &str) -> Line<'_> {
+    let mut spans = Vec::new();
+    let mut rest = line;
+
+    while let Some(pos) = rest.find('`') {
+        if pos > 0 {
+            spans.push(Span::raw(&rest[..pos]));
+        }
+        let after = &rest[pos + 1..];
+        if let Some(end) = after.find('`') {
+            spans.push(Span::styled(&after[..end], Style::default().fg(Color::Green)));
+            rest = &after[end + 1..];
+        } else {
+            spans.push(Span::raw(&rest[pos..]));
+            rest = "";
+            break;
+        }
+    }
+    if !rest.is_empty() {
+        spans.push(Span::raw(rest));
+    }
+    Line::from(spans)
 }

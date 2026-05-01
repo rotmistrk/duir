@@ -208,11 +208,20 @@ fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Esc => {
             app.filter_active = false;
             app.filter_text.clear();
+            app.filter_exclude = false;
             app.status_message.clear();
+            app.rebuild_rows(); // clear filter, show all
             true
         }
         KeyCode::Enter => {
             app.filter_active = false;
+            // Check for ! prefix = exclude mode
+            if let Some(rest) = app.filter_text.strip_prefix('!') {
+                app.filter_exclude = true;
+                app.filter_text = rest.to_owned();
+            } else {
+                app.filter_exclude = false;
+            }
             app.apply_filter();
             true
         }
