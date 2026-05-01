@@ -21,6 +21,13 @@ pub struct TodoItem {
     pub note: String,
     #[serde(default)]
     pub items: Vec<Self>,
+    /// If set, this node's children and note are encrypted.
+    /// The cipher text contains the serialized children + note.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cipher: Option<String>,
+    /// Runtime-only: true if currently decrypted in memory.
+    #[serde(skip)]
+    pub unlocked: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,7 +63,21 @@ impl TodoItem {
             folded: false,
             note: String::new(),
             items: Vec::new(),
+            cipher: None,
+            unlocked: false,
         }
+    }
+
+    /// Returns true if this node is an encryption root.
+    #[must_use]
+    pub const fn is_encrypted(&self) -> bool {
+        self.cipher.is_some()
+    }
+
+    /// Returns true if this node is encrypted and currently locked.
+    #[must_use]
+    pub const fn is_locked(&self) -> bool {
+        self.cipher.is_some() && !self.unlocked
     }
 }
 

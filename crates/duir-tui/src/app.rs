@@ -16,6 +16,9 @@ pub struct TreeRow {
     pub stats_text: String,
     pub is_file_root: bool,
     pub file_index: usize,
+    pub encrypted: bool,
+    pub locked: bool,
+    pub has_encrypted_children: bool,
 }
 
 /// Loaded file with its data and metadata.
@@ -65,6 +68,8 @@ pub struct App {
     pub help_scroll: u16,
     pub show_about: bool,
     pub pending_delete: bool,
+    pub password_prompt: Option<crate::password::PasswordPrompt>,
+    pub passwords: std::collections::HashMap<(usize, Vec<usize>), String>,
     pub completer: crate::completer::Completer,
 }
 
@@ -100,6 +105,8 @@ impl App {
             help_scroll: 0,
             show_about: false,
             pending_delete: false,
+            password_prompt: None,
+            passwords: std::collections::HashMap::new(),
             completer: crate::completer::Completer::new(crate::completer::APP_COMMANDS),
         }
     }
@@ -136,6 +143,9 @@ impl App {
                 stats_text: String::new(),
                 is_file_root: true,
                 file_index: fi,
+                encrypted: false,
+                locked: false,
+                has_encrypted_children: false,
             });
             // Items — collect data first to avoid borrow conflict
             let items: Vec<(usize, TodoItem)> = self.files[fi]
@@ -162,7 +172,8 @@ impl App {
             String::new()
         };
 
-        let expanded = !item.folded && !item.items.is_empty();
+        let expanded = !item.folded && !item.items.is_empty() && !item.is_locked();
+        let has_enc_children = item.items.iter().any(duir_core::crypto::has_encrypted_in_subtree);
 
         self.rows.push(TreeRow {
             path: path.to_vec(),
@@ -171,10 +182,13 @@ impl App {
             completed: item.completed.clone(),
             important: item.important,
             expanded,
-            has_children: !item.items.is_empty(),
+            has_children: !item.items.is_empty() || item.is_locked(),
             stats_text,
             is_file_root: false,
             file_index,
+            encrypted: item.is_encrypted(),
+            locked: item.is_locked(),
+            has_encrypted_children: has_enc_children,
         });
 
         if expanded {
@@ -324,6 +338,13 @@ impl App {
             }
             let fi = row.file_index;
             let path = row.path.clone();
+            // Check if locked — prompt for password
+            if duir_core::tree_ops::get_item(&self.files[fi].data, &path)
+                .is_some_and(duir_core::model::TodoItem::is_locked)
+            {
+                self.try_expand_encrypted();
+                return;
+            }
             if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 && item.folded
                 && !item.items.is_empty()
@@ -672,6 +693,8 @@ impl App {
                 self.show_help = true;
                 self.help_scroll = 0;
             }
+            "encrypt" => self.cmd_encrypt(),
+            "decrypt" => self.cmd_decrypt(),
             "about" => {
                 self.show_about = true;
             }
@@ -870,6 +893,125 @@ impl App {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 "Note expanded to children".clone_into(&mut self.status_message);
+            }
+        }
+    }
+
+    fn cmd_encrypt(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.is_file_root {
+                "Cannot encrypt file root".clone_into(&mut self.status_message);
+                return;
+            }
+            let fi = row.file_index;
+            let item = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path);
+            let already_encrypted = item.is_some_and(duir_core::TodoItem::is_encrypted);
+            let title = if already_encrypted {
+                "Change encryption password"
+            } else {
+                "Encrypt subtree"
+            };
+            let action = if already_encrypted {
+                crate::password::PasswordAction::ChangePassword {
+                    file_index: fi,
+                    path: row.path,
+                }
+            } else {
+                crate::password::PasswordAction::Encrypt {
+                    file_index: fi,
+                    path: row.path,
+                }
+            };
+            self.password_prompt = Some(crate::password::PasswordPrompt::new(title, action));
+        }
+    }
+
+    fn cmd_decrypt(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.is_file_root {
+                return;
+            }
+            let fi = row.file_index;
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+                if !item.is_encrypted() {
+                    "Node is not encrypted".clone_into(&mut self.status_message);
+                    return;
+                }
+                duir_core::crypto::strip_encryption(item);
+                self.passwords.remove(&(fi, row.path));
+                self.files[fi].modified = true;
+                self.rebuild_rows();
+                "Encryption removed".clone_into(&mut self.status_message);
+            }
+        }
+    }
+
+    /// Handle password prompt result.
+    pub fn handle_password_result(&mut self, password: &str) {
+        let Some(prompt) = self.password_prompt.take() else {
+            return;
+        };
+        match prompt.callback {
+            crate::password::PasswordAction::Encrypt { file_index, path } => {
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
+                    match duir_core::crypto::encrypt_item(item, password) {
+                        Ok(()) => {
+                            self.passwords.insert((file_index, path), password.to_owned());
+                            self.files[file_index].modified = true;
+                            self.rebuild_rows();
+                            "Subtree encrypted".clone_into(&mut self.status_message);
+                        }
+                        Err(e) => self.status_message = format!("Encrypt error: {e}"),
+                    }
+                }
+            }
+            crate::password::PasswordAction::Decrypt { file_index, path } => {
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
+                    match duir_core::crypto::decrypt_item(item, password) {
+                        Ok(()) => {
+                            self.passwords.insert((file_index, path), password.to_owned());
+                            self.files[file_index].modified = true;
+                            self.rebuild_rows();
+                            "Subtree unlocked".clone_into(&mut self.status_message);
+                        }
+                        Err(_) => "Wrong password".clone_into(&mut self.status_message),
+                    }
+                }
+            }
+            crate::password::PasswordAction::ChangePassword { file_index, path } => {
+                // Already decrypted — re-encrypt with new password
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
+                    match duir_core::crypto::encrypt_item(item, password) {
+                        Ok(()) => {
+                            self.passwords.insert((file_index, path), password.to_owned());
+                            self.files[file_index].modified = true;
+                            self.rebuild_rows();
+                            "Password changed".clone_into(&mut self.status_message);
+                        }
+                        Err(e) => self.status_message = format!("Encrypt error: {e}"),
+                    }
+                }
+            }
+        }
+    }
+
+    /// Try to expand an encrypted node — prompts for password.
+    pub fn try_expand_encrypted(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.is_file_root {
+                return;
+            }
+            let fi = row.file_index;
+            let is_locked = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
+                .is_some_and(duir_core::model::TodoItem::is_locked);
+            if is_locked {
+                self.password_prompt = Some(crate::password::PasswordPrompt::new(
+                    "Unlock encrypted node",
+                    crate::password::PasswordAction::Decrypt {
+                        file_index: fi,
+                        path: row.path,
+                    },
+                ));
             }
         }
     }

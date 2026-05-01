@@ -4,6 +4,7 @@ mod help;
 mod input;
 mod note_editor;
 mod note_view;
+mod password;
 mod tree_view;
 
 use std::io;
@@ -187,10 +188,25 @@ fn run_loop(
             if app.show_help {
                 help::render_help(frame, size, app.help_scroll);
             }
+            if let Some(prompt) = &app.password_prompt {
+                prompt.render(frame, size);
+            }
         })?;
 
         if let Some(Event::Key(key)) = input::poll_event(Duration::from_millis(100))? {
             // Handle overlay input first
+            if let Some(prompt) = &mut app.password_prompt {
+                match prompt.handle_key(key) {
+                    crate::password::PromptResult::Submitted(password) => {
+                        app.handle_password_result(&password);
+                    }
+                    crate::password::PromptResult::Cancelled => {
+                        app.password_prompt = None;
+                    }
+                    crate::password::PromptResult::Pending => {}
+                }
+                continue;
+            }
             if app.show_about {
                 app.show_about = false;
                 continue;

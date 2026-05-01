@@ -64,6 +64,16 @@ impl StatefulWidget for TreeView<'_> {
                 "  "
             };
 
+            let lock_icon = if row.locked {
+                "🔒"
+            } else if row.encrypted {
+                "🔓"
+            } else if row.has_encrypted_children && !row.expanded {
+                "🔐"
+            } else {
+                ""
+            };
+
             let checkbox = if row.is_file_root {
                 String::new()
             } else {
@@ -74,7 +84,7 @@ impl StatefulWidget for TreeView<'_> {
                 }
             };
 
-            let prefix = format!("{indent}{arrow}{checkbox}");
+            let prefix = format!("{indent}{arrow}{lock_icon}{checkbox}");
             let prefix_width = prefix.chars().count();
 
             let title = if is_selected && state.editing_title {
