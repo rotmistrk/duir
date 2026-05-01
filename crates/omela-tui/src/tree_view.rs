@@ -1,7 +1,7 @@
 use omela_core::Completion;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, StatefulWidget, Widget};
 
@@ -58,13 +58,7 @@ impl StatefulWidget for TreeView<'_> {
 
             let indent = "  ".repeat(row.depth);
 
-            let arrow = if row.is_file_root {
-                if row.has_children {
-                    if row.expanded { "▼ " } else { "▶ " }
-                } else {
-                    "  "
-                }
-            } else if row.has_children {
+            let arrow = if row.has_children {
                 if row.expanded { "▼ " } else { "▶ " }
             } else {
                 "  "
@@ -79,6 +73,9 @@ impl StatefulWidget for TreeView<'_> {
                     Completion::Partial => "◐ ".to_owned(),
                 }
             };
+
+            let prefix = format!("{indent}{arrow}{checkbox}");
+            let prefix_width = prefix.chars().count();
 
             let title = if is_selected && state.editing_title {
                 format!("{}▏", state.edit_buffer)
@@ -101,32 +98,37 @@ impl StatefulWidget for TreeView<'_> {
                 style = style.add_modifier(Modifier::BOLD);
             }
 
+            // Content after prefix: title + stats + padding to fill line
+            let content = format!("{title}{stats_label}{imp}");
+            let content_width = content.chars().count();
+            let total_width = inner.width as usize;
+            let pad_len = total_width.saturating_sub(prefix_width + content_width);
+            let padding = " ".repeat(pad_len);
+
             if is_selected {
-                let cursor_style = Style::default()
-                    .fg(ratatui::style::Color::LightCyan)
-                    .add_modifier(Modifier::UNDERLINED);
-                let title_style = if state.editing_title {
-                    Style::default()
-                        .fg(ratatui::style::Color::White)
-                        .add_modifier(Modifier::UNDERLINED)
+                let select_all = state.editing_title && state.edit_select_all;
+                let title_style = if select_all {
+                    Style::default().fg(Color::Yellow).bg(Color::DarkGray)
+                } else if state.editing_title {
+                    Style::default().fg(Color::White).add_modifier(Modifier::UNDERLINED)
                 } else {
-                    style
-                        .fg(ratatui::style::Color::LightCyan)
-                        .add_modifier(Modifier::UNDERLINED)
+                    style.fg(Color::LightCyan).add_modifier(Modifier::UNDERLINED)
                 };
-                let dim_style = Style::default()
-                    .fg(ratatui::style::Color::DarkGray)
-                    .add_modifier(Modifier::UNDERLINED);
+                let trail_style = if select_all {
+                    Style::default().bg(Color::DarkGray)
+                } else {
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::UNDERLINED)
+                };
 
                 let line = Line::from(vec![
-                    Span::styled(format!("{indent}{arrow}{checkbox}"), cursor_style),
-                    Span::styled(title, title_style),
-                    Span::styled(format!("{stats_label}{imp}"), dim_style),
+                    Span::raw(prefix),
+                    Span::styled(content, title_style),
+                    Span::styled(padding, trail_style),
                 ]);
                 buf.set_line(inner.x, y, &line, inner.width);
             } else {
                 let line = Line::from(vec![
-                    Span::raw(format!("{indent}{arrow}{checkbox}")),
+                    Span::raw(prefix),
                     Span::styled(title, style),
                     Span::styled(
                         format!("{stats_label}{imp}"),
