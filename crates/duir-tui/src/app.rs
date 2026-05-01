@@ -500,7 +500,10 @@ impl App {
                     } else {
                         "has children"
                     };
-                    self.status_message = format!("Task {reason}! Press y to confirm delete, any other key to cancel");
+                    self.set_status(
+                        &format!("Task {reason}! Press y to confirm delete, any other key to cancel"),
+                        StatusLevel::Warning,
+                    );
                     return;
                 }
             }

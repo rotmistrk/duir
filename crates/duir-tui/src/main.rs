@@ -213,7 +213,12 @@ fn run_loop(
             app.handle_password_result(&password);
         }
 
-        if let Some(Event::Key(key)) = input::poll_event(Duration::from_millis(100))? {
+        let poll_ms = if app.editing_title || app.focus == Focus::Note {
+            16
+        } else {
+            50
+        };
+        if let Some(Event::Key(key)) = input::poll_event(Duration::from_millis(poll_ms))? {
             // Handle overlay input first
             if let Some(prompt) = &mut app.password_prompt {
                 match prompt.handle_key(key) {
