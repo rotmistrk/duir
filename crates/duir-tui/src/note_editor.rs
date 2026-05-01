@@ -987,25 +987,22 @@ impl NoteEditor<'_> {
 
     pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
         self.viewport_height = area.height.saturating_sub(2);
-        if self.mode == EditorMode::Normal || self.mode == EditorMode::Visual {
-            // Render with markdown highlighting
+        if self.mode == EditorMode::Insert {
+            frame.render_widget(&self.textarea, area);
+        } else {
             let content = self.content();
             let (cursor_row, _) = self.textarea.cursor();
             let block = self.textarea.block().cloned();
             let lines = crate::markdown_view::highlight_lines(&content, cursor_row);
+            #[allow(clippy::cast_possible_truncation)]
+            let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
             let mut paragraph = ratatui::widgets::Paragraph::new(lines)
                 .wrap(ratatui::widgets::Wrap { trim: false })
-                .scroll({
-                    #[allow(clippy::cast_possible_truncation)]
-                    let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
-                    (scroll_offset, 0)
-                });
+                .scroll((scroll_offset, 0));
             if let Some(b) = block {
                 paragraph = paragraph.block(b);
             }
             frame.render_widget(paragraph, area);
-        } else {
-            frame.render_widget(&self.textarea, area);
         }
     }
 

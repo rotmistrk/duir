@@ -971,6 +971,10 @@ impl App {
                     "Node is not encrypted".clone_into(&mut self.status_message);
                     return;
                 }
+                if !item.unlocked {
+                    "Unlock the node first (→ to expand, enter password)".clone_into(&mut self.status_message);
+                    return;
+                }
                 duir_core::crypto::strip_encryption(item);
                 self.passwords.remove(&(fi, row.path));
                 self.files[fi].modified = true;

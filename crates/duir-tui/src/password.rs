@@ -58,7 +58,7 @@ impl PasswordPrompt {
     /// Render the password prompt.
     pub fn render(&self, frame: &mut ratatui::Frame, area: Rect) {
         let w = 50.min(area.width.saturating_sub(4));
-        let h = 5;
+        let h = 6;
         let x = area.x + (area.width.saturating_sub(w)) / 2;
         let y = area.y + (area.height.saturating_sub(h)) / 2;
         let popup = Rect::new(x, y, w, h);
@@ -72,6 +72,10 @@ impl PasswordPrompt {
                 Span::raw("  Password: "),
                 Span::styled(format!("{masked}▏"), Style::default().add_modifier(Modifier::BOLD)),
             ]),
+            Line::styled(
+                "  Enter to confirm, Esc to cancel",
+                Style::default().fg(Color::DarkGray),
+            ),
             Line::raw(""),
         ];
 
