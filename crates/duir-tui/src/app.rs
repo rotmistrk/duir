@@ -919,7 +919,7 @@ impl App {
         }
     }
 
-    fn cmd_collapse(&mut self) {
+    pub(crate) fn cmd_collapse(&mut self) {
         // Collapse subtree children into markdown note
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
@@ -950,7 +950,7 @@ impl App {
         }
     }
 
-    fn cmd_expand(&mut self) {
+    pub(crate) fn cmd_expand(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
                 return;
@@ -986,7 +986,7 @@ impl App {
         }
     }
 
-    fn cmd_encrypt(&mut self) {
+    pub(crate) fn cmd_encrypt(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
                 "Cannot encrypt file root".clone_into(&mut self.status_message);
@@ -1015,7 +1015,7 @@ impl App {
         }
     }
 
-    fn cmd_decrypt(&mut self) {
+    pub(crate) fn cmd_decrypt(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
                 return;

@@ -542,6 +542,7 @@ dependencies = [
  "pretty_assertions",
  "ratatui",
  "regex",
+ "tempfile",
  "tokio",
  "tui-textarea",
 ]

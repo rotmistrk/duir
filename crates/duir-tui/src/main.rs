@@ -385,3 +385,263 @@ fn build_status_line(app: &App) -> Line<'_> {
         Line::from(spans)
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use app::{App, Focus, StatusLevel};
+    use duir_core::TodoStorage;
+    use duir_core::model::{Completion, TodoFile, TodoItem};
+
+    fn make_app_with_tree() -> App {
+        let mut app = App::new();
+        let mut file = TodoFile::new("test");
+        let mut branch1 = TodoItem::new("Branch 1");
+        branch1.note = "branch1 note".to_owned();
+        let mut child11 = TodoItem::new("Child 1.1");
+        child11.completed = Completion::Done;
+        child11.note = "child11 note".to_owned();
+        let mut child12 = TodoItem::new("Child 1.2");
+        child12.important = true;
+        child12.note = "child12 note".to_owned();
+        branch1.items.push(child11);
+        branch1.items.push(child12);
+        let mut branch2 = TodoItem::new("Branch 2");
+        branch2.note = "branch2 note".to_owned();
+        branch2.items.push(TodoItem::new("Child 2.1"));
+        file.items.push(branch1);
+        file.items.push(branch2);
+        file.items.push(TodoItem::new("Branch 3"));
+        app.add_file("test".to_owned(), file);
+        app
+    }
+
+    #[test]
+    fn tab_into_note_loads_editor() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.load_editor();
+        app.focus = Focus::Note;
+        assert!(app.editor.is_some());
+        assert_eq!(app.editor.as_ref().unwrap().content(), "branch1 note");
+    }
+
+    #[test]
+    fn tab_back_saves_editor_to_model() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.load_editor();
+        if let Some(editor) = &mut app.editor {
+            editor.textarea.insert_str("MODIFIED");
+            editor.dirty = true;
+        }
+        app.save_editor();
+        assert!(app.files[0].data.items[0].note.contains("MODIFIED"));
+    }
+
+    #[test]
+    fn editor_not_written_without_save() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.load_editor();
+        if let Some(editor) = &mut app.editor {
+            editor.textarea.insert_str("SHOULD NOT PERSIST");
+        }
+        assert_eq!(app.files[0].data.items[0].note, "branch1 note");
+    }
+
+    #[test]
+    fn cursor_move_does_not_affect_model() {
+        let mut app = make_app_with_tree();
+        let original = app.files[0].data.items[0].note.clone();
+        app.move_down();
+        app.move_down();
+        app.move_up();
+        assert_eq!(app.files[0].data.items[0].note, original);
+    }
+
+    #[test]
+    fn clone_then_navigate_correct_items() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.clone_subtree();
+        assert_eq!(app.files[0].data.items[0].title, "Branch 1");
+        assert_eq!(app.files[0].data.items[1].title, "Branch 1");
+        assert_eq!(app.files[0].data.items[2].title, "Branch 2");
+        assert_eq!(app.files[0].data.items[3].title, "Branch 3");
+    }
+
+    #[test]
+    fn encrypt_sets_prompt() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.cmd_encrypt();
+        assert!(app.password_prompt.is_some());
+    }
+
+    #[test]
+    fn encrypt_then_decrypt_roundtrip() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.cmd_encrypt();
+        app.handle_password_result("pass");
+        assert!(app.files[0].data.items[0].cipher.is_some());
+        assert!(app.files[0].data.items[0].items.is_empty());
+
+        app.cursor = 1;
+        app.expand_current();
+        app.handle_password_result("pass");
+        assert!(app.files[0].data.items[0].unlocked);
+        assert_eq!(app.files[0].data.items[0].items.len(), 2);
+        assert_eq!(app.files[0].data.items[0].note, "branch1 note");
+    }
+
+    #[test]
+    fn decrypt_wrong_password_no_corruption() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.cmd_encrypt();
+        app.handle_password_result("correct");
+        let cipher = app.files[0].data.items[0].cipher.clone();
+
+        app.cursor = 1;
+        app.expand_current();
+        app.handle_password_result("wrong");
+        assert_eq!(app.files[0].data.items[0].cipher, cipher);
+        assert!(app.files[0].data.items[0].items.is_empty());
+        assert_eq!(app.status_level, StatusLevel::Error);
+    }
+
+    #[test]
+    fn collapse_encrypted_relocks() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.cmd_encrypt();
+        app.handle_password_result("pass");
+        app.cursor = 1;
+        app.expand_current();
+        app.handle_password_result("pass");
+        assert!(app.files[0].data.items[0].unlocked);
+
+        app.cursor = 1;
+        app.collapse_current();
+        assert!(!app.files[0].data.items[0].unlocked);
+        assert!(app.files[0].data.items[0].items.is_empty());
+    }
+
+    #[test]
+    fn decrypt_requires_unlock() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.cmd_encrypt();
+        app.handle_password_result("pass");
+        app.cmd_decrypt();
+        assert_eq!(app.status_level, StatusLevel::Warning);
+        assert!(app.files[0].data.items[0].cipher.is_some());
+    }
+
+    #[test]
+    fn save_reencrypts_unlocked() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.cmd_encrypt();
+        app.handle_password_result("pass");
+        app.cursor = 1;
+        app.expand_current();
+        app.handle_password_result("pass");
+
+        let dir = tempfile::tempdir().unwrap();
+        let storage = duir_core::FileStorage::new(dir.path()).unwrap();
+        app.save_all(&storage);
+
+        let loaded = storage.load("test").unwrap();
+        assert!(loaded.items[0].cipher.is_some());
+        assert!(loaded.items[0].items.is_empty());
+        // In memory still unlocked
+        assert!(app.files[0].data.items[0].unlocked);
+    }
+
+    #[test]
+    fn collapse_updates_editor() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.load_editor();
+        app.save_editor();
+        app.cmd_collapse();
+        let content = app.editor.as_ref().unwrap().content();
+        assert!(content.contains("duir:collapsed"));
+    }
+
+    #[test]
+    fn delete_incomplete_requires_confirm() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.delete_current();
+        assert!(app.pending_delete);
+        assert_eq!(app.files[0].data.items[0].title, "Branch 1");
+    }
+
+    #[test]
+    fn delete_completed_leaf_immediate() {
+        let mut app = make_app_with_tree();
+        app.cursor = 2; // Child 1.1 (Done)
+        app.delete_current();
+        assert!(!app.pending_delete);
+        assert_eq!(app.files[0].data.items[0].items[0].title, "Child 1.2");
+    }
+
+    #[test]
+    fn filter_hides_rows() {
+        let mut app = make_app_with_tree();
+        let total = app.rows.len();
+        app.filter_text = "Child 1.1".to_owned();
+        app.apply_filter();
+        assert!(app.rows.len() < total);
+    }
+
+    #[test]
+    fn filter_clear_restores() {
+        let mut app = make_app_with_tree();
+        let total = app.rows.len();
+        app.filter_text = "Child 1.1".to_owned();
+        app.apply_filter();
+        app.filter_text.clear();
+        app.apply_filter();
+        assert_eq!(app.rows.len(), total);
+    }
+
+    #[test]
+    fn new_sibling_starts_editing() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        app.new_sibling();
+        assert!(app.editing_title);
+        assert_eq!(app.files[0].data.items.len(), 4);
+    }
+
+    #[test]
+    fn new_child_starts_editing() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1;
+        let old = app.files[0].data.items[0].items.len();
+        app.new_child();
+        assert!(app.editing_title);
+        assert_eq!(app.files[0].data.items[0].items.len(), old + 1);
+    }
+
+    #[test]
+    fn save_preserves_unencrypted_data() {
+        let mut app = make_app_with_tree();
+        app.files[0].modified = true;
+        let dir = tempfile::tempdir().unwrap();
+        let storage = duir_core::FileStorage::new(dir.path()).unwrap();
+        app.save_all(&storage);
+        let loaded = storage.load("test").unwrap();
+        assert_eq!(loaded.items[0].title, "Branch 1");
+        assert_eq!(loaded.items[0].note, "branch1 note");
+        assert_eq!(loaded.items[0].items[0].title, "Child 1.1");
+        assert_eq!(loaded.items[1].title, "Branch 2");
+        assert_eq!(loaded.items[2].title, "Branch 3");
+    }
+}
