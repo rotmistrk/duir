@@ -213,12 +213,16 @@ fn run_loop(
             app.handle_password_result(&password);
         }
 
-        let poll_ms = if app.editing_title || app.focus == Focus::Note {
-            16
+        // Block for input, with timeout only for autosave
+        let has_pending_save = app.focus == Focus::Tree && app.files.iter().any(|f| f.autosave && f.modified);
+        let timeout = if app.pending_crypto.is_some() {
+            Duration::from_millis(1) // process crypto immediately
+        } else if has_pending_save {
+            Duration::from_secs(autosave_interval)
         } else {
-            50
+            Duration::from_secs(3600) // effectively block
         };
-        if let Some(Event::Key(key)) = input::poll_event(Duration::from_millis(poll_ms))? {
+        if let Some(Event::Key(key)) = input::poll_event(timeout)? {
             // Handle overlay input first
             if let Some(prompt) = &mut app.password_prompt {
                 match prompt.handle_key(key) {
@@ -274,9 +278,9 @@ fn run_loop(
             }
         }
 
-        // Autosave — debounced, only when tree focused, at most every 5 seconds
+        // Autosave — fires when poll timeout expires (no input for autosave_interval)
         if app.focus == Focus::Tree
-            && last_save.elapsed() > Duration::from_secs(autosave_interval)
+            && last_save.elapsed() >= Duration::from_secs(autosave_interval)
             && app.files.iter().any(|f| f.autosave && f.modified)
             && let Ok(storage) = FileStorage::new(storage_dir)
         {
