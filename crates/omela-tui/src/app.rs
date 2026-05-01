@@ -181,6 +181,16 @@ impl App {
         })
     }
 
+    fn navigate_to(&mut self, file_index: usize, path: &[usize]) {
+        if let Some(pos) = self
+            .rows
+            .iter()
+            .position(|r| r.file_index == file_index && !r.is_file_root && r.path == path)
+        {
+            self.cursor = pos;
+            self.note_scroll = 0;
+        }
+    }
     pub const fn move_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
@@ -287,11 +297,16 @@ impl App {
                 return;
             }
             let fi = row.file_index;
+            // New sibling path: same parent, index + 1
+            let mut new_path = row.path.clone();
+            if let Some(last) = new_path.last_mut() {
+                *last += 1;
+            }
             let new_item = TodoItem::new("<new task>");
             if omela_core::tree_ops::add_sibling(&mut self.files[fi].data, &row.path, new_item).is_ok() {
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.move_down();
+                self.navigate_to(fi, &new_path);
                 self.start_editing();
             }
         }
@@ -301,23 +316,27 @@ impl App {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             let fi = row.file_index;
             if row.is_file_root {
-                // Add top-level item to this file
+                let child_idx = self.files[fi].data.items.len();
                 self.files[fi].data.items.push(TodoItem::new("<new task>"));
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.move_down();
+                self.navigate_to(fi, &[child_idx]);
                 self.start_editing();
                 return;
             }
+            // New child path: current path + last child index
+            let child_idx =
+                omela_core::tree_ops::get_item(&self.files[fi].data, &row.path).map_or(0, |item| item.items.len());
+            let mut new_path = row.path.clone();
+            new_path.push(child_idx);
             let new_item = TodoItem::new("<new task>");
             if omela_core::tree_ops::add_child(&mut self.files[fi].data, &row.path, new_item).is_ok() {
-                // Unfold parent
                 if let Some(item) = omela_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                     item.folded = false;
                 }
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.move_down();
+                self.navigate_to(fi, &new_path);
                 self.start_editing();
             }
         }

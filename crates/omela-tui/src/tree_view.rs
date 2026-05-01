@@ -101,34 +101,40 @@ impl StatefulWidget for TreeView<'_> {
                 style = style.add_modifier(Modifier::BOLD);
             }
 
-            let sel_style = if is_selected {
-                style.add_modifier(Modifier::REVERSED)
+            if is_selected {
+                let cursor_style = Style::default()
+                    .fg(ratatui::style::Color::LightCyan)
+                    .add_modifier(Modifier::UNDERLINED);
+                let title_style = if state.editing_title {
+                    Style::default()
+                        .fg(ratatui::style::Color::White)
+                        .add_modifier(Modifier::UNDERLINED)
+                } else {
+                    style
+                        .fg(ratatui::style::Color::LightCyan)
+                        .add_modifier(Modifier::UNDERLINED)
+                };
+                let dim_style = Style::default()
+                    .fg(ratatui::style::Color::DarkGray)
+                    .add_modifier(Modifier::UNDERLINED);
+
+                let line = Line::from(vec![
+                    Span::styled(format!("{indent}{arrow}{checkbox}"), cursor_style),
+                    Span::styled(title, title_style),
+                    Span::styled(format!("{stats_label}{imp}"), dim_style),
+                ]);
+                buf.set_line(inner.x, y, &line, inner.width);
             } else {
-                Style::default().add_modifier(Modifier::DIM)
-            };
-
-            let line = Line::from(vec![
-                Span::styled(
-                    format!("{indent}{arrow}{checkbox}"),
-                    if is_selected {
-                        Style::default().add_modifier(Modifier::REVERSED)
-                    } else {
-                        Style::default()
-                    },
-                ),
-                Span::styled(
-                    title,
-                    if is_selected {
-                        style.add_modifier(Modifier::REVERSED)
-                    } else {
-                        style
-                    },
-                ),
-                Span::styled(format!("{stats_label}{imp}"), sel_style),
-            ]);
-
-            let width = inner.width as usize;
-            buf.set_line(inner.x, y, &line, width as u16);
+                let line = Line::from(vec![
+                    Span::raw(format!("{indent}{arrow}{checkbox}")),
+                    Span::styled(title, style),
+                    Span::styled(
+                        format!("{stats_label}{imp}"),
+                        Style::default().add_modifier(Modifier::DIM),
+                    ),
+                ]);
+                buf.set_line(inner.x, y, &line, inner.width);
+            }
         }
     }
 }
