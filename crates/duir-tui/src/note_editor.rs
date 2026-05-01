@@ -409,6 +409,10 @@ impl NoteEditor<'_> {
                 self.textarea.search_back(false);
                 true
             }
+            KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.open_url_at_cursor();
+                true
+            }
             _ => {
                 self.pending_count = None;
                 false
@@ -982,11 +986,79 @@ impl NoteEditor<'_> {
     }
 
     pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
-        self.viewport_height = area.height.saturating_sub(2); // minus borders
-        frame.render_widget(&self.textarea, area);
+        self.viewport_height = area.height.saturating_sub(2);
+        if self.mode == EditorMode::Normal || self.mode == EditorMode::Visual {
+            // Render with markdown highlighting
+            let content = self.content();
+            let (cursor_row, _) = self.textarea.cursor();
+            let block = self.textarea.block().cloned();
+            let lines = crate::markdown_view::highlight_lines(&content, cursor_row);
+            let mut paragraph = ratatui::widgets::Paragraph::new(lines)
+                .wrap(ratatui::widgets::Wrap { trim: false })
+                .scroll({
+                    #[allow(clippy::cast_possible_truncation)]
+                    let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
+                    (scroll_offset, 0)
+                });
+            if let Some(b) = block {
+                paragraph = paragraph.block(b);
+            }
+            frame.render_widget(paragraph, area);
+        } else {
+            frame.render_widget(&self.textarea, area);
+        }
+    }
+
+    /// Try to open URL under cursor.
+    pub fn open_url_at_cursor(&self) {
+        let (row, col) = self.textarea.cursor();
+        if let Some(line) = self.textarea.lines().get(row)
+            && let Some(url) = extract_url(line, col)
+        {
+            open_in_browser(&url);
+        }
     }
 }
 
+/// Extract a URL from a line at the given column position.
+fn extract_url(line: &str, col: usize) -> Option<String> {
+    // Find URLs: https://... or http://...
+    let mut start = col;
+    while start > 0 && !line[..start].ends_with(|c: char| c.is_whitespace() || c == '(' || c == '<') {
+        start -= 1;
+    }
+    let rest = &line[start..];
+    // Try to find a URL starting near the cursor
+    for prefix in ["https://", "http://"] {
+        if let Some(pos) = rest.find(prefix) {
+            let url_start = start + pos;
+            let url_end = line[url_start..]
+                .find(|c: char| c.is_whitespace() || c == ')' || c == '>' || c == '"' || c == '\'')
+                .map_or(line.len(), |e| url_start + e);
+            if col <= url_end {
+                return Some(line[url_start..url_end].to_owned());
+            }
+        }
+    }
+    None
+}
+
+fn open_in_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    let cmd = "open";
+    #[cfg(target_os = "linux")]
+    let cmd = "xdg-open";
+    #[cfg(target_os = "windows")]
+    let cmd = "start";
+
+    std::process::Command::new(cmd)
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .ok();
+}
 /// Parsed ex-command with resolved line range.
 enum ExCommand {
     Yank {

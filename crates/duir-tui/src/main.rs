@@ -3,6 +3,7 @@ mod clipboard;
 mod completer;
 mod help;
 mod input;
+mod markdown_view;
 mod note_editor;
 mod note_view;
 mod password;
