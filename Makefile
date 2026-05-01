@@ -1,4 +1,4 @@
-.PHONY: all build check fmt clippy test clean install run
+.PHONY: all build check fmt clippy test clean install install-local run
 
 all: check build
 
@@ -24,3 +24,8 @@ clean:
 
 install:
 	cargo install --path crates/duir-tui
+
+install-local: build
+	mkdir -p ~/.local/bin
+	cp target/release/duir-tui ~/.local/bin/duir
+	@echo "Installed to ~/.local/bin/duir"
