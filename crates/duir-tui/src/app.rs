@@ -60,6 +60,9 @@ pub struct App {
     pub command_history_index: Option<usize>,
     pub note_panel_pct: u16,
     pub editor_cache: std::collections::HashMap<(usize, Vec<usize>), crate::note_editor::NoteEditor<'static>>,
+    pub show_help: bool,
+    pub help_scroll: u16,
+    pub show_about: bool,
 }
 
 impl App {
@@ -89,6 +92,9 @@ impl App {
             command_history_index: None,
             note_panel_pct: 50,
             editor_cache: std::collections::HashMap::new(),
+            show_help: false,
+            help_scroll: 0,
+            show_about: false,
         }
     }
 
@@ -637,6 +643,13 @@ impl App {
                         config.editor.autosave,
                     );
                 }
+            }
+            "help" => {
+                self.show_help = true;
+                self.help_scroll = 0;
+            }
+            "about" => {
+                self.show_about = true;
             }
             _ => {
                 self.status_message = format!("Unknown command: {cmd}");

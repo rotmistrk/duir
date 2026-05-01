@@ -1,4 +1,5 @@
 mod app;
+mod help;
 mod input;
 mod note_editor;
 mod note_view;
@@ -98,6 +99,7 @@ fn main() -> io::Result<()> {
     result
 }
 
+#[allow(clippy::too_many_lines)]
 fn run_loop(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     app: &mut App,
@@ -171,9 +173,36 @@ fn run_loop(
             // Status bar
             let status = build_status_line(app);
             frame.render_widget(Paragraph::new(status), main_chunks[1]);
+
+            // Overlays
+            if app.show_about {
+                help::render_about(frame, size);
+            }
+            if app.show_help {
+                help::render_help(frame, size, app.help_scroll);
+            }
         })?;
 
         if let Some(Event::Key(key)) = input::poll_event(Duration::from_millis(100))? {
+            // Handle overlay input first
+            if app.show_about {
+                app.show_about = false;
+                continue;
+            }
+            if app.show_help {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Char('q') => app.show_help = false,
+                    KeyCode::Down | KeyCode::Char('j') => app.help_scroll += 1,
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        app.help_scroll = app.help_scroll.saturating_sub(1);
+                    }
+                    KeyCode::PageDown => app.help_scroll += 20,
+                    KeyCode::PageUp => app.help_scroll = app.help_scroll.saturating_sub(20),
+                    _ => {}
+                }
+                continue;
+            }
+
             if key.code == KeyCode::Char('s')
                 && key.modifiers.contains(KeyModifiers::CONTROL)
                 && !app.editing_title

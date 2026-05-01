@@ -166,3 +166,12 @@ Hierarchy is encoded in the filename:
 - Exit criteria must be **objectively verifiable** (test passes, file exists, etc.)
 - When moving to `done/`, update Status field in the file to `done`
 - Prefix commit messages with the item ID: `[01.001.01] Define core structs`
+
+## SOP: Updating Help
+
+When any agent adds, removes, or changes a keybinding or command:
+
+1. **MUST** update `HELP.md` at the project root
+2. The `:help` command in the TUI renders this file directly
+3. The `:about` text is in `crates/duir-tui/src/help.rs`
+4. Commit message MUST mention the keybinding/command change
