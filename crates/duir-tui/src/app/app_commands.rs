@@ -83,6 +83,20 @@ impl App {
             "decrypt" => self.cmd_decrypt(),
             "kiron" => self.cmd_kiron(&parts),
             "kiro" => self.cmd_kiro(&parts),
+            "kbd" => match parts.get(1).copied() {
+                Some("mac") => {
+                    self.kbd_mac = true;
+                    self.set_status("Keyboard: macOS (⌥)", StatusLevel::Success);
+                }
+                Some("linux" | "pc") => {
+                    self.kbd_mac = false;
+                    self.set_status("Keyboard: Linux/PC (Alt)", StatusLevel::Success);
+                }
+                _ => {
+                    let current = if self.kbd_mac { "mac (⌥)" } else { "linux (Alt)" };
+                    self.status_message = format!("Keyboard: {current}. Use :kbd mac | :kbd linux");
+                }
+            },
             "about" => {
                 self.state = FocusState::About;
             }

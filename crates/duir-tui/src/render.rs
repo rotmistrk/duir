@@ -244,6 +244,7 @@ pub fn build_status_line(app: &App) -> Line<'_> {
         ])
     } else {
         let bold = Style::default().add_modifier(Modifier::BOLD);
+        let dim = Style::default().add_modifier(Modifier::DIM);
         let mut spans = vec![
             Span::styled(" q", bold),
             Span::raw("uit "),
@@ -265,12 +266,18 @@ pub fn build_status_line(app: &App) -> Line<'_> {
             Span::raw("filter "),
             Span::styled("^S", bold),
             Span::raw("ave "),
-            Span::styled("Tab", bold),
-            Span::raw(" note "),
-            Span::styled(":", bold),
-            Span::raw("cmd "),
-            Span::styled(":help", bold),
+            Span::styled("F2", dim),
+            Span::raw("tree "),
+            Span::styled("F3", dim),
+            Span::raw("note "),
         ];
+        if app.active_kiron_for_cursor().is_some() {
+            spans.push(Span::styled("F4", dim));
+            spans.push(Span::raw("kiro "));
+            spans.push(Span::styled("F5", dim));
+            spans.push(Span::raw("send "));
+        }
+        spans.extend_from_slice(&[Span::styled(":", bold), Span::raw("cmd "), Span::styled(":help", bold)]);
         if !app.status_message.is_empty() {
             let color = match app.status_level {
                 StatusLevel::Info => Color::DarkGray,

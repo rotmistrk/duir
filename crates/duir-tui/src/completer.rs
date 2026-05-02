@@ -77,6 +77,8 @@ pub const APP_COMMANDS: &[&str] = &[
     "help",
     "import ",
     "init",
+    "kbd linux",
+    "kbd mac",
     "kiro start",
     "kiro stop",
     "kiron",

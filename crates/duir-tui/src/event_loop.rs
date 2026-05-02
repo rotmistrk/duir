@@ -134,8 +134,10 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    if key.code == KeyCode::Enter
-        && (key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT))
+    // F5 or Alt+Enter or Ctrl+Enter: send to kiro
+    if (key.code == KeyCode::F(5)
+        || (key.code == KeyCode::Enter
+            && (key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT))))
         && app.is_tree_focused()
         && app.active_kiron_for_cursor().is_some()
     {
@@ -155,8 +157,8 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // Alt+1: focus tree
-    if key.code == KeyCode::Char('1') && key.modifiers.contains(KeyModifiers::ALT) {
+    // F2 or Alt+2: focus tree
+    if key.code == KeyCode::F(2) || (key.code == KeyCode::Char('2') && key.modifiers.contains(KeyModifiers::ALT)) {
         if app.is_note_focused() {
             app.save_editor();
         }
@@ -165,9 +167,8 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // Alt+2: focus note
-    if key.code == KeyCode::Char('2')
-        && key.modifiers.contains(KeyModifiers::ALT)
+    // F3 or Alt+3: focus note
+    if (key.code == KeyCode::F(3) || (key.code == KeyCode::Char('3') && key.modifiers.contains(KeyModifiers::ALT)))
         && !app.is_command_active()
         && !app.is_filter_active()
     {
@@ -178,9 +179,8 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // Alt+3: focus kiro (if active)
-    if key.code == KeyCode::Char('3')
-        && key.modifiers.contains(KeyModifiers::ALT)
+    // F4 or Alt+4: focus kiro (if active)
+    if (key.code == KeyCode::F(4) || (key.code == KeyCode::Char('4') && key.modifiers.contains(KeyModifiers::ALT)))
         && app.active_kiron_for_cursor().is_some()
     {
         if app.is_note_focused() {

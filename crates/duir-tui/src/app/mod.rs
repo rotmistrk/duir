@@ -135,6 +135,8 @@ pub struct App {
     pub pending_responses: Vec<PendingResponse>,
     /// Zoom: show focused panel fullscreen with no border.
     pub zoomed: bool,
+    /// Keyboard label mode: "mac" shows ⌥, "linux" shows Alt.
+    pub kbd_mac: bool,
 }
 
 impl App {
@@ -167,6 +169,7 @@ impl App {
             kiro_tab_focused: false,
             pending_responses: Vec::new(),
             zoomed: false,
+            kbd_mac: detect_mac_terminal(),
         }
     }
 
@@ -352,8 +355,21 @@ pub fn find_available_path(base: &str) -> std::path::PathBuf {
     std::path::PathBuf::from(format!("{stem}.99.{ext}"))
 }
 
+/// Detect macOS terminal by checking `TERM_PROGRAM` env var.
+fn detect_mac_terminal() -> bool {
+    std::env::var("TERM_PROGRAM")
+        .map(|v| {
+            let lower = v.to_lowercase();
+            lower.contains("iterm") || lower.contains("apple_terminal") || lower.contains("terminal.app")
+        })
+        .unwrap_or(false)
+        || std::env::var("LC_TERMINAL")
+            .map(|v| v.to_lowercase().contains("iterm"))
+            .unwrap_or(false)
+}
+
 #[cfg(test)]
-#[allow(clippy::indexing_slicing)] // Tests: indices are controlled by test setup
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -373,7 +389,6 @@ mod tests {
         app.add_empty_file("c");
         let id_a = app.files[0].id;
         let id_c = app.files[2].id;
-        // Remove middle file
         app.files.remove(1);
         app.rebuild_rows();
         assert_eq!(app.files[0].id, id_a);
