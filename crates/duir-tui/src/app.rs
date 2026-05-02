@@ -1,6 +1,18 @@
+use std::sync::{Arc, Mutex};
+
+use duir_core::mcp_server::McpMutation;
 use duir_core::stats::compute_stats;
 use duir_core::tree_ops::TreePath;
 use duir_core::{Completion, TodoFile, TodoItem};
+
+/// An active kiron session: PTY + optional MCP server state.
+pub struct ActiveKiron {
+    pub pty: crate::pty_tab::PtyTab,
+    pub mcp_mutations: Option<std::sync::mpsc::Receiver<McpMutation>>,
+    /// Kept alive so the MCP server thread can access the snapshot.
+    #[allow(dead_code)]
+    pub mcp_snapshot: Option<Arc<Mutex<TodoFile>>>,
+}
 
 /// A flattened row in the tree view, used for rendering and navigation.
 #[derive(Debug, Clone)]
@@ -103,7 +115,7 @@ pub struct App {
     pub filter_committed_exclude: bool,
     pub highlighter: crate::syntax::SyntaxHighlighter,
     /// Active kiron PTY sessions, keyed by (`file_index`, path).
-    pub active_kirons: std::collections::HashMap<(usize, Vec<usize>), crate::pty_tab::PtyTab>,
+    pub active_kirons: std::collections::HashMap<(usize, Vec<usize>), ActiveKiron>,
     /// Whether the Kiro tab is focused (vs Note tab) in the note panel.
     pub kiro_tab_focused: bool,
     /// Pending response captures awaiting idle timeout.
@@ -1423,7 +1435,31 @@ impl App {
         let cwd = std::env::current_dir().unwrap_or_default();
         match crate::pty_tab::PtyTab::spawn(&cmd, &arg_refs, 80, 24, &cwd) {
             Ok(pty) => {
-                self.active_kirons.insert(key, pty);
+                // Create MCP snapshot from kiron subtree
+                let subtree = duir_core::tree_ops::get_item(&self.files[fi].data, &key.1).map_or_else(
+                    || TodoFile::new("kiron"),
+                    |item| {
+                        let mut file = TodoFile::new(&item.title);
+                        file.items.clone_from(&item.items);
+                        file.note.clone_from(&item.note);
+                        file
+                    },
+                );
+                let snapshot = Arc::new(Mutex::new(subtree));
+                let (tx, rx) = std::sync::mpsc::channel();
+                let snap_clone = Arc::clone(&snapshot);
+                std::thread::spawn(move || {
+                    let server = duir_core::mcp_server::McpServer::new(snap_clone, tx);
+                    let _ = server.run_stdio();
+                });
+                self.active_kirons.insert(
+                    key,
+                    ActiveKiron {
+                        pty,
+                        mcp_mutations: Some(rx),
+                        mcp_snapshot: Some(snapshot),
+                    },
+                );
                 self.kiro_tab_focused = true;
                 self.set_status("Kiro session started", StatusLevel::Success);
             }
@@ -1465,8 +1501,8 @@ impl App {
 
     /// Poll all active kiron PTYs for new output.
     pub fn poll_kirons(&mut self) {
-        for pty in self.active_kirons.values_mut() {
-            pty.poll();
+        for kiron in self.active_kirons.values_mut() {
+            kiron.pty.poll();
         }
     }
 
@@ -1492,7 +1528,7 @@ impl App {
         };
 
         // Write to PTY as bracketed paste
-        let Some(pty) = self.active_kirons.get_mut(&kiron_key) else {
+        let Some(kiron) = self.active_kirons.get_mut(&kiron_key) else {
             return;
         };
         let mut payload = String::with_capacity(content.len() + 16);
@@ -1500,7 +1536,7 @@ impl App {
         payload.push_str(&content);
         payload.push_str("\x1b[201~");
         payload.push('\n');
-        pty.write(payload.as_bytes());
+        kiron.pty.write(payload.as_bytes());
 
         // Mark node as prompt type
         if !path.is_empty() {
@@ -1538,11 +1574,11 @@ impl App {
                 continue;
             }
             let key = (pr.kiron_fi, pr.kiron_path.clone());
-            let Some(pty) = self.active_kirons.get(&key) else {
+            let Some(kiron) = self.active_kirons.get(&key) else {
                 completed.push(i);
                 continue;
             };
-            let output = crate::termbuf::extract_last_output(&pty.termbuf);
+            let output = crate::termbuf::extract_last_output(&kiron.pty.termbuf);
             if output.trim().is_empty() {
                 continue;
             }
@@ -1553,10 +1589,10 @@ impl App {
         for &i in completed.iter().rev() {
             let pr = self.pending_responses.remove(i);
             let key = (pr.kiron_fi, pr.kiron_path.clone());
-            let Some(pty) = self.active_kirons.get(&key) else {
+            let Some(kiron) = self.active_kirons.get(&key) else {
                 continue;
             };
-            let output = crate::termbuf::extract_last_output(&pty.termbuf);
+            let output = crate::termbuf::extract_last_output(&kiron.pty.termbuf);
             if output.trim().is_empty() {
                 continue;
             }
@@ -1591,6 +1627,82 @@ impl App {
         }
 
         if !completed.is_empty() {
+            self.rebuild_rows();
+        }
+    }
+
+    /// Drain MCP mutation channels and apply to the actual tree model.
+    pub fn process_mcp_mutations(&mut self) {
+        let keys: Vec<_> = self.active_kirons.keys().cloned().collect();
+        let mut changed = false;
+        for key in keys {
+            let Some(kiron) = self.active_kirons.get(&key) else {
+                continue;
+            };
+            let Some(rx) = kiron.mcp_mutations.as_ref() else {
+                continue;
+            };
+            let mutations: Vec<McpMutation> = rx.try_iter().collect();
+            let (fi, ref base_path) = key;
+            for mutation in mutations {
+                match mutation {
+                    McpMutation::AddChild {
+                        parent_path,
+                        title,
+                        note,
+                    } => {
+                        let abs = absolute_path(base_path, &parent_path);
+                        let mut item = TodoItem::new(&title);
+                        item.note = note;
+                        if duir_core::tree_ops::add_child(&mut self.files[fi].data, &abs, item).is_ok() {
+                            changed = true;
+                            self.files[fi].modified = true;
+                        }
+                    }
+                    McpMutation::AddSibling { path, title, note } => {
+                        let abs = absolute_path(base_path, &path);
+                        let mut item = TodoItem::new(&title);
+                        item.note = note;
+                        if duir_core::tree_ops::add_sibling(&mut self.files[fi].data, &abs, item).is_ok() {
+                            changed = true;
+                            self.files[fi].modified = true;
+                        }
+                    }
+                    McpMutation::MarkDone { path } => {
+                        let abs = absolute_path(base_path, &path);
+                        if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &abs) {
+                            item.completed = Completion::Done;
+                            changed = true;
+                            self.files[fi].modified = true;
+                        }
+                    }
+                    McpMutation::MarkImportant { path } => {
+                        let abs = absolute_path(base_path, &path);
+                        if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &abs) {
+                            item.important = !item.important;
+                            changed = true;
+                            self.files[fi].modified = true;
+                        }
+                    }
+                    McpMutation::Reorder { path, direction } => {
+                        let abs = absolute_path(base_path, &path);
+                        let result = match direction {
+                            duir_core::mcp_server::ReorderDirection::Up => {
+                                duir_core::tree_ops::swap_up(&mut self.files[fi].data, &abs)
+                            }
+                            duir_core::mcp_server::ReorderDirection::Down => {
+                                duir_core::tree_ops::swap_down(&mut self.files[fi].data, &abs)
+                            }
+                        };
+                        if result.is_ok() {
+                            changed = true;
+                            self.files[fi].modified = true;
+                        }
+                    }
+                }
+            }
+        }
+        if changed {
             self.rebuild_rows();
         }
     }
@@ -1755,6 +1867,13 @@ fn write_file(path: &str, data: &[u8]) -> Result<(), String> {
         std::fs::write(path, data).map_err(|e| format!("{e}"))
     }
 }
+/// Translate a relative MCP path to an absolute tree path by prepending the kiron base.
+fn absolute_path(base: &[usize], relative: &[usize]) -> Vec<usize> {
+    let mut abs = base.to_vec();
+    abs.extend_from_slice(relative);
+    abs
+}
+
 fn find_available_path(base: &str) -> std::path::PathBuf {
     let path = std::path::PathBuf::from(base);
     if !path.exists() {

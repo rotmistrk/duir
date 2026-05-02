@@ -179,7 +179,7 @@ fn run_loop(
                 }
             } else if app.kiro_tab_focused
                 && let Some(ref key) = active_kiron_key
-                && let Some(pty) = app.active_kirons.get(key)
+                && let Some(kiron) = app.active_kirons.get(key)
             {
                 // Render Kiro terminal
                 let kiro_block = Block::default()
@@ -188,7 +188,7 @@ fn run_loop(
                     .border_style(Style::default().add_modifier(Modifier::BOLD));
                 let inner = kiro_block.inner(content_chunks[1]);
                 frame.render_widget(kiro_block, content_chunks[1]);
-                render_termbuf(frame, &pty.termbuf, inner);
+                render_termbuf(frame, &kiron.pty.termbuf, inner);
             } else {
                 // Render note from model (with tab indicator if kiron active)
                 let note_content = app.current_note();
@@ -252,6 +252,7 @@ fn run_loop(
         if has_active_kirons {
             app.poll_kirons();
             app.check_response_capture();
+            app.process_mcp_mutations();
         }
 
         if let Some(Event::Key(key)) = input::poll_event(timeout)? {
@@ -325,11 +326,11 @@ fn run_loop(
             {
                 // Route input to active kiron PTY
                 if let Some(kiron_key) = app.active_kiron_for_cursor()
-                    && let Some(pty) = app.active_kirons.get_mut(&kiron_key)
+                    && let Some(kiron) = app.active_kirons.get_mut(&kiron_key)
                 {
                     let bytes = key_to_bytes(key);
                     if !bytes.is_empty() {
-                        pty.write(&bytes);
+                        kiron.pty.write(&bytes);
                     }
                 }
             } else if key.code == KeyCode::Esc && app.kiro_tab_focused && app.is_tree_focused() {

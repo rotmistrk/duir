@@ -81,6 +81,35 @@ All file commands accept `s3://` paths (e.g. `:open s3://bucket/file.todo.json`)
 | `→` on 🔒 | Unlock (prompts password) |
 | `←` on 🔓 | Lock (re-encrypts, forgets password) |
 
+### Kiro Integration (AI Planning)
+
+| Command | Action |
+|---------|--------|
+| `:kiron` | Mark current node as AI session (kiron) |
+| `:kiron disable` | Remove kiron marking (must stop first) |
+| `:kiro start` | Start kiro-cli on current kiron node |
+| `:kiro stop` | Stop kiro session |
+| `Ctrl+T` | Toggle between Note and Kiro tabs |
+| `Ctrl+Enter` | Send current node as prompt to kiro |
+| `Esc` | Return from Kiro tab to tree |
+
+Kiron nodes show 🤖 icon in the tree.
+When inside an active kiron's subtree, the note panel shows
+`[Note]` and `[Kiro]` tabs. `Ctrl+T` switches between them.
+
+`Ctrl+Enter` serializes the current node and its descendants
+as markdown and sends it to kiro as a prompt. After kiro
+responds (5s idle), the response is captured as a new sibling
+node marked with 📥.
+
+Kiro configuration in `config.toml`:
+
+```toml
+[kiro]
+command = "kiro-cli"
+args = ["chat", "--resume"]
+```
+
 ### Settings
 
 | Command | Action |
