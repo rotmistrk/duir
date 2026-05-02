@@ -355,12 +355,27 @@ fn run_loop(
                 && !app.is_filter_active()
                 && !app.is_editing_title()
             {
-                // Ctrl+T: cycle focus Tree → Kiro → Tree (or Tree → Tree if no kiron)
+                // Ctrl+T: cycle focus Tree → Note → Kiro → Tree
                 if app.kiro_tab_focused {
-                    app.kiro_tab_focused = false; // back to tree
-                } else if app.active_kiron_for_cursor().is_some() {
-                    app.kiro_tab_focused = true; // tree → kiro
+                    // Kiro → Tree
+                    app.kiro_tab_focused = false;
+                } else if app.is_tree_focused() {
+                    // Tree → Note
+                    app.focus_note();
                 }
+                // Note → Kiro or Note → Tree handled by Ctrl+T in note editor
+                // (which calls focus_tree, then next Ctrl+T goes to kiro)
+            } else if key.code == KeyCode::Char('t')
+                && key.modifiers.contains(KeyModifiers::CONTROL)
+                && app.is_note_focused()
+            {
+                // Ctrl+T from Note: → Kiro (if available) or → Tree
+                app.save_editor();
+                app.state = FocusState::Tree;
+                if app.active_kiron_for_cursor().is_some() {
+                    app.kiro_tab_focused = true; // Note → Kiro
+                }
+                // else: Note → Tree (kiro_tab_focused stays false)
             } else if app.kiro_tab_focused
                 && app.is_tree_focused()
                 && app.active_kiron_for_cursor().is_some()
