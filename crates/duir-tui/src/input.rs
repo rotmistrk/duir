@@ -131,8 +131,7 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             true
         }
         (KeyCode::Tab, false) => {
-            app.load_editor();
-            app.focus = Focus::Note;
+            app.focus_note();
             true
         }
         (KeyCode::Char('/'), false) => {
@@ -178,8 +177,7 @@ fn handle_note_key(app: &mut App, key: KeyEvent) -> bool {
         && editor.mode == crate::note_editor::EditorMode::Normal
         && key.code == KeyCode::Tab
     {
-        app.save_editor();
-        app.focus = Focus::Tree;
+        app.focus_tree();
         return true;
     }
 

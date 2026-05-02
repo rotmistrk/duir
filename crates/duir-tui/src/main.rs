@@ -287,6 +287,9 @@ fn run_loop(
             last_save = std::time::Instant::now();
         }
 
+        // Check invariants in debug builds
+        app.assert_invariants();
+
         if app.should_quit {
             break;
         }
@@ -436,8 +439,7 @@ mod tests {
     fn tab_into_note_loads_editor() {
         let mut app = make_app_with_tree();
         app.cursor = 1;
-        app.load_editor();
-        app.focus = Focus::Note;
+        app.focus_note();
         assert!(app.editor.is_some());
         assert_eq!(app.editor.as_ref().unwrap().content(), "branch1 note");
     }
@@ -446,7 +448,7 @@ mod tests {
     fn tab_back_saves_editor_to_model() {
         let mut app = make_app_with_tree();
         app.cursor = 1;
-        app.load_editor();
+        app.focus_note();
         if let Some(editor) = &mut app.editor {
             editor.textarea.insert_str("MODIFIED");
             editor.dirty = true;
@@ -459,7 +461,7 @@ mod tests {
     fn editor_not_written_without_save() {
         let mut app = make_app_with_tree();
         app.cursor = 1;
-        app.load_editor();
+        app.focus_note();
         if let Some(editor) = &mut app.editor {
             editor.textarea.insert_str("SHOULD NOT PERSIST");
         }
@@ -484,15 +486,14 @@ mod tests {
         app.cursor = 1; // Branch 1
 
         // Tab into note, edit
-        app.load_editor();
-        app.focus = Focus::Note;
+        app.focus_note();
         if let Some(editor) = &mut app.editor {
             editor.textarea.insert_str("EDITED TEXT ");
         }
 
         // Tab back to tree
         app.save_editor();
-        app.focus = Focus::Tree;
+        app.focus_tree();
         assert!(app.files[0].data.items[0].note.contains("EDITED TEXT"));
 
         // Navigate to different items
@@ -699,7 +700,7 @@ mod tests {
     fn collapse_updates_editor() {
         let mut app = make_app_with_tree();
         app.cursor = 1;
-        app.load_editor();
+        app.focus_note();
         app.save_editor();
         app.cmd_collapse();
         let content = app.editor.as_ref().unwrap().content();
@@ -1256,8 +1257,7 @@ mod tests {
     fn input_note_tab_back_to_tree() {
         let mut app = make_app_with_tree();
         app.cursor = 1;
-        app.load_editor();
-        app.focus = Focus::Note;
+        app.focus_note();
         // Editor starts in Normal mode, Tab returns to tree
         input::handle_key(&mut app, key(KeyCode::Tab));
         assert_eq!(app.focus, Focus::Tree);

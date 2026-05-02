@@ -304,6 +304,40 @@ impl App {
         self.status_level = level;
     }
 
+    /// Switch focus to note pane. Loads editor from model.
+    /// This is the ONLY way to enter note focus.
+    pub fn focus_note(&mut self) {
+        self.load_editor();
+        self.focus = Focus::Note;
+        debug_assert!(self.editor.is_some(), "Editor must exist when note is focused");
+    }
+
+    /// Switch focus to tree pane. Saves editor to model and drops it.
+    /// This is the ONLY way to return to tree focus from note.
+    pub fn focus_tree(&mut self) {
+        if self.focus == Focus::Note {
+            self.save_editor();
+            self.editor = None;
+        }
+        self.focus = Focus::Tree;
+        debug_assert!(self.editor.is_none(), "Editor must be None when tree is focused");
+    }
+
+    /// Assert invariants. Called in debug builds to catch violations early.
+    pub fn assert_invariants(&self) {
+        if self.focus == Focus::Tree {
+            debug_assert!(
+                self.editor.is_none(),
+                "INVARIANT VIOLATION: editor exists while tree is focused"
+            );
+        }
+        if self.focus == Focus::Note {
+            debug_assert!(
+                self.editor.is_some(),
+                "INVARIANT VIOLATION: editor is None while note is focused"
+            );
+        }
+    }
     /// Mark a file as modified and invalidate cipher caches for encrypted ancestors.
     pub(crate) fn mark_modified(&mut self, fi: usize, path: &[usize]) {
         self.files[fi].modified = true;
