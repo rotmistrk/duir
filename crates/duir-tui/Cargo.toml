@@ -23,6 +23,7 @@ dirs = "6"
 portable-pty = "0.8"
 uuid = { version = "1", features = ["v4"] }
 vte = "0.13"
+chrono = "0.4"
 
 tempfile = "3"
 

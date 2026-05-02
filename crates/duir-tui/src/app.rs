@@ -68,6 +68,17 @@ pub enum StatusLevel {
     Warning,
     Error,
 }
+
+/// A pending response capture: tracks which kiron PTY to monitor
+/// and which prompt node to insert the response after.
+pub struct PendingResponse {
+    pub kiron_fi: usize,
+    pub kiron_path: Vec<usize>,
+    pub prompt_fi: usize,
+    pub prompt_path: Vec<usize>,
+    pub start_time: std::time::Instant,
+}
+
 #[allow(clippy::struct_excessive_bools)]
 pub struct App {
     pub files: Vec<LoadedFile>,
@@ -95,6 +106,8 @@ pub struct App {
     pub active_kirons: std::collections::HashMap<(usize, Vec<usize>), crate::pty_tab::PtyTab>,
     /// Whether the Kiro tab is focused (vs Note tab) in the note panel.
     pub kiro_tab_focused: bool,
+    /// Pending response captures awaiting idle timeout.
+    pub pending_responses: Vec<PendingResponse>,
 }
 
 impl App {
@@ -124,6 +137,7 @@ impl App {
             highlighter: crate::syntax::SyntaxHighlighter::new(),
             active_kirons: std::collections::HashMap::new(),
             kiro_tab_focused: false,
+            pending_responses: Vec::new(),
         }
     }
 
@@ -1453,6 +1467,131 @@ impl App {
     pub fn poll_kirons(&mut self) {
         for pty in self.active_kirons.values_mut() {
             pty.poll();
+        }
+    }
+
+    /// Send the current node's content as a prompt to the active kiron's PTY.
+    pub(crate) fn send_to_kiro(&mut self) {
+        let Some(row) = self.current_row().cloned() else {
+            return;
+        };
+        let Some(kiron_key) = self.active_kiron_for_cursor() else {
+            return;
+        };
+        let fi = row.file_index;
+        let path = row.path;
+
+        // Get node content as markdown
+        let content = if path.is_empty() {
+            duir_core::markdown_export::export_file(&self.files[fi].data)
+        } else {
+            let Some(item) = duir_core::tree_ops::get_item(&self.files[fi].data, &path) else {
+                return;
+            };
+            duir_core::markdown_export::export_subtree_safe(item, 3)
+        };
+
+        // Write to PTY as bracketed paste
+        let Some(pty) = self.active_kirons.get_mut(&kiron_key) else {
+            return;
+        };
+        let mut payload = String::with_capacity(content.len() + 16);
+        payload.push_str("\x1b[200~");
+        payload.push_str(&content);
+        payload.push_str("\x1b[201~");
+        payload.push('\n');
+        pty.write(payload.as_bytes());
+
+        // Mark node as prompt type
+        if !path.is_empty() {
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+                item.node_type = Some(duir_core::NodeType::Prompt);
+                if !item.title.starts_with("📤 ") {
+                    item.title = format!("📤 {}", item.title);
+                }
+            }
+            self.mark_modified(fi, &path);
+        }
+
+        // Record pending response
+        self.pending_responses.push(PendingResponse {
+            kiron_fi: kiron_key.0,
+            kiron_path: kiron_key.1,
+            prompt_fi: fi,
+            prompt_path: path,
+            start_time: std::time::Instant::now(),
+        });
+
+        self.rebuild_rows();
+        self.set_status("Prompt sent to kiro", StatusLevel::Success);
+    }
+
+    /// Check pending responses for idle PTYs and capture output.
+    pub(crate) fn check_response_capture(&mut self) {
+        let idle_threshold = std::time::Duration::from_secs(5);
+        let now = std::time::Instant::now();
+
+        // Collect indices of completed responses
+        let mut completed = Vec::new();
+        for (i, pr) in self.pending_responses.iter().enumerate() {
+            if now.duration_since(pr.start_time) < idle_threshold {
+                continue;
+            }
+            let key = (pr.kiron_fi, pr.kiron_path.clone());
+            let Some(pty) = self.active_kirons.get(&key) else {
+                completed.push(i);
+                continue;
+            };
+            let output = crate::termbuf::extract_last_output(&pty.termbuf);
+            if output.trim().is_empty() {
+                continue;
+            }
+            completed.push(i);
+        }
+
+        // Process in reverse to preserve indices
+        for &i in completed.iter().rev() {
+            let pr = self.pending_responses.remove(i);
+            let key = (pr.kiron_fi, pr.kiron_path.clone());
+            let Some(pty) = self.active_kirons.get(&key) else {
+                continue;
+            };
+            let output = crate::termbuf::extract_last_output(&pty.termbuf);
+            if output.trim().is_empty() {
+                continue;
+            }
+
+            // Build response title from first non-empty line
+            let first_line = output.lines().find(|l| !l.trim().is_empty()).unwrap_or("Response");
+            let truncated: String = first_line.chars().take(80).collect();
+            let title = format!("📥 {truncated}");
+
+            // Get kiron session_id for the marker
+            let session_id = duir_core::tree_ops::get_item(&self.files[pr.kiron_fi].data, &pr.kiron_path)
+                .and_then(|item| item.kiron.as_ref())
+                .map_or_else(|| "unknown".to_owned(), |k| k.session_id.clone());
+
+            let timestamp = chrono::Utc::now().to_rfc3339();
+            let note = format!(
+                "<!-- duir:response kiron={session_id} timestamp={timestamp} -->\n\
+                 {output}"
+            );
+
+            let mut response_node = duir_core::TodoItem::new(&title);
+            response_node.note = note;
+            response_node.node_type = Some(duir_core::NodeType::Response);
+
+            if let Err(e) =
+                duir_core::tree_ops::add_sibling(&mut self.files[pr.prompt_fi].data, &pr.prompt_path, response_node)
+            {
+                self.set_status(&format!("Failed to insert response: {e}"), StatusLevel::Error);
+                continue;
+            }
+            self.mark_modified(pr.prompt_fi, &pr.prompt_path);
+        }
+
+        if !completed.is_empty() {
+            self.rebuild_rows();
         }
     }
 

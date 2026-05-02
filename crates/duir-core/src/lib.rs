@@ -8,6 +8,7 @@ pub mod filter;
 pub mod legacy_import;
 pub mod markdown_export;
 pub mod markdown_import;
+pub mod mcp_server;
 pub mod model;
 pub mod s3_storage;
 pub mod stats;

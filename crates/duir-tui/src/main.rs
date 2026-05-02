@@ -251,6 +251,7 @@ fn run_loop(
         // Poll active kirons for new output
         if has_active_kirons {
             app.poll_kirons();
+            app.check_response_capture();
         }
 
         if let Some(Event::Key(key)) = input::poll_event(timeout)? {
@@ -294,7 +295,13 @@ fn run_loop(
                 continue;
             }
 
-            if key.code == KeyCode::Char('s')
+            if key.code == KeyCode::Enter
+                && key.modifiers.contains(KeyModifiers::CONTROL)
+                && app.is_tree_focused()
+                && app.active_kiron_for_cursor().is_some()
+            {
+                app.send_to_kiro();
+            } else if key.code == KeyCode::Char('s')
                 && key.modifiers.contains(KeyModifiers::CONTROL)
                 && !app.is_editing_title()
                 && !app.is_filter_active()
