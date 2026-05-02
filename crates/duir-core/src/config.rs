@@ -10,6 +10,7 @@ pub struct Config {
     pub storage: StorageConfig,
     pub editor: EditorConfig,
     pub ui: UiConfig,
+    pub diagrams: crate::diagram::ToolPaths,
 }
 
 /// Storage paths configuration.
