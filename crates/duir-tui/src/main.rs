@@ -175,9 +175,7 @@ fn run_loop(
                 let note_content = app.current_note();
                 let note_block = Block::default().title(" Note ").borders(Borders::ALL);
                 let lines = crate::markdown_view::highlight_lines(&note_content, usize::MAX, 0);
-                let paragraph = Paragraph::new(lines)
-                    .block(note_block)
-                    .wrap(ratatui::widgets::Wrap { trim: false });
+                let paragraph = Paragraph::new(lines).block(note_block);
                 frame.render_widget(paragraph, content_chunks[1]);
             }
 

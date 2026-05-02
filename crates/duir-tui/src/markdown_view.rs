@@ -1,9 +1,21 @@
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-/// Highlight markdown content, returning owned lines suitable for use after
-/// the source `content` string has been dropped.
+/// Highlight markdown content with cursor display.
+/// Returns owned lines. `cursor_row = usize::MAX` means no cursor.
 pub fn highlight_lines(content: &str, cursor_row: usize, cursor_col: usize) -> Vec<Line<'static>> {
+    if content.is_empty() {
+        // Empty content: show cursor on empty line
+        return if cursor_row == 0 {
+            vec![Line::from(Span::styled(
+                " ".to_owned(),
+                Style::default().add_modifier(Modifier::REVERSED),
+            ))]
+        } else {
+            vec![Line::raw(String::new())]
+        };
+    }
+
     let mut in_fence = false;
     content
         .lines()
@@ -18,7 +30,7 @@ pub fn highlight_lines(content: &str, cursor_row: usize, cursor_col: usize) -> V
                 highlight_md(line)
             };
             if i == cursor_row {
-                apply_cursor(line, cursor_col)
+                insert_cursor_into_line(&styled, line, cursor_col)
             } else {
                 styled
             }
@@ -30,42 +42,92 @@ fn owned_line(text: &str, style: Style) -> Line<'static> {
     Line::from(Span::styled(text.to_owned(), style))
 }
 
-fn apply_cursor(line: &str, col: usize) -> Line<'static> {
+/// Insert a reversed cursor character into an already-styled line.
+/// Preserves all existing styling — only modifies the character at `cursor_col`.
+fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Line<'static> {
     let rev = Style::default().add_modifier(Modifier::REVERSED);
-    if line.is_empty() {
+
+    if raw.is_empty() {
         return Line::from(Span::styled(" ".to_owned(), rev));
     }
-    let col = col.min(line.len());
-    if col >= line.len() {
-        Line::from(vec![Span::raw(line.to_owned()), Span::styled(" ".to_owned(), rev)])
-    } else {
-        Line::from(vec![
-            Span::raw(line[..col].to_owned()),
-            Span::styled(line[col..=col].to_owned(), rev),
-            Span::raw(line[col + 1..].to_owned()),
-        ])
+
+    // For simple single-span lines, do direct insertion
+    if styled.spans.len() == 1 {
+        let style = styled.spans[0].style;
+        let col = col.min(raw.len());
+        if col >= raw.len() {
+            return Line::from(vec![
+                Span::styled(raw.to_owned(), style),
+                Span::styled(" ".to_owned(), rev),
+            ]);
+        }
+        return Line::from(vec![
+            Span::styled(raw[..col].to_owned(), style),
+            Span::styled(raw[col..=col].to_owned(), style.patch(rev)),
+            Span::styled(raw[col + 1..].to_owned(), style),
+        ]);
     }
+
+    // For multi-span lines, find which span contains the cursor column
+    // and split it to insert the cursor
+    let col = col.min(raw.len());
+    let mut result: Vec<Span<'static>> = Vec::new();
+    let mut char_offset = 0;
+    let mut cursor_placed = false;
+
+    for span in &styled.spans {
+        let span_len = span.content.len();
+        let span_end = char_offset + span_len;
+
+        if !cursor_placed && col >= char_offset && col < span_end {
+            // Cursor is in this span
+            let local_col = col - char_offset;
+            if local_col > 0 {
+                result.push(Span::styled(span.content[..local_col].to_owned(), span.style));
+            }
+            if local_col < span_len {
+                result.push(Span::styled(
+                    span.content[local_col..=local_col].to_owned(),
+                    span.style.patch(rev),
+                ));
+                if local_col + 1 < span_len {
+                    result.push(Span::styled(span.content[local_col + 1..].to_owned(), span.style));
+                }
+            }
+            cursor_placed = true;
+        } else {
+            result.push(span.clone());
+        }
+        char_offset = span_end;
+    }
+
+    // Cursor at end of line
+    if !cursor_placed {
+        result.push(Span::styled(" ".to_owned(), rev));
+    }
+
+    Line::from(result)
 }
 
 fn highlight_md(line: &str) -> Line<'static> {
     let base = Style::default();
 
     // Headings
-    if line.strip_prefix("### ").is_some() {
+    if line.starts_with("#### ") || line.starts_with("##### ") || line.starts_with("###### ") {
+        return owned_line(line, base.fg(Color::Yellow));
+    }
+    if line.starts_with("### ") {
         return owned_line(line, base.fg(Color::Yellow).add_modifier(Modifier::BOLD));
     }
-    if line.strip_prefix("## ").is_some() {
+    if line.starts_with("## ") {
         return owned_line(line, base.fg(Color::LightCyan).add_modifier(Modifier::BOLD));
     }
-    if line.strip_prefix("# ").is_some() {
+    if line.starts_with("# ") {
         return owned_line(
             line,
             base.fg(Color::LightCyan)
                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
         );
-    }
-    if line.starts_with('#') {
-        return owned_line(line, base.fg(Color::Yellow));
     }
 
     // Blockquote
@@ -82,7 +144,10 @@ fn highlight_md(line: &str) -> Line<'static> {
     // Checkbox items
     let stripped = line.trim_start();
     let indent = &line[..line.len() - stripped.len()];
-    if let Some(rest) = stripped.strip_prefix("- [x] ") {
+    if let Some(rest) = stripped
+        .strip_prefix("- [x] ")
+        .or_else(|| stripped.strip_prefix("- [X] "))
+    {
         return Line::from(vec![
             Span::styled(format!("{indent}- "), base),
             Span::styled("[x]".to_owned(), base.fg(Color::Green)),

@@ -1015,9 +1015,7 @@ impl NoteEditor<'_> {
             let lines = crate::markdown_view::highlight_lines(&content, cursor_row, cursor_col);
             #[allow(clippy::cast_possible_truncation)]
             let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
-            let mut paragraph = ratatui::widgets::Paragraph::new(lines)
-                .wrap(ratatui::widgets::Wrap { trim: false })
-                .scroll((scroll_offset, 0));
+            let mut paragraph = ratatui::widgets::Paragraph::new(lines).scroll((scroll_offset, 0));
             if let Some(b) = block {
                 paragraph = paragraph.block(b);
             }
