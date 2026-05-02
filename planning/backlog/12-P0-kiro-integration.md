@@ -169,7 +169,7 @@ Response nodes:
 ```toml
 [kiro]
 command = "kiro-cli"
-args = ["chat", "--classic"]
+args = ["chat", "--classic", "--session={session_id}"]
 # session_flag = "--session-id"  # if supported
 # mcp_flag = "--mcp-config"     # if supported
 ```
