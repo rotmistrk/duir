@@ -91,8 +91,11 @@ impl StatefulWidget for TreeView<'_> {
             let prefix_width = prefix.chars().count();
 
             let title = if is_selected && let FocusState::EditingTitle { ref buffer, cursor, .. } = state.state {
-                let pos = cursor.min(buffer.len());
-                format!("{}▏{}", &buffer[..pos], &buffer[pos..])
+                let chars: Vec<char> = buffer.chars().collect();
+                let pos = cursor.min(chars.len());
+                let before: String = chars[..pos].iter().collect();
+                let after: String = chars[pos..].iter().collect();
+                format!("{before}▏{after}")
             } else {
                 row.title.clone()
             };

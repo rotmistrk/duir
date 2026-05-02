@@ -139,44 +139,48 @@ fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Lin
     // For simple single-span lines, do direct insertion
     if styled.spans.len() == 1 {
         let style = styled.spans[0].style;
-        let col = col.min(raw.len());
-        if col >= raw.len() {
+        let chars: Vec<char> = raw.chars().collect();
+        let col = col.min(chars.len());
+        if col >= chars.len() {
             return Line::from(vec![
                 Span::styled(raw.to_owned(), style),
                 Span::styled(" ".to_owned(), rev),
             ]);
         }
+        let before: String = chars[..col].iter().collect();
+        let cursor_ch: String = chars[col..=col].iter().collect();
+        let after: String = chars[col + 1..].iter().collect();
         return Line::from(vec![
-            Span::styled(raw[..col].to_owned(), style),
-            Span::styled(raw[col..=col].to_owned(), style.patch(rev)),
-            Span::styled(raw[col + 1..].to_owned(), style),
+            Span::styled(before, style),
+            Span::styled(cursor_ch, style.patch(rev)),
+            Span::styled(after, style),
         ]);
     }
 
     // For multi-span lines, find which span contains the cursor column
     // and split it to insert the cursor
-    let col = col.min(raw.len());
+    let col = col.min(raw.chars().count());
     let mut result: Vec<Span<'static>> = Vec::new();
     let mut char_offset = 0;
     let mut cursor_placed = false;
 
     for span in &styled.spans {
-        let span_len = span.content.len();
+        let span_chars: Vec<char> = span.content.chars().collect();
+        let span_len = span_chars.len();
         let span_end = char_offset + span_len;
 
         if !cursor_placed && col >= char_offset && col < span_end {
-            // Cursor is in this span
             let local_col = col - char_offset;
             if local_col > 0 {
-                result.push(Span::styled(span.content[..local_col].to_owned(), span.style));
+                let before: String = span_chars[..local_col].iter().collect();
+                result.push(Span::styled(before, span.style));
             }
             if local_col < span_len {
-                result.push(Span::styled(
-                    span.content[local_col..=local_col].to_owned(),
-                    span.style.patch(rev),
-                ));
+                let cursor_ch: String = span_chars[local_col..=local_col].iter().collect();
+                result.push(Span::styled(cursor_ch, span.style.patch(rev)));
                 if local_col + 1 < span_len {
-                    result.push(Span::styled(span.content[local_col + 1..].to_owned(), span.style));
+                    let after: String = span_chars[local_col + 1..].iter().collect();
+                    result.push(Span::styled(after, span.style));
                 }
             }
             cursor_placed = true;
@@ -405,4 +409,47 @@ fn push_plain(spans: &mut Vec<Span<'static>>, line: &str, start: usize, end: usi
 
 fn peek_pos(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>, default: usize) -> usize {
     chars.peek().map_or(default, |&(idx, _)| idx)
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cursor_on_multibyte_char() {
+        // • is 3 bytes (E2 80 A2). Cursor at char position 2 (the bullet).
+        let line = "  • item";
+        let styled = Line::from(line.to_owned());
+        // Should not panic at any position
+        let _r = insert_cursor_into_line(&styled, line, 2);
+        let _r = insert_cursor_into_line(&styled, line, 0);
+        let _r = insert_cursor_into_line(&styled, line, 4);
+        let _r = insert_cursor_into_line(&styled, line, 7);
+    }
+
+    #[test]
+    fn cursor_on_emoji() {
+        let line = "🤖 hello";
+        let styled = Line::from(line.to_owned());
+        let _r = insert_cursor_into_line(&styled, line, 0);
+        let _r = insert_cursor_into_line(&styled, line, 1);
+        let _r = insert_cursor_into_line(&styled, line, 2);
+    }
+
+    #[test]
+    fn cursor_on_cjk() {
+        let line = "日本語テスト";
+        let styled = Line::from(line.to_owned());
+        for i in 0..=6 {
+            let _r = insert_cursor_into_line(&styled, line, i);
+        }
+    }
+
+    #[test]
+    fn cursor_past_end() {
+        let line = "short";
+        let styled = Line::from(line.to_owned());
+        let _r = insert_cursor_into_line(&styled, line, 100);
+    }
 }
