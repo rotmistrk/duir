@@ -8,6 +8,7 @@ pub mod filter;
 pub mod markdown_export;
 pub mod markdown_import;
 pub mod model;
+pub mod s3_storage;
 pub mod stats;
 pub mod storage;
 pub mod tree_ops;

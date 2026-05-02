@@ -106,6 +106,11 @@ pub const EDITOR_COMMANDS: &[&str] = &[
 /// Complete file/directory paths from the filesystem.
 /// Returns matching entries for the given partial path.
 pub fn complete_path(partial: &str) -> Vec<String> {
+    // S3 path completion
+    if partial.starts_with("s3://") {
+        return complete_s3_path(partial);
+    }
+
     let path = std::path::Path::new(partial);
     let (dir, prefix) = if partial.ends_with('/') {
         (std::path::PathBuf::from(partial), "")
@@ -148,4 +153,27 @@ pub fn complete_path(partial: &str) -> Vec<String> {
     }
     results.sort();
     results
+}
+
+fn complete_s3_path(partial: &str) -> Vec<String> {
+    let rest = partial.strip_prefix("s3://").unwrap_or("");
+
+    if !rest.contains('/') {
+        // List buckets, filter by typed prefix
+        if let Ok(s3) = duir_core::s3_storage::S3Storage::new()
+            && let Ok(buckets) = s3.list_buckets()
+        {
+            return buckets.into_iter().filter(|b| b.starts_with(partial)).collect();
+        }
+        return vec![];
+    }
+
+    // Have bucket, list objects
+    let (bucket, prefix) = rest.split_once('/').unwrap_or((rest, ""));
+    if let Ok(s3) = duir_core::s3_storage::S3Storage::new()
+        && let Ok(objects) = s3.list_objects(bucket, prefix)
+    {
+        return objects.into_iter().filter(|o| o.starts_with(partial)).collect();
+    }
+    vec![]
 }

@@ -952,19 +952,18 @@ impl App {
 
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
 
+        let path_s = path.to_string_lossy().to_string();
         match ext {
             "md" => {
                 let md = duir_core::markdown_export::export_subtree(item, 3);
-                match std::fs::write(&path, &md) {
-                    Ok(()) => self.status_message = format!("Exported to {}", path.display()),
-                    Err(e) => self.status_message = format!("Export error: {e}"),
+                match write_file(&path_s, md.as_bytes()) {
+                    Ok(()) => self.set_status(&format!("Exported to {path_s}"), StatusLevel::Success),
+                    Err(e) => self.set_status(&format!("Export error: {e}"), StatusLevel::Error),
                 }
             }
             "docx" => match duir_core::docx_export::export_subtree_docx(item) {
-                Ok(bytes) => match std::fs::write(&path, bytes) {
-                    Ok(()) => {
-                        self.set_status(&format!("Exported to {}", path.display()), StatusLevel::Success);
-                    }
+                Ok(bytes) => match write_file(&path_s, &bytes) {
+                    Ok(()) => self.set_status(&format!("Exported to {path_s}"), StatusLevel::Success),
                     Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
                 },
                 Err(e) => self.set_status(&format!("DOCX error: {e}"), StatusLevel::Error),
@@ -986,7 +985,7 @@ impl App {
             return;
         };
         let path = std::path::Path::new(path_str);
-        match std::fs::read_to_string(path) {
+        match read_file(path_str) {
             Ok(content) => {
                 let parsed = duir_core::markdown_import::import_markdown(&content);
                 if let Some(row) = self.rows.get(self.cursor).cloned() {
@@ -1415,7 +1414,29 @@ impl App {
     }
 }
 
-/// Find an available filename, adding .1, .2 etc before the extension if it exists.
+/// Read a file from local filesystem or S3.
+fn read_file(path: &str) -> Result<String, String> {
+    if duir_core::s3_storage::S3Path::is_s3(path) {
+        let s3path = duir_core::s3_storage::S3Path::parse(path).ok_or("Invalid S3 path")?;
+        let s3 = duir_core::s3_storage::S3Storage::new().map_err(|e| format!("{e}"))?;
+        let bytes = s3.read_bytes(&s3path.bucket, &s3path.key).map_err(|e| format!("{e}"))?;
+        String::from_utf8(bytes).map_err(|e| format!("{e}"))
+    } else {
+        std::fs::read_to_string(path).map_err(|e| format!("{e}"))
+    }
+}
+
+/// Write bytes to local filesystem or S3.
+fn write_file(path: &str, data: &[u8]) -> Result<(), String> {
+    if duir_core::s3_storage::S3Path::is_s3(path) {
+        let s3path = duir_core::s3_storage::S3Path::parse(path).ok_or("Invalid S3 path")?;
+        let s3 = duir_core::s3_storage::S3Storage::new().map_err(|e| format!("{e}"))?;
+        s3.write_bytes(&s3path.bucket, &s3path.key, data.to_vec())
+            .map_err(|e| format!("{e}"))
+    } else {
+        std::fs::write(path, data).map_err(|e| format!("{e}"))
+    }
+}
 fn find_available_path(base: &str) -> std::path::PathBuf {
     let path = std::path::PathBuf::from(base);
     if !path.exists() {
