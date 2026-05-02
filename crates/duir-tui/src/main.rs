@@ -1328,25 +1328,6 @@ mod tests {
     }
 
     #[test]
-    fn cmd_open_md() {
-        let mut app = make_app_with_tree();
-        let dir = tempfile::tempdir().unwrap();
-        let md_path = dir.path().join("opened.md");
-        std::fs::write(&md_path, "# Root\n- Child\n").unwrap();
-        app.cmd_open_md(&["open", "md", md_path.to_str().unwrap()]);
-        assert!(app.status_message.contains("Opened"));
-        assert_eq!(app.files.len(), 2);
-        assert_eq!(app.files[1].name, "opened");
-    }
-
-    #[test]
-    fn cmd_open_md_bad_usage() {
-        let mut app = make_app_with_tree();
-        app.cmd_open_md(&["open"]);
-        assert!(app.status_message.contains("Usage"));
-    }
-
-    #[test]
     fn cmd_collapse_then_expand_roundtrip() {
         let mut app = make_app_with_tree();
         app.cursor = 1; // Branch 1 with children

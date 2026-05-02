@@ -723,7 +723,9 @@ impl App {
             "export" => self.cmd_export(&parts),
             "yank" => self.cmd_yank_tree(),
             "import" => self.cmd_import(&parts),
-            "open" => self.cmd_open_md(&parts),
+            "open" => self.cmd_open(&parts, storage),
+            "write" => self.cmd_write(&parts, storage),
+            "saveas" => self.cmd_saveas(&parts, storage),
             "collapse" => self.cmd_collapse(),
             "expand" => self.cmd_expand(),
             "autosave" => self.cmd_autosave(&parts),
@@ -931,25 +933,82 @@ impl App {
         }
     }
 
-    pub(crate) fn cmd_open_md(&mut self, parts: &[&str]) {
-        // :open md <file.md> — open markdown as new top-level tree
-        if parts.len() < 3 || parts[1] != "md" {
-            "Usage: :open md <file.md>".clone_into(&mut self.status_message);
+    fn cmd_open(&mut self, parts: &[&str], storage: &dyn duir_core::TodoStorage) {
+        // :open <path> — open file as new top-level tree (auto-detect format)
+        // Backward compat: :open md <file> still works
+        let path_str = if parts.len() >= 3 && parts[1] == "md" {
+            parts[2]
+        } else if let Some(&p) = parts.get(1) {
+            p
+        } else {
+            "Usage: :open <file>".clone_into(&mut self.status_message);
             return;
-        }
-        let path = std::path::Path::new(parts[2]);
-        match std::fs::read_to_string(path) {
-            Ok(content) => {
-                let parsed = duir_core::markdown_import::import_markdown(&content);
-                let name = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or("imported")
-                    .to_owned();
-                self.add_file(name.clone(), parsed);
-                self.status_message = format!("Opened {name} as tree");
+        };
+        let path = std::path::Path::new(path_str);
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        match ext {
+            "md" => match std::fs::read_to_string(path) {
+                Ok(content) => {
+                    let parsed = duir_core::markdown_import::import_markdown(&content);
+                    let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("imported");
+                    self.add_file(name.to_owned(), parsed);
+                    self.set_status(&format!("Opened {name}"), StatusLevel::Success);
+                }
+                Err(e) => self.set_status(&format!("Open error: {e}"), StatusLevel::Error),
+            },
+            "json" | "yaml" | "yml" => {
+                self.open_file_path(path_str, storage);
             }
-            Err(e) => self.status_message = format!("Open error: {e}"),
+            _ => {
+                // Try as JSON first, then markdown
+                self.open_file_path(path_str, storage);
+            }
+        }
+    }
+
+    fn cmd_write(&mut self, parts: &[&str], storage: &dyn duir_core::TodoStorage) {
+        // :write <path> — write current file as copy (doesn't switch)
+        if let Some(&path_str) = parts.get(1) {
+            if let Some(row) = self.current_row().cloned() {
+                let fi = row.file_index;
+                let path = std::path::Path::new(path_str);
+                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("json");
+                match ext {
+                    "md" => {
+                        let md = duir_core::markdown_export::export_file(&self.files[fi].data);
+                        match std::fs::write(path, &md) {
+                            Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
+                            Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
+                        }
+                    }
+                    _ => match storage.save(path_str, &self.files[fi].data) {
+                        Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
+                        Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
+                    },
+                }
+            }
+        } else {
+            "Usage: :write <path>".clone_into(&mut self.status_message);
+        }
+    }
+
+    fn cmd_saveas(&mut self, parts: &[&str], storage: &dyn duir_core::TodoStorage) {
+        // :saveas <name> — save current file under new name and switch to it
+        if let Some(&name) = parts.get(1) {
+            if let Some(row) = self.current_row().cloned() {
+                let fi = row.file_index;
+                match storage.save(name, &self.files[fi].data) {
+                    Ok(()) => {
+                        name.clone_into(&mut self.files[fi].name);
+                        self.files[fi].modified = false;
+                        self.rebuild_rows();
+                        self.set_status(&format!("Saved as {name}"), StatusLevel::Success);
+                    }
+                    Err(e) => self.set_status(&format!("Save error: {e}"), StatusLevel::Error),
+                }
+            }
+        } else {
+            "Usage: :saveas <name>".clone_into(&mut self.status_message);
         }
     }
 

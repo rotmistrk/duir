@@ -255,6 +255,46 @@ fn handle_edit_key(app: &mut App, key: KeyEvent) -> bool {
     }
 }
 
+/// Path-taking commands: after these prefixes, Tab completes file paths.
+const PATH_COMMANDS: &[&str] = &["import ", "export ", "open ", "o ", "w ", "write ", "saveas "];
+
+fn complete_command_or_path(app: &mut App, reverse: bool) {
+    // Check if we're in a path-completing context
+    let needs_path = PATH_COMMANDS
+        .iter()
+        .any(|prefix| app.command_buffer.starts_with(prefix));
+
+    if needs_path {
+        // Extract the command prefix and the path part
+        let split_pos = app.command_buffer.find(' ').unwrap_or(app.command_buffer.len()) + 1;
+        let (cmd_prefix, path_part) = app.command_buffer.split_at(split_pos.min(app.command_buffer.len()));
+        let completions = crate::completer::complete_path(path_part);
+        if completions.is_empty() {
+            return;
+        }
+        // Cycle through completions
+        let current_path = path_part.to_owned();
+        let idx = completions.iter().position(|c| *c == current_path);
+        let next_idx = if reverse {
+            idx.map_or(completions.len() - 1, |i| {
+                if i == 0 { completions.len() - 1 } else { i - 1 }
+            })
+        } else {
+            idx.map_or(0, |i| (i + 1) % completions.len())
+        };
+        app.command_buffer = format!("{cmd_prefix}{}", completions[next_idx]);
+    } else {
+        app.completer.update(&app.command_buffer);
+        let completion = if reverse {
+            app.completer.prev()
+        } else {
+            app.completer.next()
+        };
+        if let Some(c) = completion {
+            app.command_buffer = c.to_owned();
+        }
+    }
+}
 fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Esc => {
@@ -320,17 +360,11 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
             true
         }
         KeyCode::Tab => {
-            app.completer.update(&app.command_buffer);
-            if let Some(completion) = app.completer.next() {
-                app.command_buffer = completion.to_owned();
-            }
+            complete_command_or_path(app, false);
             true
         }
         KeyCode::BackTab => {
-            app.completer.update(&app.command_buffer);
-            if let Some(completion) = app.completer.prev() {
-                app.command_buffer = completion.to_owned();
-            }
+            complete_command_or_path(app, true);
             true
         }
         KeyCode::Up => {

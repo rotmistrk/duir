@@ -82,8 +82,10 @@ pub const APP_COMMANDS: &[&str] = &[
     "q",
     "q!",
     "qa",
+    "saveas ",
     "w",
     "wa",
+    "write ",
     "yank",
 ];
 
@@ -100,3 +102,50 @@ pub const EDITOR_COMMANDS: &[&str] = &[
     "set noli",
     "set nolist",
 ];
+
+/// Complete file/directory paths from the filesystem.
+/// Returns matching entries for the given partial path.
+pub fn complete_path(partial: &str) -> Vec<String> {
+    let path = std::path::Path::new(partial);
+    let (dir, prefix) = if partial.ends_with('/') {
+        (std::path::PathBuf::from(partial), "")
+    } else {
+        let dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let prefix = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
+        (dir.to_path_buf(), prefix)
+    };
+
+    let expanded_dir = if dir.starts_with("~") {
+        dirs::home_dir().map_or_else(|| dir.clone(), |home| home.join(dir.strip_prefix("~").unwrap_or(&dir)))
+    } else {
+        dir.clone()
+    };
+
+    let mut results = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(&expanded_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let name_str = name.to_string_lossy();
+            if !name_str.starts_with('.') && name_str.starts_with(prefix) {
+                let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
+                let full = if dir.as_os_str() == "." {
+                    name_str.to_string()
+                } else {
+                    format!("{}/{name_str}", dir.display())
+                };
+                if is_dir {
+                    results.push(format!("{full}/"));
+                } else if name_str.ends_with(".md")
+                    || name_str.ends_with(".todo.json")
+                    || name_str.ends_with(".json")
+                    || name_str.ends_with(".yaml")
+                    || name_str.ends_with(".yml")
+                {
+                    results.push(full);
+                }
+            }
+        }
+    }
+    results.sort();
+    results
+}
