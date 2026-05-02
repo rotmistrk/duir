@@ -713,6 +713,56 @@ mod tests {
     }
 
     #[test]
+    fn adding_child_to_completed_parent_uncompletes_it() {
+        let mut app = make_app_with_tree();
+        // Branch 1 has Child 1.1 (Done) and Child 1.2 (Open, important)
+        // Complete Child 1.2
+        app.cursor = 3; // Child 1.2
+        app.toggle_completed();
+        // Now Branch 1 should be Done (all children done)
+        assert_eq!(app.files[0].data.items[0].completed, Completion::Done);
+
+        // Add a new child to Branch 1
+        app.cursor = 1; // Branch 1
+        app.new_child();
+        app.cancel_editing();
+
+        // Branch 1 should no longer be Done (new child is Open)
+        assert_ne!(app.files[0].data.items[0].completed, Completion::Done);
+    }
+
+    #[test]
+    fn adding_sibling_updates_parent_completion() {
+        let mut app = make_app_with_tree();
+        // Complete both children of Branch 1
+        app.cursor = 2; // Child 1.1 (already Done)
+        app.cursor = 3; // Child 1.2
+        app.toggle_completed();
+        assert_eq!(app.files[0].data.items[0].completed, Completion::Done);
+
+        // Add sibling to Child 1.2
+        app.cursor = 3;
+        app.new_sibling();
+        app.cancel_editing();
+
+        // Branch 1 should not be Done anymore
+        assert_ne!(app.files[0].data.items[0].completed, Completion::Done);
+    }
+
+    #[test]
+    fn deleting_incomplete_child_may_complete_parent() {
+        let mut app = make_app_with_tree();
+        // Child 1.1 is Done, Child 1.2 is Open
+        // Delete Child 1.2 (the incomplete one)
+        app.cursor = 3; // Child 1.2
+        app.delete_current(); // pending
+        app.force_delete_current(); // confirm
+
+        // Branch 1 should now be Done (only Child 1.1 remains, which is Done)
+        assert_eq!(app.files[0].data.items[0].completed, Completion::Done);
+    }
+
+    #[test]
     fn save_preserves_unencrypted_data() {
         let mut app = make_app_with_tree();
         app.files[0].modified = true;

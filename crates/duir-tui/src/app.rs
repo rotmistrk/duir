@@ -446,6 +446,9 @@ impl App {
             }
             let new_item = TodoItem::new("<new task>");
             if duir_core::tree_ops::add_sibling(&mut self.files[fi].data, &row.path, new_item).is_ok() {
+                for item in &mut self.files[fi].data.items {
+                    duir_core::stats::update_completion(item);
+                }
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 self.navigate_to(fi, &new_path);
@@ -475,6 +478,9 @@ impl App {
             if duir_core::tree_ops::add_child(&mut self.files[fi].data, &row.path, new_item).is_ok() {
                 if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
                     item.folded = false;
+                }
+                for item in &mut self.files[fi].data.items {
+                    duir_core::stats::update_completion(item);
                 }
                 self.files[fi].modified = true;
                 self.rebuild_rows();
@@ -515,6 +521,9 @@ impl App {
             }
             let fi = row.file_index;
             if duir_core::tree_ops::remove_item(&mut self.files[fi].data, &row.path).is_ok() {
+                for item in &mut self.files[fi].data.items {
+                    duir_core::stats::update_completion(item);
+                }
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 self.status_message.clear();
