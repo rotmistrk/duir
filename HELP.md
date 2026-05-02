@@ -178,6 +178,35 @@ line_numbers = false
 note_panel_pct = 50
 ```
 
+## Syntax Highlighting
+
+The note editor highlights markdown and fenced code blocks:
+
+- Headings, bold, italic, inline code, links, checkboxes, blockquotes
+- Fenced code blocks with 100+ languages via syntect (base16-ocean.dark theme)
+- Cursor preserves syntax colors in normal mode
+
+## Diagrams
+
+Diagram blocks in notes are rendered as images in `.docx` export:
+
+| Block | Tool required |
+|-------|---------------|
+| ` ```mermaid ` | `mmdc` (mermaid-cli, requires Node.js) |
+| ` ```plantuml ` | `plantuml` (requires Java) |
+| ` ```dot ` / ` ```graphviz ` | `dot` (graphviz) |
+
+If the tool is not installed, the source text is included as a code block.
+
+Tool paths are configurable:
+
+```toml
+[diagrams]
+mmdc = "mmdc"
+plantuml = "plantuml"
+dot = "dot"
+```
+
 ## Status Colors
 
 | Color | Meaning |

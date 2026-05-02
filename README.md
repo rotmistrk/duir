@@ -9,12 +9,14 @@ Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 
 - **Tree**: checkboxes, importance, completion %, drag-reorder, clone, filter
 - **Editor**: vim keybindings (normal/insert/visual), ex-commands, search, shell pipe
-- **Markdown**: syntax highlighting, export/import, collapse subtree ↔ markdown
+- **Markdown**: syntax highlighting, fenced code blocks (100+ languages via syntect)
+- **Export**: markdown, Word .docx (with diagram rendering), clipboard
+- **Diagrams**: mermaid, plantuml, graphviz rendered as images in docx export
 - **Encryption**: per-subtree with password, hierarchical, auto-lock on collapse
 - **Files**: multi-file, autosave, JSON storage, YAML export, path completion
 - **Config**: XDG-compliant, project-local `.duir/`, configurable autosave interval
 - **Clipboard**: system clipboard via OSC 52 (works over SSH)
-- **Self-contained**: single 5.7MB binary, all resources embedded
+- **Self-contained**: single 7MB binary, all resources embedded
 
 ## Install
 
