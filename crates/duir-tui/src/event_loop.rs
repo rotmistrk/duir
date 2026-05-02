@@ -128,19 +128,18 @@ fn handle_overlay_input(app: &mut App, key: crossterm::event::KeyEvent) -> bool 
 /// Handle global key bindings (Ctrl+Enter, Ctrl+S, Ctrl+T, kiro routing, Esc from kiro).
 /// Returns true if the event was consumed.
 fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_dir: &PathBuf) -> bool {
-    // F11: toggle zoom on focused panel
+    // F11: toggle zoom on focused panel (works from ANY state)
     if key.code == KeyCode::F(11) {
         app.zoomed = !app.zoomed;
         return true;
     }
 
-    // F5 or Alt+Enter or Ctrl+Enter: send to kiro
-    if (key.code == KeyCode::F(5)
-        || (key.code == KeyCode::Enter
-            && (key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT))))
-        && app.is_tree_focused()
-        && app.active_kiron_for_cursor().is_some()
-    {
+    // F5: send to kiro (works from ANY panel, as long as kiron is active)
+    if key.code == KeyCode::F(5) && app.active_kiron_for_cursor().is_some() {
+        if app.is_note_focused() {
+            app.save_editor();
+            app.state = FocusState::Tree;
+        }
         app.send_to_kiro();
         return true;
     }
@@ -157,21 +156,18 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // F2 or Alt+2: focus tree
-    if key.code == KeyCode::F(2) || (key.code == KeyCode::Char('2') && key.modifiers.contains(KeyModifiers::ALT)) {
+    // F2: focus tree (leave right panel as-is)
+    if key.code == KeyCode::F(2) {
         if app.is_note_focused() {
             app.save_editor();
         }
         app.state = FocusState::Tree;
-        app.kiro_tab_focused = false;
+        // Don't touch kiro_tab_focused — preserve right panel state
         return true;
     }
 
-    // F3 or Alt+3: focus note
-    if (key.code == KeyCode::F(3) || (key.code == KeyCode::Char('3') && key.modifiers.contains(KeyModifiers::ALT)))
-        && !app.is_command_active()
-        && !app.is_filter_active()
-    {
+    // F3: focus note
+    if key.code == KeyCode::F(3) && !app.is_command_active() && !app.is_filter_active() {
         if !app.is_note_focused() {
             app.kiro_tab_focused = false;
             app.focus_note();
@@ -179,10 +175,8 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // F4 or Alt+4: focus kiro (if active)
-    if (key.code == KeyCode::F(4) || (key.code == KeyCode::Char('4') && key.modifiers.contains(KeyModifiers::ALT)))
-        && app.active_kiron_for_cursor().is_some()
-    {
+    // F4: focus kiro (if active)
+    if key.code == KeyCode::F(4) && app.active_kiron_for_cursor().is_some() {
         if app.is_note_focused() {
             app.save_editor();
             app.state = FocusState::Tree;
