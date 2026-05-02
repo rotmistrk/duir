@@ -135,7 +135,7 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
     }
 
     if key.code == KeyCode::Enter
-        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && (key.modifiers.contains(KeyModifiers::CONTROL) || key.modifiers.contains(KeyModifiers::ALT))
         && app.is_tree_focused()
         && app.active_kiron_for_cursor().is_some()
     {
@@ -155,8 +155,8 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // Ctrl+1: focus tree
-    if key.code == KeyCode::Char('1') && key.modifiers.contains(KeyModifiers::CONTROL) {
+    // Alt+1: focus tree
+    if key.code == KeyCode::Char('1') && key.modifiers.contains(KeyModifiers::ALT) {
         if app.is_note_focused() {
             app.save_editor();
         }
@@ -165,9 +165,9 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // Ctrl+2: focus note
+    // Alt+2: focus note
     if key.code == KeyCode::Char('2')
-        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.modifiers.contains(KeyModifiers::ALT)
         && !app.is_command_active()
         && !app.is_filter_active()
     {
@@ -178,9 +178,9 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // Ctrl+3: focus kiro (if active)
+    // Alt+3: focus kiro (if active)
     if key.code == KeyCode::Char('3')
-        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.modifiers.contains(KeyModifiers::ALT)
         && app.active_kiron_for_cursor().is_some()
     {
         if app.is_note_focused() {

@@ -111,6 +111,12 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
                 }
                 frame.render_widget(kiro_block, area);
                 render_termbuf(frame, &kiron.pty.termbuf, inner);
+                // Show cursor in kiro terminal
+                if right_focused && kiron.pty.termbuf.cursor_visible {
+                    let (crow, ccol) = kiron.pty.termbuf.cursor();
+                    #[allow(clippy::cast_possible_truncation)]
+                    frame.set_cursor_position((inner.x + ccol as u16, inner.y + crow as u16));
+                }
             }
         } else {
             // Note view (not editing) with kiron available
