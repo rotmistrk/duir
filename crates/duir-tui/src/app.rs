@@ -89,6 +89,7 @@ pub struct App {
     pub editor_cache: std::collections::HashMap<(usize, Vec<usize>), crate::note_editor::NoteEditor<'static>>,
     pub filter_committed_text: String,
     pub filter_committed_exclude: bool,
+    pub highlighter: crate::syntax::SyntaxHighlighter,
 }
 
 impl App {
@@ -115,6 +116,7 @@ impl App {
             completer: crate::completer::Completer::new(crate::completer::APP_COMMANDS),
             filter_committed_text: String::new(),
             filter_committed_exclude: false,
+            highlighter: crate::syntax::SyntaxHighlighter::new(),
         }
     }
 

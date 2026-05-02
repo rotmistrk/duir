@@ -1,11 +1,16 @@
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
-/// Highlight markdown content with cursor display.
-/// Returns owned lines. `cursor_row = usize::MAX` means no cursor.
-pub fn highlight_lines(content: &str, cursor_row: usize, cursor_col: usize) -> Vec<Line<'static>> {
+use crate::syntax::SyntaxHighlighter;
+
+/// Highlight markdown content with optional syntax highlighting for fenced code blocks.
+pub fn highlight_lines_with_syntax(
+    content: &str,
+    cursor_row: usize,
+    cursor_col: usize,
+    highlighter: Option<&SyntaxHighlighter>,
+) -> Vec<Line<'static>> {
     if content.is_empty() {
-        // Empty content: show cursor on empty line
         return if cursor_row == 0 {
             vec![Line::from(Span::styled(
                 " ".to_owned(),
@@ -16,26 +21,106 @@ pub fn highlight_lines(content: &str, cursor_row: usize, cursor_col: usize) -> V
         };
     }
 
-    let mut in_fence = false;
-    content
-        .lines()
-        .enumerate()
-        .map(|(i, line)| {
-            let styled = if line.starts_with("```") {
-                in_fence = !in_fence;
-                owned_line(line, Style::default().fg(Color::DarkGray))
-            } else if in_fence {
-                owned_line(line, Style::default().fg(Color::Green))
-            } else {
-                highlight_md(line)
-            };
-            if i == cursor_row {
-                insert_cursor_into_line(&styled, line, cursor_col)
-            } else {
-                styled
-            }
-        })
-        .collect()
+    let raw_lines: Vec<&str> = content.lines().collect();
+    let mut result = Vec::with_capacity(raw_lines.len());
+    let mut i = 0;
+
+    while i < raw_lines.len() {
+        if raw_lines[i].starts_with("```") {
+            i = process_code_block(&raw_lines, i, highlighter, cursor_row, cursor_col, &mut result);
+        } else {
+            let styled = highlight_md(raw_lines[i]);
+            result.push(apply_cursor(i, raw_lines[i], cursor_row, cursor_col, &styled));
+            i += 1;
+        }
+    }
+
+    result
+}
+
+/// Process a fenced code block starting at `start`, returning the next line index.
+fn process_code_block(
+    raw_lines: &[&str],
+    start: usize,
+    highlighter: Option<&SyntaxHighlighter>,
+    cursor_row: usize,
+    cursor_col: usize,
+    result: &mut Vec<Line<'static>>,
+) -> usize {
+    let fence_line = raw_lines[start];
+    let lang = fence_line.trim_start_matches('`').trim();
+    let fence_style = Style::default().fg(Color::DarkGray);
+    result.push(apply_cursor(
+        start,
+        fence_line,
+        cursor_row,
+        cursor_col,
+        &owned_line(fence_line, fence_style),
+    ));
+
+    let mut i = start + 1;
+    let block_start = i;
+    let mut code = String::new();
+    while i < raw_lines.len() && !raw_lines[i].starts_with("```") {
+        if !code.is_empty() {
+            code.push('\n');
+        }
+        code.push_str(raw_lines[i]);
+        i += 1;
+    }
+
+    let syntax_spans = highlighter
+        .filter(|_| !lang.is_empty())
+        .map(|h| h.highlight_code(&code, lang));
+
+    let fallback = Style::default().fg(Color::Green);
+    for (j, line_idx) in (block_start..i).enumerate() {
+        let styled = syntax_span_or_fallback(syntax_spans.as_deref(), j, raw_lines[line_idx], fallback);
+        result.push(apply_cursor(
+            line_idx,
+            raw_lines[line_idx],
+            cursor_row,
+            cursor_col,
+            &styled,
+        ));
+    }
+
+    if i < raw_lines.len() {
+        result.push(apply_cursor(
+            i,
+            raw_lines[i],
+            cursor_row,
+            cursor_col,
+            &owned_line(raw_lines[i], fence_style),
+        ));
+        i += 1;
+    }
+    i
+}
+
+fn syntax_span_or_fallback(
+    syntax_spans: Option<&[Vec<Span<'static>>]>,
+    idx: usize,
+    raw: &str,
+    fallback: Style,
+) -> Line<'static> {
+    syntax_spans
+        .and_then(|s| s.get(idx))
+        .map_or_else(|| owned_line(raw, fallback), |s| Line::from(s.clone()))
+}
+
+fn apply_cursor(
+    line_idx: usize,
+    raw: &str,
+    cursor_row: usize,
+    cursor_col: usize,
+    styled: &Line<'static>,
+) -> Line<'static> {
+    if line_idx == cursor_row {
+        insert_cursor_into_line(styled, raw, cursor_col)
+    } else {
+        styled.clone()
+    }
 }
 
 fn owned_line(text: &str, style: Style) -> Line<'static> {

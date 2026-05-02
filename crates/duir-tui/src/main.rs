@@ -5,6 +5,7 @@ mod help;
 mod input;
 mod markdown_view;
 mod note_editor;
+mod syntax;
 
 mod password;
 mod tree_view;
@@ -163,18 +164,23 @@ fn run_loop(
                         .constraints([Constraint::Min(3), Constraint::Length(1)])
                         .split(content_chunks[1]);
                     editor.set_block(" Note", true);
-                    editor.render(frame, note_chunks[0]);
+                    editor.render(frame, note_chunks[0], &app.highlighter);
                     let cmd_line = editor.status_line();
                     frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
                 } else {
                     editor.set_block(" Note", true);
-                    editor.render(frame, content_chunks[1]);
+                    editor.render(frame, content_chunks[1], &app.highlighter);
                 }
             } else {
                 // Not in Note state: render from model
                 let note_content = app.current_note();
                 let note_block = Block::default().title(" Note ").borders(Borders::ALL);
-                let lines = crate::markdown_view::highlight_lines(&note_content, usize::MAX, 0);
+                let lines = crate::markdown_view::highlight_lines_with_syntax(
+                    &note_content,
+                    usize::MAX,
+                    0,
+                    Some(&app.highlighter),
+                );
                 let paragraph = Paragraph::new(lines).block(note_block);
                 frame.render_widget(paragraph, content_chunks[1]);
             }

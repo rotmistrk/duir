@@ -1004,7 +1004,7 @@ impl NoteEditor<'_> {
         }
     }
 
-    pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect) {
+    pub fn render(&mut self, frame: &mut ratatui::Frame, area: Rect, highlighter: &crate::syntax::SyntaxHighlighter) {
         self.viewport_height = area.height.saturating_sub(2);
         if self.mode == EditorMode::Insert {
             frame.render_widget(&self.textarea, area);
@@ -1012,7 +1012,8 @@ impl NoteEditor<'_> {
             let content = self.content();
             let (cursor_row, cursor_col) = self.textarea.cursor();
             let block = self.textarea.block().cloned();
-            let lines = crate::markdown_view::highlight_lines(&content, cursor_row, cursor_col);
+            let lines =
+                crate::markdown_view::highlight_lines_with_syntax(&content, cursor_row, cursor_col, Some(highlighter));
             #[allow(clippy::cast_possible_truncation)]
             let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
             let mut paragraph = ratatui::widgets::Paragraph::new(lines).scroll((scroll_offset, 0));
