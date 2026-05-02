@@ -145,6 +145,14 @@ impl App {
 
     /// Rebuild the flattened row list from all loaded files.
     pub fn rebuild_rows(&mut self) {
+        self.rebuild_rows_raw();
+        // Reapply active filter
+        if !self.filter_text.is_empty() && !self.filter_active {
+            self.reapply_filter();
+        }
+    }
+
+    fn rebuild_rows_raw(&mut self) {
         // Invalidate editor cache — paths may have shifted
         self.editor_cache.clear();
 
@@ -893,12 +901,16 @@ impl App {
     }
 
     pub(crate) fn cmd_import(&mut self, parts: &[&str]) {
-        // :import md <file.md> — import as children of current item
-        if parts.len() < 3 || parts[1] != "md" {
-            "Usage: :import md <file.md>".clone_into(&mut self.status_message);
+        // :import <file.md> or :import md <file.md> (backward compat)
+        let path_str = if parts.len() >= 3 && parts[1] == "md" {
+            parts[2]
+        } else if parts.len() >= 2 {
+            parts[1]
+        } else {
+            "Usage: :import <file.md>".clone_into(&mut self.status_message);
             return;
-        }
-        let path = std::path::Path::new(parts[2]);
+        };
+        let path = std::path::Path::new(path_str);
         match std::fs::read_to_string(path) {
             Ok(content) => {
                 let parsed = duir_core::markdown_import::import_markdown(&content);
@@ -912,10 +924,10 @@ impl App {
                     }
                     self.files[fi].modified = true;
                     self.rebuild_rows();
-                    self.status_message = format!("Imported {}", path.display());
+                    self.set_status(&format!("Imported {}", path.display()), StatusLevel::Success);
                 }
             }
-            Err(e) => self.status_message = format!("Import error: {e}"),
+            Err(e) => self.set_status(&format!("Import error: {e}"), StatusLevel::Error),
         }
     }
 
@@ -1188,9 +1200,11 @@ impl App {
 
     /// Apply the current filter text, searching titles and notes.
     pub fn apply_filter(&mut self) {
-        // First rebuild all rows
-        self.rebuild_rows();
+        self.rebuild_rows_raw();
+        self.reapply_filter();
+    }
 
+    fn reapply_filter(&mut self) {
         if self.filter_text.is_empty() {
             return;
         }
@@ -1200,7 +1214,6 @@ impl App {
             case_sensitive: false,
         };
 
-        // Collect matching paths per file
         let mut match_set: std::collections::HashSet<(usize, Vec<usize>)> = std::collections::HashSet::new();
         for (fi, file) in self.files.iter().enumerate() {
             let matches = duir_core::filter::filter_items(&file.data.items, &self.filter_text, &opts);
@@ -1209,13 +1222,10 @@ impl App {
             }
         }
 
-        // Filter rows: keep file roots + matching items
         if self.filter_exclude {
-            // Exclude mode: hide matching items
             self.rows
                 .retain(|row| row.is_file_root || !match_set.contains(&(row.file_index, row.path.clone())));
         } else {
-            // Include mode: show only matching items
             self.rows
                 .retain(|row| row.is_file_root || match_set.contains(&(row.file_index, row.path.clone())));
         }
@@ -1232,22 +1242,21 @@ impl App {
     /// Live filter — called on each keystroke while typing the filter.
     pub fn apply_filter_live(&mut self) {
         if self.filter_text.is_empty() {
-            self.rebuild_rows();
+            self.rebuild_rows_raw();
             self.status_message.clear();
             return;
         }
-        // Temporarily treat ! prefix as exclude for live preview
         let (text, exclude) = if let Some(rest) = self.filter_text.strip_prefix('!') {
             (rest.to_owned(), true)
         } else {
             (self.filter_text.clone(), false)
         };
         if text.is_empty() {
-            self.rebuild_rows();
+            self.rebuild_rows_raw();
             return;
         }
 
-        self.rebuild_rows();
+        self.rebuild_rows_raw();
         let opts = duir_core::filter::FilterOptions {
             search_notes: true,
             case_sensitive: false,
