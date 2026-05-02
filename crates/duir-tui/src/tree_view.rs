@@ -5,7 +5,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, StatefulWidget, Widget};
 
-use crate::app::App;
+use crate::app::{App, FocusState};
 
 /// Renders the tree pane.
 pub struct TreeView<'a> {
@@ -88,9 +88,9 @@ impl StatefulWidget for TreeView<'_> {
             let prefix = format!("{indent}{arrow}{checkbox}{lock_icon}");
             let prefix_width = prefix.chars().count();
 
-            let title = if is_selected && state.editing_title {
-                let pos = state.edit_cursor.min(state.edit_buffer.len());
-                format!("{}▏{}", &state.edit_buffer[..pos], &state.edit_buffer[pos..])
+            let title = if is_selected && let FocusState::EditingTitle { ref buffer, cursor, .. } = state.state {
+                let pos = cursor.min(buffer.len());
+                format!("{}▏{}", &buffer[..pos], &buffer[pos..])
             } else {
                 row.title.clone()
             };
@@ -118,10 +118,11 @@ impl StatefulWidget for TreeView<'_> {
             let padding = " ".repeat(pad_len);
 
             if is_selected {
-                let select_all = state.editing_title && state.edit_select_all;
+                let is_editing = matches!(state.state, FocusState::EditingTitle { .. });
+                let select_all = matches!(state.state, FocusState::EditingTitle { select_all: true, .. });
                 let title_style = if select_all {
                     Style::default().fg(Color::Yellow).bg(Color::DarkGray)
-                } else if state.editing_title {
+                } else if is_editing {
                     Style::default().fg(Color::White).add_modifier(Modifier::UNDERLINED)
                 } else {
                     style.fg(Color::LightCyan).add_modifier(Modifier::UNDERLINED)

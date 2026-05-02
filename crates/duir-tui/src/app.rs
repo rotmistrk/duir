@@ -30,11 +30,31 @@ pub struct LoadedFile {
     pub autosave: bool,
 }
 
-/// Focus area in the UI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Focus {
+/// Focus area in the UI — each variant carries the state specific to that mode.
+pub enum FocusState {
     Tree,
-    Note,
+    EditingTitle {
+        buffer: String,
+        cursor: usize,
+        select_all: bool,
+    },
+    Note {
+        editor: Box<crate::note_editor::NoteEditor<'static>>,
+        file_index: usize,
+        path: Vec<usize>,
+    },
+    Command {
+        buffer: String,
+        history_index: Option<usize>,
+    },
+    Filter {
+        text: String,
+        saved: String,
+    },
+    Help {
+        scroll: u16,
+    },
+    About,
 }
 
 /// Application state.
@@ -53,37 +73,22 @@ pub struct App {
     pub rows: Vec<TreeRow>,
     pub cursor: usize,
     pub scroll_offset: usize,
-    pub focus: Focus,
+    pub state: FocusState,
     pub should_quit: bool,
     pub status_message: String,
     pub status_level: StatusLevel,
     pub note_scroll: usize,
-    pub editing_title: bool,
-    pub edit_buffer: String,
-    pub edit_cursor: usize,
-    pub edit_select_all: bool,
-    pub filter_active: bool,
-    pub filter_text: String,
-    pub filter_exclude: bool,
-    pub filter_saved: String,
-    pub command_active: bool,
-    pub command_buffer: String,
     pub autosave_global: bool,
-    pub editor: Option<crate::note_editor::NoteEditor<'static>>,
-    pub editor_file_index: usize,
-    pub editor_path: duir_core::tree_ops::TreePath,
     pub command_history: Vec<String>,
-    pub command_history_index: Option<usize>,
     pub note_panel_pct: u16,
-    pub editor_cache: std::collections::HashMap<(usize, Vec<usize>), crate::note_editor::NoteEditor<'static>>,
-    pub show_help: bool,
-    pub help_scroll: u16,
-    pub show_about: bool,
     pub pending_delete: bool,
     pub password_prompt: Option<crate::password::PasswordPrompt>,
     pub passwords: std::collections::HashMap<(usize, Vec<usize>), String>,
     pub pending_crypto: Option<(String, crate::password::PasswordAction)>,
     pub completer: crate::completer::Completer,
+    pub editor_cache: std::collections::HashMap<(usize, Vec<usize>), crate::note_editor::NoteEditor<'static>>,
+    pub filter_committed_text: String,
+    pub filter_committed_exclude: bool,
 }
 
 impl App {
@@ -94,37 +99,22 @@ impl App {
             rows: Vec::new(),
             cursor: 0,
             scroll_offset: 0,
-            focus: Focus::Tree,
+            state: FocusState::Tree,
             should_quit: false,
             status_message: String::new(),
             status_level: StatusLevel::Info,
             note_scroll: 0,
-            editing_title: false,
-            edit_buffer: String::new(),
-            edit_cursor: 0,
-            edit_select_all: false,
-            filter_active: false,
-            filter_text: String::new(),
-            filter_exclude: false,
-            filter_saved: String::new(),
-            command_active: false,
-            command_buffer: String::new(),
             autosave_global: true,
-            editor: None,
-            editor_file_index: 0,
-            editor_path: vec![],
             command_history: Vec::new(),
-            command_history_index: None,
             note_panel_pct: 50,
             editor_cache: std::collections::HashMap::new(),
-            show_help: false,
-            help_scroll: 0,
-            show_about: false,
             pending_delete: false,
             password_prompt: None,
             passwords: std::collections::HashMap::new(),
             pending_crypto: None,
             completer: crate::completer::Completer::new(crate::completer::APP_COMMANDS),
+            filter_committed_text: String::new(),
+            filter_committed_exclude: false,
         }
     }
 
@@ -146,8 +136,8 @@ impl App {
     /// Rebuild the flattened row list from all loaded files.
     pub fn rebuild_rows(&mut self) {
         self.rebuild_rows_raw();
-        // Reapply active filter
-        if !self.filter_text.is_empty() && !self.filter_active {
+        // Reapply committed filter
+        if !self.filter_committed_text.is_empty() && !self.is_filter_active() {
             self.reapply_filter();
         }
     }
@@ -258,16 +248,17 @@ impl App {
         })
     }
 
-    /// Write editor content back to the model. Called on:
-    /// 1. Tab back to tree (focus change)
-    /// 2. Before file save (:w, :wa, autosave)
-    ///
-    /// This is the ONLY place editor->model sync happens.
+    /// Write editor content back to the model. Called before any operation
+    /// that needs the model to be up-to-date while in Note state.
     pub fn save_editor(&mut self) {
-        if let Some(editor) = &self.editor {
+        if let FocusState::Note {
+            ref editor,
+            file_index: fi,
+            ref path,
+        } = self.state
+        {
             let content = editor.content();
-            let fi = self.editor_file_index;
-            let path = self.editor_path.clone();
+            let path = path.clone();
             if path.is_empty() {
                 if fi < self.files.len() && self.files[fi].data.note != content {
                     self.files[fi].data.note = content;
@@ -283,18 +274,26 @@ impl App {
         }
     }
 
-    /// Load the current item's note into the editor. Called on:
-    /// 1. Tab into note pane (focus change)
-    /// 2. After commands that modify the note (:collapse, :expand)
-    pub fn load_editor(&mut self) {
-        self.editor_cache.clear();
-        if let Some(row) = self.current_row().cloned() {
-            let note = self.current_note();
-            self.editor = Some(crate::note_editor::NoteEditor::new(&note));
-            self.editor_file_index = row.file_index;
-            self.editor_path = row.path;
-        } else {
-            self.editor = None;
+    /// Reload the editor from the model (used after commands that modify the note
+    /// while in Note state, like :collapse/:expand).
+    pub fn reload_editor(&mut self) {
+        if let FocusState::Note {
+            ref mut editor,
+            file_index,
+            ref path,
+        } = self.state
+        {
+            let note = if path.is_empty() {
+                self.files
+                    .get(file_index)
+                    .map_or(String::new(), |f| f.data.note.clone())
+            } else {
+                self.files
+                    .get(file_index)
+                    .and_then(|f| duir_core::tree_ops::get_item(&f.data, path))
+                    .map_or(String::new(), |item| item.note.clone())
+            };
+            **editor = crate::note_editor::NoteEditor::new(&note);
         }
     }
 
@@ -305,38 +304,66 @@ impl App {
     }
 
     /// Switch focus to note pane. Loads editor from model.
-    /// This is the ONLY way to enter note focus.
     pub fn focus_note(&mut self) {
-        self.load_editor();
-        self.focus = Focus::Note;
-        debug_assert!(self.editor.is_some(), "Editor must exist when note is focused");
+        self.editor_cache.clear();
+        if let Some(row) = self.current_row().cloned() {
+            let note = self.current_note();
+            self.state = FocusState::Note {
+                editor: Box::new(crate::note_editor::NoteEditor::new(&note)),
+                file_index: row.file_index,
+                path: row.path,
+            };
+        }
     }
 
-    /// Switch focus to tree pane. Saves editor to model and drops it.
-    /// This is the ONLY way to return to tree focus from note.
+    /// Switch focus to tree pane. Saves editor to model if in Note state.
     pub fn focus_tree(&mut self) {
-        if self.focus == Focus::Note {
-            self.save_editor();
-            self.editor = None;
-        }
-        self.focus = Focus::Tree;
-        debug_assert!(self.editor.is_none(), "Editor must be None when tree is focused");
+        self.save_editor();
+        self.state = FocusState::Tree;
     }
 
-    /// Assert invariants. Called in debug builds to catch violations early.
-    pub fn assert_invariants(&self) {
-        if self.focus == Focus::Tree {
-            debug_assert!(
-                self.editor.is_none(),
-                "INVARIANT VIOLATION: editor exists while tree is focused"
-            );
-        }
-        if self.focus == Focus::Note {
-            debug_assert!(
-                self.editor.is_some(),
-                "INVARIANT VIOLATION: editor is None while note is focused"
-            );
-        }
+    /// Helper: is the tree focused (no overlay active)?
+    #[must_use]
+    pub const fn is_tree_focused(&self) -> bool {
+        matches!(self.state, FocusState::Tree)
+    }
+
+    /// Helper: is the note editor active?
+    #[must_use]
+    #[allow(dead_code)]
+    pub const fn is_note_focused(&self) -> bool {
+        matches!(self.state, FocusState::Note { .. })
+    }
+
+    /// Helper: is title editing active?
+    #[must_use]
+    pub const fn is_editing_title(&self) -> bool {
+        matches!(self.state, FocusState::EditingTitle { .. })
+    }
+
+    /// Helper: is command mode active?
+    #[must_use]
+    pub const fn is_command_active(&self) -> bool {
+        matches!(self.state, FocusState::Command { .. })
+    }
+
+    /// Helper: is filter mode active?
+    #[must_use]
+    pub const fn is_filter_active(&self) -> bool {
+        matches!(self.state, FocusState::Filter { .. })
+    }
+
+    /// Helper: is help overlay shown?
+    #[must_use]
+    #[allow(dead_code)]
+    pub const fn is_help_shown(&self) -> bool {
+        matches!(self.state, FocusState::Help { .. })
+    }
+
+    /// Helper: is about overlay shown?
+    #[must_use]
+    pub const fn is_about_shown(&self) -> bool {
+        matches!(self.state, FocusState::About)
     }
     /// Mark a file as modified and invalidate cipher caches for encrypted ancestors.
     pub(crate) fn mark_modified(&mut self, fi: usize, path: &[usize]) {
@@ -691,45 +718,50 @@ impl App {
             if row.is_file_root {
                 return;
             }
-            self.edit_buffer = row.title.clone();
-            self.edit_cursor = self.edit_buffer.len();
-            self.editing_title = true;
-            self.edit_select_all = true;
+            let buffer = row.title.clone();
+            let cursor = buffer.len();
+            self.state = FocusState::EditingTitle {
+                buffer,
+                cursor,
+                select_all: true,
+            };
         }
     }
 
     pub fn finish_editing(&mut self) {
-        if !self.editing_title {
-            return;
-        }
-        self.editing_title = false;
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path)
-                && item.title != self.edit_buffer
+        if let FocusState::EditingTitle { ref buffer, .. } = self.state {
+            let new_title = buffer.clone();
+            if let Some(row) = self.rows.get(self.cursor).cloned()
+                && !row.is_file_root
             {
-                item.title.clone_from(&self.edit_buffer);
-                self.files[fi].modified = true;
+                let fi = row.file_index;
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path)
+                    && item.title != new_title
+                {
+                    item.title.clone_from(&new_title);
+                    self.files[fi].modified = true;
+                }
             }
+            self.state = FocusState::Tree;
             self.rebuild_rows();
         }
     }
 
     pub fn cancel_editing(&mut self) {
-        self.editing_title = false;
-        self.edit_buffer.clear();
+        if matches!(self.state, FocusState::EditingTitle { .. }) {
+            self.state = FocusState::Tree;
+        }
     }
 
     /// Execute a `:` command. Returns an optional path for file operations.
     pub fn execute_command(&mut self, storage: &dyn duir_core::TodoStorage) {
-        // Flush editor content to model before any command
-
-        let cmd = self.command_buffer.trim().to_owned();
-        self.command_active = false;
-        self.command_buffer.clear();
+        // Extract command buffer from state
+        let cmd = if let FocusState::Command { ref buffer, .. } = self.state {
+            buffer.trim().to_owned()
+        } else {
+            return;
+        };
+        self.state = FocusState::Tree;
 
         let parts: Vec<&str> = cmd.splitn(3, ' ').collect();
         match parts.first().copied().unwrap_or("") {
@@ -795,13 +827,12 @@ impl App {
                 }
             }
             "help" => {
-                self.show_help = true;
-                self.help_scroll = 0;
+                self.state = FocusState::Help { scroll: 0 };
             }
             "encrypt" => self.cmd_encrypt(),
             "decrypt" => self.cmd_decrypt(),
             "about" => {
-                self.show_about = true;
+                self.state = FocusState::About;
             }
             _ => {
                 self.status_message = format!("Unknown command: {cmd}");
@@ -1071,7 +1102,7 @@ impl App {
                 item.items.clear();
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.load_editor();
+                self.reload_editor();
                 "Children collapsed to note".clone_into(&mut self.status_message);
             }
         }
@@ -1107,7 +1138,7 @@ impl App {
                 item.folded = false;
                 self.files[fi].modified = true;
                 self.rebuild_rows();
-                self.load_editor();
+                self.reload_editor();
                 "Note expanded to children".clone_into(&mut self.status_message);
             }
         }
@@ -1291,14 +1322,14 @@ impl App {
         self.files.iter().any(|f| f.modified)
     }
 
-    /// Apply the current filter text, searching titles and notes.
+    /// Apply the current committed filter text, searching titles and notes.
     pub fn apply_filter(&mut self) {
         self.rebuild_rows_raw();
         self.reapply_filter();
     }
 
     fn reapply_filter(&mut self) {
-        if self.filter_text.is_empty() {
+        if self.filter_committed_text.is_empty() {
             return;
         }
 
@@ -1309,13 +1340,13 @@ impl App {
 
         let mut match_set: std::collections::HashSet<(usize, Vec<usize>)> = std::collections::HashSet::new();
         for (fi, file) in self.files.iter().enumerate() {
-            let matches = duir_core::filter::filter_items(&file.data.items, &self.filter_text, &opts);
+            let matches = duir_core::filter::filter_items(&file.data.items, &self.filter_committed_text, &opts);
             for path in matches {
                 match_set.insert((fi, path));
             }
         }
 
-        if self.filter_exclude {
+        if self.filter_committed_exclude {
             self.rows
                 .retain(|row| row.is_file_root || !match_set.contains(&(row.file_index, row.path.clone())));
         } else {
@@ -1324,8 +1355,15 @@ impl App {
         }
 
         let visible = self.rows.iter().filter(|r| !r.is_file_root).count();
-        let mode = if self.filter_exclude { "exclude" } else { "include" };
-        self.status_message = format!("Filter '{}' ({}): {} visible", self.filter_text, mode, visible);
+        let mode = if self.filter_committed_exclude {
+            "exclude"
+        } else {
+            "include"
+        };
+        self.status_message = format!(
+            "Filter '{}' ({}): {} visible",
+            self.filter_committed_text, mode, visible
+        );
 
         if self.cursor >= self.rows.len() && !self.rows.is_empty() {
             self.cursor = self.rows.len() - 1;
@@ -1334,16 +1372,20 @@ impl App {
 
     /// Live filter — called on each keystroke while typing the filter.
     pub fn apply_filter_live(&mut self) {
-        if self.filter_text.is_empty() {
+        let filter_text = if let FocusState::Filter { ref text, .. } = self.state {
+            text.clone()
+        } else {
+            return;
+        };
+
+        if filter_text.is_empty() {
             self.rebuild_rows_raw();
             self.status_message.clear();
             return;
         }
-        let (text, exclude) = if let Some(rest) = self.filter_text.strip_prefix('!') {
-            (rest.to_owned(), true)
-        } else {
-            (self.filter_text.clone(), false)
-        };
+        let (text, exclude) = filter_text
+            .strip_prefix('!')
+            .map_or_else(|| (filter_text.clone(), false), |rest| (rest.to_owned(), true));
         if text.is_empty() {
             self.rebuild_rows_raw();
             return;
@@ -1369,7 +1411,7 @@ impl App {
                 .retain(|row| row.is_file_root || match_set.contains(&(row.file_index, row.path.clone())));
         }
         let visible = self.rows.iter().filter(|r| !r.is_file_root).count();
-        self.status_message = format!("/{}: {} matches", self.filter_text, visible);
+        self.status_message = format!("/{filter_text}: {visible} matches");
         if self.cursor >= self.rows.len() && !self.rows.is_empty() {
             self.cursor = self.rows.len() - 1;
         }

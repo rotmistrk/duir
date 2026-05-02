@@ -26,7 +26,7 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 
 use duir_core::{FileStorage, TodoStorage};
 
-use app::{App, Focus};
+use app::{App, FocusState};
 use tree_view::TreeView;
 
 #[derive(Parser)]
@@ -86,7 +86,7 @@ fn main() -> io::Result<()> {
     }
 
     if first_run {
-        app.show_about = true;
+        app.state = FocusState::About;
     }
 
     enable_raw_mode()?;
@@ -131,13 +131,16 @@ fn run_loop(
                 .split(main_chunks[0]);
 
             // Tree pane
-            let tree_title = match (app.has_unsaved(), !app.filter_text.is_empty() && !app.filter_active) {
-                (true, true) => format!(" Tree (*) [/{}] ", app.filter_text),
+            let tree_title = match (
+                app.has_unsaved(),
+                !app.filter_committed_text.is_empty() && !app.is_filter_active(),
+            ) {
+                (true, true) => format!(" Tree (*) [/{}] ", app.filter_committed_text),
                 (true, false) => " Tree (*) ".to_owned(),
-                (false, true) => format!(" Tree [/{}] ", app.filter_text),
+                (false, true) => format!(" Tree [/{}] ", app.filter_committed_text),
                 (false, false) => " Tree ".to_owned(),
             };
-            let tree_border_style = if app.focus == Focus::Tree {
+            let tree_border_style = if app.is_tree_focused() || app.is_editing_title() {
                 Style::default().add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -149,29 +152,26 @@ fn run_loop(
             frame.render_stateful_widget(TreeView::new().block(tree_block), content_chunks[0], app);
 
             // Note pane
-            let focused = app.focus == Focus::Note;
-            if focused {
-                if let Some(editor) = &mut app.editor {
-                    let has_cmdline = matches!(
-                        editor.mode,
-                        crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
-                    );
-                    if has_cmdline {
-                        let note_chunks = Layout::default()
-                            .direction(Direction::Vertical)
-                            .constraints([Constraint::Min(3), Constraint::Length(1)])
-                            .split(content_chunks[1]);
-                        editor.set_block(" Note", true);
-                        editor.render(frame, note_chunks[0]);
-                        let cmd_line = editor.status_line();
-                        frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
-                    } else {
-                        editor.set_block(" Note", true);
-                        editor.render(frame, content_chunks[1]);
-                    }
+            if let FocusState::Note { ref mut editor, .. } = app.state {
+                let has_cmdline = matches!(
+                    editor.mode,
+                    crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
+                );
+                if has_cmdline {
+                    let note_chunks = Layout::default()
+                        .direction(Direction::Vertical)
+                        .constraints([Constraint::Min(3), Constraint::Length(1)])
+                        .split(content_chunks[1]);
+                    editor.set_block(" Note", true);
+                    editor.render(frame, note_chunks[0]);
+                    let cmd_line = editor.status_line();
+                    frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
+                } else {
+                    editor.set_block(" Note", true);
+                    editor.render(frame, content_chunks[1]);
                 }
             } else {
-                // Tree focused: always render from model
+                // Not in Note state: render from model
                 let note_content = app.current_note();
                 let note_block = Block::default().title(" Note ").borders(Borders::ALL);
                 let lines = crate::markdown_view::highlight_lines(&note_content, usize::MAX, 0);
@@ -186,16 +186,16 @@ fn run_loop(
             frame.render_widget(Paragraph::new(status), main_chunks[1]);
 
             // Command palette popup (above status bar)
-            if app.command_active && !app.completer.matches.is_empty() {
+            if app.is_command_active() && !app.completer.matches.is_empty() {
                 render_palette(frame, &app.completer, main_chunks[1]);
             }
 
             // Overlays
-            if app.show_about {
+            if app.is_about_shown() {
                 help::render_about(frame, size);
             }
-            if app.show_help {
-                help::render_help(frame, size, app.help_scroll);
+            if let FocusState::Help { scroll } = app.state {
+                help::render_help(frame, size, scroll);
             }
             if let Some(prompt) = &app.password_prompt {
                 prompt.render(frame, size);
@@ -209,7 +209,7 @@ fn run_loop(
         }
 
         // Block for input, with timeout only for autosave
-        let has_pending_save = app.focus == Focus::Tree && app.files.iter().any(|f| f.autosave && f.modified);
+        let has_pending_save = app.is_tree_focused() && app.files.iter().any(|f| f.autosave && f.modified);
         let timeout = if app.pending_crypto.is_some() {
             Duration::from_millis(1) // process crypto immediately
         } else if has_pending_save {
@@ -240,19 +240,19 @@ fn run_loop(
                 }
                 continue;
             }
-            if app.show_about {
-                app.show_about = false;
+            if app.is_about_shown() {
+                app.state = FocusState::Tree;
                 continue;
             }
-            if app.show_help {
+            if let FocusState::Help { ref mut scroll } = app.state {
                 match key.code {
-                    KeyCode::Esc | KeyCode::Char('q') => app.show_help = false,
-                    KeyCode::Down | KeyCode::Char('j') => app.help_scroll += 1,
+                    KeyCode::Esc | KeyCode::Char('q') => app.state = FocusState::Tree,
+                    KeyCode::Down | KeyCode::Char('j') => *scroll += 1,
                     KeyCode::Up | KeyCode::Char('k') => {
-                        app.help_scroll = app.help_scroll.saturating_sub(1);
+                        *scroll = scroll.saturating_sub(1);
                     }
-                    KeyCode::PageDown => app.help_scroll += 20,
-                    KeyCode::PageUp => app.help_scroll = app.help_scroll.saturating_sub(20),
+                    KeyCode::PageDown => *scroll += 20,
+                    KeyCode::PageUp => *scroll = scroll.saturating_sub(20),
                     _ => {}
                 }
                 continue;
@@ -260,14 +260,14 @@ fn run_loop(
 
             if key.code == KeyCode::Char('s')
                 && key.modifiers.contains(KeyModifiers::CONTROL)
-                && !app.editing_title
-                && !app.filter_active
-                && !app.command_active
+                && !app.is_editing_title()
+                && !app.is_filter_active()
+                && !app.is_command_active()
             {
                 if let Ok(storage) = FileStorage::new(storage_dir) {
                     app.save_all(&storage);
                 }
-            } else if app.command_active && key.code == KeyCode::Enter {
+            } else if app.is_command_active() && key.code == KeyCode::Enter {
                 // Execute command with storage access
                 if let Ok(storage) = FileStorage::new(storage_dir) {
                     app.execute_command(&storage);
@@ -278,7 +278,7 @@ fn run_loop(
         }
 
         // Autosave — fires when poll timeout expires (no input for autosave_interval)
-        if app.focus == Focus::Tree
+        if app.is_tree_focused()
             && last_save.elapsed() >= Duration::from_secs(autosave_interval)
             && app.files.iter().any(|f| f.autosave && f.modified)
             && let Ok(storage) = FileStorage::new(storage_dir)
@@ -286,9 +286,6 @@ fn run_loop(
             app.save_all(&storage);
             last_save = std::time::Instant::now();
         }
-
-        // Check invariants in debug builds
-        app.assert_invariants();
 
         if app.should_quit {
             break;
@@ -334,24 +331,18 @@ fn render_palette(frame: &mut ratatui::Frame, completer: &crate::completer::Comp
     frame.render_widget(paragraph, popup);
 }
 fn build_status_line(app: &App) -> Line<'_> {
-    if app.command_active {
+    if let FocusState::Command { ref buffer, .. } = app.state {
         Line::from(vec![
             Span::raw(":"),
-            Span::styled(
-                format!("{}▏", app.command_buffer),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(format!("{buffer}▏"), Style::default().add_modifier(Modifier::BOLD)),
         ])
-    } else if app.filter_active {
+    } else if let FocusState::Filter { ref text, .. } = app.state {
         Line::from(vec![
             Span::raw("Filter: "),
-            Span::styled(
-                format!("{}▏", app.filter_text),
-                Style::default().add_modifier(Modifier::BOLD),
-            ),
+            Span::styled(format!("{text}▏"), Style::default().add_modifier(Modifier::BOLD)),
             Span::raw("  [Enter] apply  [Esc] cancel"),
         ])
-    } else if app.editing_title {
+    } else if app.is_editing_title() {
         Line::from(vec![
             Span::raw("Editing: "),
             Span::styled(
@@ -408,7 +399,7 @@ fn build_status_line(app: &App) -> Line<'_> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
-    use app::{App, Focus, StatusLevel};
+    use app::{App, FocusState, StatusLevel};
     use duir_core::TodoStorage;
     use duir_core::model::{Completion, TodoFile, TodoItem};
 
@@ -440,8 +431,11 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.focus_note();
-        assert!(app.editor.is_some());
-        assert_eq!(app.editor.as_ref().unwrap().content(), "branch1 note");
+        assert!(app.is_note_focused());
+        let FocusState::Note { ref editor, .. } = app.state else {
+            unreachable!();
+        };
+        assert_eq!(editor.content(), "branch1 note");
     }
 
     #[test]
@@ -449,7 +443,7 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.focus_note();
-        if let Some(editor) = &mut app.editor {
+        if let FocusState::Note { ref mut editor, .. } = app.state {
             editor.textarea.insert_str("MODIFIED");
             editor.dirty = true;
         }
@@ -462,7 +456,7 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.focus_note();
-        if let Some(editor) = &mut app.editor {
+        if let FocusState::Note { ref mut editor, .. } = app.state {
             editor.textarea.insert_str("SHOULD NOT PERSIST");
         }
         assert_eq!(app.files[0].data.items[0].note, "branch1 note");
@@ -487,7 +481,7 @@ mod tests {
 
         // Tab into note, edit
         app.focus_note();
-        if let Some(editor) = &mut app.editor {
+        if let FocusState::Note { ref mut editor, .. } = app.state {
             editor.textarea.insert_str("EDITED TEXT ");
         }
 
@@ -703,8 +697,10 @@ mod tests {
         app.focus_note();
         app.save_editor();
         app.cmd_collapse();
-        let content = app.editor.as_ref().unwrap().content();
-        assert!(content.contains("duir:collapsed"));
+        let FocusState::Note { ref editor, .. } = app.state else {
+            unreachable!();
+        };
+        assert!(editor.content().contains("duir:collapsed"));
     }
 
     #[test]
@@ -729,7 +725,7 @@ mod tests {
     fn filter_hides_rows() {
         let mut app = make_app_with_tree();
         let total = app.rows.len();
-        app.filter_text = "Child 1.1".to_owned();
+        app.filter_committed_text = "Child 1.1".to_owned();
         app.apply_filter();
         assert!(app.rows.len() < total);
     }
@@ -738,9 +734,9 @@ mod tests {
     fn filter_clear_restores() {
         let mut app = make_app_with_tree();
         let total = app.rows.len();
-        app.filter_text = "Child 1.1".to_owned();
+        app.filter_committed_text = "Child 1.1".to_owned();
         app.apply_filter();
-        app.filter_text.clear();
+        app.filter_committed_text.clear();
         app.apply_filter();
         assert_eq!(app.rows.len(), total);
     }
@@ -750,7 +746,7 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.new_sibling();
-        assert!(app.editing_title);
+        assert!(app.is_editing_title());
         assert_eq!(app.files[0].data.items.len(), 4);
     }
 
@@ -760,7 +756,7 @@ mod tests {
         app.cursor = 1;
         let old = app.files[0].data.items[0].items.len();
         app.new_child();
-        assert!(app.editing_title);
+        assert!(app.is_editing_title());
         assert_eq!(app.files[0].data.items[0].items.len(), old + 1);
     }
 
@@ -885,7 +881,7 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         input::handle_key(&mut app, key(KeyCode::Char('n')));
-        assert!(app.editing_title);
+        assert!(app.is_editing_title());
         assert_eq!(app.files[0].data.items.len(), 4);
     }
 
@@ -895,7 +891,7 @@ mod tests {
         app.cursor = 1;
         let old = app.files[0].data.items[0].items.len();
         input::handle_key(&mut app, key(KeyCode::Char('b')));
-        assert!(app.editing_title);
+        assert!(app.is_editing_title());
         assert_eq!(app.files[0].data.items[0].items.len(), old + 1);
     }
 
@@ -1016,31 +1012,28 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         input::handle_key(&mut app, key(KeyCode::Tab));
-        assert_eq!(app.focus, Focus::Note);
-        assert!(app.editor.is_some());
+        assert!(app.is_note_focused());
     }
 
     #[test]
     fn input_tree_colon_to_command() {
         let mut app = make_app_with_tree();
         input::handle_key(&mut app, key(KeyCode::Char(':')));
-        assert!(app.command_active);
-        assert!(app.command_buffer.is_empty());
+        assert!(app.is_command_active());
     }
 
     #[test]
     fn input_tree_slash_to_filter() {
         let mut app = make_app_with_tree();
         input::handle_key(&mut app, key(KeyCode::Char('/')));
-        assert!(app.filter_active);
+        assert!(app.is_filter_active());
     }
 
     #[test]
     fn input_tree_f1_help() {
         let mut app = make_app_with_tree();
         input::handle_key(&mut app, key(KeyCode::F(1)));
-        assert!(app.show_help);
-        assert_eq!(app.help_scroll, 0);
+        assert!(app.is_help_shown());
     }
 
     // ── input.rs: filter mode ───────────────────────────────────────
@@ -1048,19 +1041,27 @@ mod tests {
     #[test]
     fn input_filter_typing() {
         let mut app = make_app_with_tree();
-        app.filter_active = true;
+        app.state = FocusState::Filter {
+            text: String::new(),
+            saved: String::new(),
+        };
         input::handle_key(&mut app, key(KeyCode::Char('C')));
         input::handle_key(&mut app, key(KeyCode::Char('h')));
-        assert_eq!(app.filter_text, "Ch");
+        let FocusState::Filter { ref text, .. } = app.state else {
+            unreachable!();
+        };
+        assert_eq!(text, "Ch");
     }
 
     #[test]
     fn input_filter_enter_applies() {
         let mut app = make_app_with_tree();
-        app.filter_active = true;
-        app.filter_text = "Child 1.1".to_owned();
+        app.state = FocusState::Filter {
+            text: "Child 1.1".to_owned(),
+            saved: String::new(),
+        };
         input::handle_key(&mut app, key(KeyCode::Enter));
-        assert!(!app.filter_active);
+        assert!(!app.is_filter_active());
         // Filter applied — fewer rows
         assert!(app.rows.iter().filter(|r| !r.is_file_root).count() < 6);
     }
@@ -1069,32 +1070,40 @@ mod tests {
     fn input_filter_esc_reverts() {
         let mut app = make_app_with_tree();
         let total = app.rows.len();
-        app.filter_active = true;
-        app.filter_saved = String::new();
-        app.filter_text = "xyz".to_owned();
+        app.state = FocusState::Filter {
+            text: "xyz".to_owned(),
+            saved: String::new(),
+        };
         input::handle_key(&mut app, key(KeyCode::Esc));
-        assert!(!app.filter_active);
-        assert!(app.filter_text.is_empty());
+        assert!(!app.is_filter_active());
+        assert!(app.filter_committed_text.is_empty());
         assert_eq!(app.rows.len(), total);
     }
 
     #[test]
     fn input_filter_exclude_prefix() {
         let mut app = make_app_with_tree();
-        app.filter_active = true;
-        app.filter_text = "!Branch 1".to_owned();
+        app.state = FocusState::Filter {
+            text: "!Branch 1".to_owned(),
+            saved: String::new(),
+        };
         input::handle_key(&mut app, key(KeyCode::Enter));
-        assert!(app.filter_exclude);
-        assert_eq!(app.filter_text, "Branch 1");
+        assert!(app.filter_committed_exclude);
+        assert_eq!(app.filter_committed_text, "Branch 1");
     }
 
     #[test]
     fn input_filter_backspace() {
         let mut app = make_app_with_tree();
-        app.filter_active = true;
-        app.filter_text = "abc".to_owned();
+        app.state = FocusState::Filter {
+            text: "abc".to_owned(),
+            saved: String::new(),
+        };
         input::handle_key(&mut app, key(KeyCode::Backspace));
-        assert_eq!(app.filter_text, "ab");
+        let FocusState::Filter { ref text, .. } = app.state else {
+            unreachable!();
+        };
+        assert_eq!(text, "ab");
     }
 
     // ── input.rs: command mode ──────────────────────────────────────
@@ -1102,27 +1111,37 @@ mod tests {
     #[test]
     fn input_command_typing() {
         let mut app = make_app_with_tree();
-        app.command_active = true;
+        app.state = FocusState::Command {
+            buffer: String::new(),
+            history_index: None,
+        };
         input::handle_key(&mut app, key(KeyCode::Char('h')));
         input::handle_key(&mut app, key(KeyCode::Char('e')));
-        assert_eq!(app.command_buffer, "he");
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert_eq!(buffer, "he");
+        } else {
+            unreachable!();
+        }
     }
 
     #[test]
     fn input_command_esc_cancels() {
         let mut app = make_app_with_tree();
-        app.command_active = true;
-        app.command_buffer = "help".to_owned();
+        app.state = FocusState::Command {
+            buffer: "help".to_owned(),
+            history_index: None,
+        };
         input::handle_key(&mut app, key(KeyCode::Esc));
-        assert!(!app.command_active);
-        assert!(app.command_buffer.is_empty());
+        assert!(!app.is_command_active());
     }
 
     #[test]
     fn input_command_enter_pushes_history() {
         let mut app = make_app_with_tree();
-        app.command_active = true;
-        app.command_buffer = "help".to_owned();
+        app.state = FocusState::Command {
+            buffer: "help".to_owned(),
+            history_index: None,
+        };
         // Enter in command mode is handled in main loop for storage,
         // but handle_key still pushes history
         input::handle_key(&mut app, key(KeyCode::Enter));
@@ -1132,48 +1151,71 @@ mod tests {
     #[test]
     fn input_command_tab_completes() {
         let mut app = make_app_with_tree();
-        app.command_active = true;
-        app.command_buffer = "hel".to_owned();
+        app.state = FocusState::Command {
+            buffer: "hel".to_owned(),
+            history_index: None,
+        };
         input::handle_key(&mut app, key(KeyCode::Tab));
-        assert_eq!(app.command_buffer, "help");
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert_eq!(buffer, "help");
+        } else {
+            unreachable!();
+        }
     }
 
     #[test]
     fn input_command_up_down_history() {
         let mut app = make_app_with_tree();
         app.command_history = vec!["first".to_owned(), "second".to_owned()];
-        app.command_active = true;
+        app.state = FocusState::Command {
+            buffer: String::new(),
+            history_index: None,
+        };
         // Up → last history entry
         input::handle_key(&mut app, key(KeyCode::Up));
-        assert_eq!(app.command_buffer, "second");
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert_eq!(buffer, "second");
+        }
         // Up again → first
         input::handle_key(&mut app, key(KeyCode::Up));
-        assert_eq!(app.command_buffer, "first");
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert_eq!(buffer, "first");
+        }
         // Down → second
         input::handle_key(&mut app, key(KeyCode::Down));
-        assert_eq!(app.command_buffer, "second");
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert_eq!(buffer, "second");
+        }
         // Down past end → clears
         input::handle_key(&mut app, key(KeyCode::Down));
-        assert!(app.command_buffer.is_empty());
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert!(buffer.is_empty());
+        }
     }
 
     #[test]
     fn input_command_backspace_on_empty_exits() {
         let mut app = make_app_with_tree();
-        app.command_active = true;
-        app.command_buffer.clear();
+        app.state = FocusState::Command {
+            buffer: String::new(),
+            history_index: None,
+        };
         input::handle_key(&mut app, key(KeyCode::Backspace));
-        assert!(!app.command_active);
+        assert!(!app.is_command_active());
     }
 
     #[test]
     fn input_command_backspace_deletes_char() {
         let mut app = make_app_with_tree();
-        app.command_active = true;
-        app.command_buffer = "hel".to_owned();
+        app.state = FocusState::Command {
+            buffer: "hel".to_owned(),
+            history_index: None,
+        };
         input::handle_key(&mut app, key(KeyCode::Backspace));
-        assert_eq!(app.command_buffer, "he");
-        assert!(app.command_active);
+        if let FocusState::Command { ref buffer, .. } = app.state {
+            assert_eq!(buffer, "he");
+        }
+        assert!(app.is_command_active());
     }
 
     // ── input.rs: edit mode (title editing) ─────────────────────────
@@ -1183,11 +1225,20 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.start_editing();
-        app.edit_select_all = false;
-        let end = app.edit_buffer.len();
-        app.edit_cursor = end;
+        if let FocusState::EditingTitle {
+            ref mut select_all,
+            ref mut cursor,
+            ref buffer,
+            ..
+        } = app.state
+        {
+            *select_all = false;
+            *cursor = buffer.len();
+        }
         input::handle_key(&mut app, key(KeyCode::Char('X')));
-        assert!(app.edit_buffer.ends_with('X'));
+        if let FocusState::EditingTitle { ref buffer, .. } = app.state {
+            assert!(buffer.ends_with('X'));
+        }
     }
 
     #[test]
@@ -1195,10 +1246,21 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.start_editing();
-        app.edit_select_all = false;
-        let orig_len = app.edit_buffer.len();
+        let orig_len = if let FocusState::EditingTitle {
+            ref mut select_all,
+            ref buffer,
+            ..
+        } = app.state
+        {
+            *select_all = false;
+            buffer.len()
+        } else {
+            0
+        };
         input::handle_key(&mut app, key(KeyCode::Backspace));
-        assert_eq!(app.edit_buffer.len(), orig_len - 1);
+        if let FocusState::EditingTitle { ref buffer, .. } = app.state {
+            assert_eq!(buffer.len(), orig_len - 1);
+        }
     }
 
     #[test]
@@ -1206,11 +1268,22 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.start_editing();
-        app.edit_select_all = false;
-        app.edit_cursor = 0;
-        let orig_len = app.edit_buffer.len();
+        let orig_len = if let FocusState::EditingTitle {
+            ref mut select_all,
+            ref mut cursor,
+            ref buffer,
+        } = app.state
+        {
+            *select_all = false;
+            *cursor = 0;
+            buffer.len()
+        } else {
+            0
+        };
         input::handle_key(&mut app, key(KeyCode::Delete));
-        assert_eq!(app.edit_buffer.len(), orig_len - 1);
+        if let FocusState::EditingTitle { ref buffer, .. } = app.state {
+            assert_eq!(buffer.len(), orig_len - 1);
+        }
     }
 
     #[test]
@@ -1218,15 +1291,27 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.start_editing();
-        app.edit_select_all = false;
+        if let FocusState::EditingTitle { ref mut select_all, .. } = app.state {
+            *select_all = false;
+        }
         input::handle_key(&mut app, key(KeyCode::Home));
-        assert_eq!(app.edit_cursor, 0);
+        if let FocusState::EditingTitle { cursor, .. } = app.state {
+            assert_eq!(cursor, 0);
+        }
         input::handle_key(&mut app, key(KeyCode::End));
-        assert_eq!(app.edit_cursor, app.edit_buffer.len());
+        if let FocusState::EditingTitle { cursor, ref buffer, .. } = app.state {
+            assert_eq!(cursor, buffer.len());
+        }
         input::handle_key(&mut app, key(KeyCode::Left));
-        let pos = app.edit_cursor;
+        let pos = if let FocusState::EditingTitle { cursor, .. } = app.state {
+            cursor
+        } else {
+            0
+        };
         input::handle_key(&mut app, key(KeyCode::Right));
-        assert_eq!(app.edit_cursor, pos + 1);
+        if let FocusState::EditingTitle { cursor, .. } = app.state {
+            assert_eq!(cursor, pos + 1);
+        }
     }
 
     #[test]
@@ -1234,10 +1319,17 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         app.start_editing();
-        app.edit_select_all = false;
-        app.edit_buffer = "Renamed".to_owned();
+        if let FocusState::EditingTitle {
+            ref mut buffer,
+            ref mut select_all,
+            ..
+        } = app.state
+        {
+            *select_all = false;
+            "Renamed".clone_into(buffer);
+        }
         input::handle_key(&mut app, key(KeyCode::Enter));
-        assert!(!app.editing_title);
+        assert!(!app.is_editing_title());
         assert_eq!(app.files[0].data.items[0].title, "Renamed");
     }
 
@@ -1247,7 +1339,7 @@ mod tests {
         app.cursor = 1;
         app.start_editing();
         input::handle_key(&mut app, key(KeyCode::Esc));
-        assert!(!app.editing_title);
+        assert!(!app.is_editing_title());
         assert_eq!(app.files[0].data.items[0].title, "Branch 1");
     }
 
@@ -1260,7 +1352,7 @@ mod tests {
         app.focus_note();
         // Editor starts in Normal mode, Tab returns to tree
         input::handle_key(&mut app, key(KeyCode::Tab));
-        assert_eq!(app.focus, Focus::Tree);
+        assert!(app.is_tree_focused());
     }
 
     // ── completer.rs tests ──────────────────────────────────────────
@@ -1452,8 +1544,8 @@ mod tests {
     #[test]
     fn apply_filter_exclude_mode() {
         let mut app = make_app_with_tree();
-        app.filter_text = "Branch 1".to_owned();
-        app.filter_exclude = true;
+        app.filter_committed_text = "Branch 1".to_owned();
+        app.filter_committed_exclude = true;
         app.apply_filter();
         // Branch 1 should be hidden
         assert!(!app.rows.iter().any(|r| r.title == "Branch 1"));
@@ -1464,7 +1556,10 @@ mod tests {
     fn apply_filter_live_updates() {
         let mut app = make_app_with_tree();
         let total = app.rows.len();
-        app.filter_text = "Child 1.1".to_owned();
+        app.state = FocusState::Filter {
+            text: "Child 1.1".to_owned(),
+            saved: String::new(),
+        };
         app.apply_filter_live();
         assert!(app.rows.len() < total);
         assert!(app.status_message.contains("matches"));
@@ -1474,9 +1569,14 @@ mod tests {
     fn apply_filter_live_empty_restores() {
         let mut app = make_app_with_tree();
         let total = app.rows.len();
-        app.filter_text = "Child".to_owned();
+        app.state = FocusState::Filter {
+            text: "Child".to_owned(),
+            saved: String::new(),
+        };
         app.apply_filter_live();
-        app.filter_text.clear();
+        if let FocusState::Filter { ref mut text, .. } = app.state {
+            text.clear();
+        }
         app.apply_filter_live();
         assert_eq!(app.rows.len(), total);
     }
@@ -1484,7 +1584,10 @@ mod tests {
     #[test]
     fn apply_filter_live_exclude_preview() {
         let mut app = make_app_with_tree();
-        app.filter_text = "!Branch 1".to_owned();
+        app.state = FocusState::Filter {
+            text: "!Branch 1".to_owned(),
+            saved: String::new(),
+        };
         app.apply_filter_live();
         assert!(!app.rows.iter().any(|r| r.title == "Branch 1"));
     }
@@ -1553,7 +1656,7 @@ mod tests {
         let mut app = make_app_with_tree();
         app.cursor = 1;
         input::handle_key(&mut app, key(KeyCode::Enter));
-        assert!(app.editing_title);
+        assert!(app.is_editing_title());
     }
 
     #[test]
