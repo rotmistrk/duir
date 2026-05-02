@@ -19,6 +19,7 @@ pub struct TreeRow {
     pub encrypted: bool,
     pub locked: bool,
     pub has_encrypted_children: bool,
+    pub is_kiron: bool,
 }
 
 /// Loaded file with its data and metadata.
@@ -90,6 +91,10 @@ pub struct App {
     pub filter_committed_text: String,
     pub filter_committed_exclude: bool,
     pub highlighter: crate::syntax::SyntaxHighlighter,
+    /// Active kiron PTY sessions, keyed by (`file_index`, path).
+    pub active_kirons: std::collections::HashMap<(usize, Vec<usize>), crate::pty_tab::PtyTab>,
+    /// Whether the Kiro tab is focused (vs Note tab) in the note panel.
+    pub kiro_tab_focused: bool,
 }
 
 impl App {
@@ -117,6 +122,8 @@ impl App {
             filter_committed_text: String::new(),
             filter_committed_exclude: false,
             highlighter: crate::syntax::SyntaxHighlighter::new(),
+            active_kirons: std::collections::HashMap::new(),
+            kiro_tab_focused: false,
         }
     }
 
@@ -166,6 +173,7 @@ impl App {
                 encrypted: false,
                 locked: false,
                 has_encrypted_children: false,
+                is_kiron: false,
             });
             // Items — collect data first to avoid borrow conflict
             let items: Vec<(usize, TodoItem)> = self.files[fi]
@@ -209,6 +217,7 @@ impl App {
             encrypted: item.is_encrypted(),
             locked: item.is_locked(),
             has_encrypted_children: has_enc_children,
+            is_kiron: item.is_kiron(),
         });
 
         if expanded {
@@ -833,6 +842,8 @@ impl App {
             }
             "encrypt" => self.cmd_encrypt(),
             "decrypt" => self.cmd_decrypt(),
+            "kiron" => self.cmd_kiron(),
+            "kiro" => self.cmd_kiro(&parts),
             "about" => {
                 self.state = FocusState::About;
             }
@@ -1281,6 +1292,132 @@ impl App {
             let state = if self.files[fi].autosave { "ON" } else { "OFF" };
             let name = &self.files[fi].name;
             self.status_message = format!("Autosave {name}: {state}");
+        }
+    }
+
+    /// Mark the current node as a kiron (AI session node).
+    pub(crate) fn cmd_kiron(&mut self) {
+        let Some(row) = self.current_row().cloned() else {
+            "No node selected".clone_into(&mut self.status_message);
+            return;
+        };
+        let fi = row.file_index;
+        let path = &row.path;
+        let item = if path.is_empty() {
+            // File root — not supported as kiron
+            "Cannot mark file root as kiron".clone_into(&mut self.status_message);
+            return;
+        } else {
+            duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, path)
+        };
+        let Some(item) = item else {
+            "Node not found".clone_into(&mut self.status_message);
+            return;
+        };
+        if item.is_kiron() {
+            self.set_status("Already a kiron", StatusLevel::Warning);
+            return;
+        }
+        let session_id = uuid::Uuid::new_v4().to_string();
+        item.node_type = Some(duir_core::NodeType::Kiron);
+        item.kiron = Some(duir_core::KironMeta {
+            session_id: session_id.clone(),
+        });
+        self.mark_modified(fi, path);
+        self.rebuild_rows();
+        self.set_status(
+            &format!("Marked as kiron (session {})", &session_id[..8]),
+            StatusLevel::Success,
+        );
+    }
+
+    /// Start or stop a kiro session on the current kiron node.
+    pub(crate) fn cmd_kiro(&mut self, parts: &[&str]) {
+        let subcmd = parts.get(1).copied().unwrap_or("");
+        match subcmd {
+            "start" => self.kiro_start(),
+            "stop" => self.kiro_stop(),
+            _ => {
+                "Usage: :kiro start | :kiro stop".clone_into(&mut self.status_message);
+            }
+        }
+    }
+
+    fn kiro_start(&mut self) {
+        let Some(row) = self.current_row().cloned() else {
+            "No node selected".clone_into(&mut self.status_message);
+            return;
+        };
+        let fi = row.file_index;
+        let path = row.path;
+        let item = if path.is_empty() {
+            None
+        } else {
+            duir_core::tree_ops::get_item(&self.files[fi].data, &path)
+        };
+        let Some(item) = item else {
+            "Node not found".clone_into(&mut self.status_message);
+            return;
+        };
+        if !item.is_kiron() {
+            self.set_status("Not a kiron node. Use :kiron first", StatusLevel::Error);
+            return;
+        }
+        let key = (fi, path);
+        if self.active_kirons.contains_key(&key) {
+            self.set_status("Kiron already active", StatusLevel::Warning);
+            return;
+        }
+        let config = duir_core::config::Config::load();
+        let (cmd, args) = config.kiro.build_command(std::path::Path::new("."));
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        match crate::pty_tab::PtyTab::spawn(&cmd, &arg_refs, 80, 24, &cwd) {
+            Ok(pty) => {
+                self.active_kirons.insert(key, pty);
+                self.kiro_tab_focused = true;
+                self.set_status("Kiro session started", StatusLevel::Success);
+            }
+            Err(e) => {
+                self.set_status(&format!("Failed to start kiro: {e}"), StatusLevel::Error);
+            }
+        }
+    }
+
+    fn kiro_stop(&mut self) {
+        let Some(row) = self.current_row().cloned() else {
+            "No node selected".clone_into(&mut self.status_message);
+            return;
+        };
+        let key = (row.file_index, row.path);
+        if self.active_kirons.remove(&key).is_some() {
+            self.kiro_tab_focused = false;
+            self.set_status("Kiro session stopped", StatusLevel::Success);
+        } else {
+            self.set_status("No active kiro session on this node", StatusLevel::Warning);
+        }
+    }
+
+    /// Find the active kiron for the current cursor position.
+    /// Returns the key of the most specific (deepest) active kiron
+    /// whose subtree contains the current node.
+    pub fn active_kiron_for_cursor(&self) -> Option<(usize, Vec<usize>)> {
+        let row = self.current_row()?;
+        let fi = row.file_index;
+        let path = &row.path;
+        let mut best: Option<&(usize, Vec<usize>)> = None;
+        for key in self.active_kirons.keys() {
+            if key.0 == fi && path.starts_with(&key.1) && best.is_none_or(|b| key.1.len() > b.1.len()) {
+                best = Some(key);
+            }
+        }
+        best.cloned()
+    }
+
+    /// Poll all active kiron PTYs for new output.
+    pub fn poll_kirons(&mut self) {
+        for pty in self.active_kirons.values_mut() {
+            pty.poll();
         }
     }
 

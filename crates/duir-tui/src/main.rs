@@ -157,6 +157,8 @@ fn run_loop(
             frame.render_stateful_widget(TreeView::new().block(tree_block), content_chunks[0], app);
 
             // Note pane
+            // Note pane (or Kiro terminal)
+            let active_kiron_key = app.active_kiron_for_cursor();
             if let FocusState::Note { ref mut editor, .. } = app.state {
                 let has_cmdline = matches!(
                     editor.mode,
@@ -175,10 +177,27 @@ fn run_loop(
                     editor.set_block(" Note", true);
                     editor.render(frame, content_chunks[1], &app.highlighter);
                 }
+            } else if app.kiro_tab_focused
+                && let Some(ref key) = active_kiron_key
+                && let Some(pty) = app.active_kirons.get(key)
+            {
+                // Render Kiro terminal
+                let kiro_block = Block::default()
+                    .title(" 🤖 Kiro ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().add_modifier(Modifier::BOLD));
+                let inner = kiro_block.inner(content_chunks[1]);
+                frame.render_widget(kiro_block, content_chunks[1]);
+                render_termbuf(frame, &pty.termbuf, inner);
             } else {
-                // Not in Note state: render from model
+                // Render note from model (with tab indicator if kiron active)
                 let note_content = app.current_note();
-                let note_block = Block::default().title(" Note ").borders(Borders::ALL);
+                let title = if active_kiron_key.is_some() {
+                    " Note [Ctrl+T: 🤖 Kiro] "
+                } else {
+                    " Note "
+                };
+                let note_block = Block::default().title(title).borders(Borders::ALL);
                 let lines = crate::markdown_view::highlight_lines_with_syntax(
                     &note_content,
                     usize::MAX,
@@ -216,15 +235,24 @@ fn run_loop(
             continue; // redraw to show result
         }
 
-        // Block for input, with timeout only for autosave
+        // Block for input, with timeout only for autosave or active kirons
         let has_pending_save = app.is_tree_focused() && app.files.iter().any(|f| f.autosave && f.modified);
+        let has_active_kirons = !app.active_kirons.is_empty();
         let timeout = if app.pending_crypto.is_some() {
             Duration::from_millis(1) // process crypto immediately
+        } else if has_active_kirons {
+            Duration::from_millis(50) // poll PTY output frequently
         } else if has_pending_save {
             Duration::from_secs(autosave_interval)
         } else {
             Duration::from_secs(3600) // effectively block
         };
+
+        // Poll active kirons for new output
+        if has_active_kirons {
+            app.poll_kirons();
+        }
+
         if let Some(Event::Key(key)) = input::poll_event(timeout)? {
             // Handle overlay input first
             if let Some(prompt) = &mut app.password_prompt {
@@ -275,6 +303,31 @@ fn run_loop(
                 if let Ok(storage) = FileStorage::new(storage_dir) {
                     app.save_all(&storage);
                 }
+            } else if key.code == KeyCode::Char('t')
+                && key.modifiers.contains(KeyModifiers::CONTROL)
+                && app.is_tree_focused()
+                && app.active_kiron_for_cursor().is_some()
+            {
+                // Toggle between Note and Kiro tabs
+                app.kiro_tab_focused = !app.kiro_tab_focused;
+            } else if app.kiro_tab_focused
+                && app.is_tree_focused()
+                && app.active_kiron_for_cursor().is_some()
+                && key.code != KeyCode::Esc
+                && !(key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL))
+            {
+                // Route input to active kiron PTY
+                if let Some(kiron_key) = app.active_kiron_for_cursor()
+                    && let Some(pty) = app.active_kirons.get_mut(&kiron_key)
+                {
+                    let bytes = key_to_bytes(key);
+                    if !bytes.is_empty() {
+                        pty.write(&bytes);
+                    }
+                }
+            } else if key.code == KeyCode::Esc && app.kiro_tab_focused && app.is_tree_focused() {
+                // Esc from kiro tab returns to tree
+                app.kiro_tab_focused = false;
             } else if app.is_command_active() && key.code == KeyCode::Enter {
                 // Execute command with storage access
                 if let Ok(storage) = FileStorage::new(storage_dir) {
@@ -338,6 +391,55 @@ fn render_palette(frame: &mut ratatui::Frame, completer: &crate::completer::Comp
     let paragraph = Paragraph::new(lines).block(block);
     frame.render_widget(paragraph, popup);
 }
+
+/// Render a `TermBuf` into a ratatui frame area.
+fn render_termbuf(frame: &mut ratatui::Frame<'_>, termbuf: &crate::termbuf::TermBuf, area: ratatui::layout::Rect) {
+    use ratatui::text::{Line as RLine, Span};
+    let mut lines = Vec::with_capacity(area.height as usize);
+    for row_idx in 0..area.height as usize {
+        let cells = termbuf.visible_row(row_idx);
+        let mut spans = Vec::new();
+        for cell in cells.iter().take(area.width as usize) {
+            spans.push(Span::styled(cell.ch.to_string(), cell.style));
+        }
+        lines.push(RLine::from(spans));
+    }
+    let paragraph = ratatui::widgets::Paragraph::new(lines);
+    frame.render_widget(paragraph, area);
+}
+
+/// Convert a crossterm `KeyEvent` to bytes for PTY input.
+fn key_to_bytes(key: crossterm::event::KeyEvent) -> Vec<u8> {
+    use crossterm::event::{KeyCode, KeyModifiers};
+    match key.code {
+        KeyCode::Char(c) => {
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                // Ctrl+A = 0x01, Ctrl+Z = 0x1A
+                let ctrl = (c as u8).wrapping_sub(b'a').wrapping_add(1);
+                vec![ctrl]
+            } else {
+                let mut buf = [0u8; 4];
+                let s = c.encode_utf8(&mut buf);
+                s.as_bytes().to_vec()
+            }
+        }
+        KeyCode::Enter => vec![b'\r'],
+        KeyCode::Backspace => vec![0x7f],
+        KeyCode::Tab => vec![b'\t'],
+        KeyCode::Esc => vec![0x1b],
+        KeyCode::Up => b"\x1b[A".to_vec(),
+        KeyCode::Down => b"\x1b[B".to_vec(),
+        KeyCode::Right => b"\x1b[C".to_vec(),
+        KeyCode::Left => b"\x1b[D".to_vec(),
+        KeyCode::Home => b"\x1b[H".to_vec(),
+        KeyCode::End => b"\x1b[F".to_vec(),
+        KeyCode::PageUp => b"\x1b[5~".to_vec(),
+        KeyCode::PageDown => b"\x1b[6~".to_vec(),
+        KeyCode::Delete => b"\x1b[3~".to_vec(),
+        _ => Vec::new(),
+    }
+}
+
 fn build_status_line(app: &App) -> Line<'_> {
     if let FocusState::Command { ref buffer, .. } = app.state {
         Line::from(vec![

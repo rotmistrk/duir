@@ -1292,6 +1292,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tui-textarea",
+ "uuid",
  "vte",
 ]
 

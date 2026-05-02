@@ -75,6 +75,8 @@ impl StatefulWidget for TreeView<'_> {
                 ""
             };
 
+            let kiron_icon = if row.is_kiron { "🤖" } else { "" };
+
             let checkbox = if row.is_file_root {
                 String::new()
             } else {
@@ -85,7 +87,7 @@ impl StatefulWidget for TreeView<'_> {
                 }
             };
 
-            let prefix = format!("{indent}{arrow}{checkbox}{lock_icon}");
+            let prefix = format!("{indent}{arrow}{checkbox}{lock_icon}{kiron_icon}");
             let prefix_width = prefix.chars().count();
 
             let title = if is_selected && let FocusState::EditingTitle { ref buffer, cursor, .. } = state.state {
