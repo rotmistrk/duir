@@ -62,6 +62,8 @@ Tab completes commands. Tab also completes file paths for file commands.
 | `:write <name>` | Save copy as todo JSON (doesn't switch) |
 | `:saveas <name>` | Save as todo JSON and switch to it |
 
+All file commands accept `s3://` paths (e.g. `:open s3://bucket/file.todo.json`).
+
 ### Tree Operations
 
 | Command | Action |
@@ -205,6 +207,24 @@ Tool paths are configurable:
 mmdc = "mmdc"
 plantuml = "plantuml"
 dot = "dot"
+```
+
+## S3 Storage
+
+Path format: `s3://bucket/prefix/file`
+
+Tab completion lists buckets and objects.
+
+Supported commands: `:open`, `:import`, `:export`, `:write`, `:saveas`.
+
+Credentials use the standard AWS chain: environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`), `~/.aws/credentials`, or instance role.
+
+Examples:
+
+```
+:open s3://my-bucket/todos/work.todo.json
+:export s3://my-bucket/reports/sprint.md
+:saveas s3://my-bucket/todos/backup.todo.json
 ```
 
 ## Status Colors

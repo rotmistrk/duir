@@ -13,7 +13,7 @@ Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 - **Export**: markdown, Word .docx (with diagram rendering), clipboard
 - **Diagrams**: mermaid, plantuml, graphviz rendered as images in docx export
 - **Encryption**: per-subtree with password, hierarchical, auto-lock on collapse
-- **Files**: multi-file, autosave, JSON storage, YAML export, path completion
+- **Files**: multi-file, autosave, JSON storage, YAML export, S3 support, path completion
 - **Config**: XDG-compliant, project-local `.duir/`, configurable autosave interval
 - **Clipboard**: system clipboard via OSC 52 (works over SSH)
 - **Self-contained**: single 7MB binary, all resources embedded
@@ -54,6 +54,21 @@ autosave_interval_secs = 30
 [ui]
 note_panel_pct = 50
 ```
+
+## S3
+
+Open, save, import, and export files directly from S3:
+
+```sh
+duir s3://my-bucket/todos/work.todo.json
+```
+
+```
+:open s3://my-bucket/todos/work.todo.json
+:export s3://my-bucket/reports/sprint.md
+```
+
+Credentials use the standard AWS chain (env vars, `~/.aws/credentials`, instance role). Tab completion lists buckets and objects.
 
 ## Project Structure
 
