@@ -128,16 +128,14 @@ fn handle_overlay_input(app: &mut App, key: crossterm::event::KeyEvent) -> bool 
 /// Handle global key bindings (Ctrl+Enter, Ctrl+S, Ctrl+T, kiro routing, Esc from kiro).
 /// Returns true if the event was consumed.
 fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_dir: &PathBuf) -> bool {
-    // F11 or macOS ∞ (Opt+5): toggle zoom
-    if matches!(key.code, KeyCode::F(11) | KeyCode::Char('∞')) {
+    // F5 or macOS ∞ (Opt+5): toggle zoom
+    if matches!(key.code, KeyCode::F(5) | KeyCode::Char('∞')) {
         app.zoomed = !app.zoomed;
         return true;
     }
 
-    // F5 or « (macOS Opt+\): send to kiro (works from ANY panel)
-    if (matches!(key.code, KeyCode::F(5)) || matches!(key.code, KeyCode::Char('«')))
-        && app.active_kiron_for_cursor().is_some()
-    {
+    // « (macOS Opt+\): send to kiro (works from ANY panel)
+    if matches!(key.code, KeyCode::Char('«')) && app.active_kiron_for_cursor().is_some() {
         if app.is_note_focused() {
             app.save_editor();
             app.state = FocusState::Tree;
@@ -221,11 +219,12 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
+    // Route ALL keys to kiro PTY when focused (including Esc — kiro uses it)
+    // Use F2 to exit kiro focus
     if app.kiro_tab_focused
         && app.is_tree_focused()
         && app.active_kiron_for_cursor().is_some()
-        && key.code != KeyCode::Esc
-        && !(key.modifiers.contains(KeyModifiers::CONTROL))
+        && !key.modifiers.contains(KeyModifiers::CONTROL)
     {
         if let Some(kiron_key) = app.active_kiron_for_cursor()
             && let Some(kiron) = app.active_kirons.get_mut(&kiron_key)
@@ -235,11 +234,6 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
                 kiron.pty.write(&bytes);
             }
         }
-        return true;
-    }
-
-    if key.code == KeyCode::Esc && app.kiro_tab_focused && app.is_tree_focused() {
-        app.kiro_tab_focused = false;
         return true;
     }
 
