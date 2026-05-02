@@ -5,7 +5,7 @@ mod help;
 mod input;
 mod markdown_view;
 mod note_editor;
-mod note_view;
+
 mod password;
 mod tree_view;
 
@@ -27,7 +27,6 @@ use ratatui::widgets::{Block, Borders, Paragraph};
 use duir_core::{FileStorage, TodoStorage};
 
 use app::{App, Focus};
-use note_view::NoteView;
 use tree_view::TreeView;
 
 #[derive(Parser)]
@@ -85,9 +84,6 @@ fn main() -> io::Result<()> {
     if first_run {
         app.add_empty_file("todo");
     }
-
-    // Initialize editor for the first item
-    app.load_editor();
 
     if first_run {
         app.show_about = true;
@@ -154,37 +150,35 @@ fn run_loop(
 
             // Note pane
             let focused = app.focus == Focus::Note;
-            if let Some(editor) = &mut app.editor {
-                let has_cmdline = matches!(
-                    editor.mode,
-                    crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
-                );
-                if has_cmdline {
-                    let note_chunks = Layout::default()
-                        .direction(Direction::Vertical)
-                        .constraints([Constraint::Min(3), Constraint::Length(1)])
-                        .split(content_chunks[1]);
-                    editor.set_block(" Note", focused);
-                    editor.render(frame, note_chunks[0]);
-                    let cmd_line = editor.status_line();
-                    frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
-                } else {
-                    editor.set_block(" Note", focused);
-                    editor.render(frame, content_chunks[1]);
+            if focused {
+                if let Some(editor) = &mut app.editor {
+                    let has_cmdline = matches!(
+                        editor.mode,
+                        crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
+                    );
+                    if has_cmdline {
+                        let note_chunks = Layout::default()
+                            .direction(Direction::Vertical)
+                            .constraints([Constraint::Min(3), Constraint::Length(1)])
+                            .split(content_chunks[1]);
+                        editor.set_block(" Note", true);
+                        editor.render(frame, note_chunks[0]);
+                        let cmd_line = editor.status_line();
+                        frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
+                    } else {
+                        editor.set_block(" Note", true);
+                        editor.render(frame, content_chunks[1]);
+                    }
                 }
             } else {
+                // Tree focused: always render from model
                 let note_content = app.current_note();
-                let note_border_style = if focused {
-                    Style::default().add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default()
-                };
-                let note_block = Block::default()
-                    .title(" Note ")
-                    .borders(Borders::ALL)
-                    .border_style(note_border_style);
-                let note_widget = NoteView::new(&note_content).block(note_block).scroll(0);
-                frame.render_widget(note_widget, content_chunks[1]);
+                let note_block = Block::default().title(" Note ").borders(Borders::ALL);
+                let lines = crate::markdown_view::highlight_lines(&note_content, usize::MAX, 0);
+                let paragraph = Paragraph::new(lines)
+                    .block(note_block)
+                    .wrap(ratatui::widgets::Wrap { trim: false });
+                frame.render_widget(paragraph, content_chunks[1]);
             }
 
             // Status bar
@@ -480,6 +474,63 @@ mod tests {
         app.move_down();
         app.move_up();
         assert_eq!(app.files[0].data.items[0].note, original);
+    }
+
+    /// THE BUG: edit note, tab back, navigate, add items → note content lost.
+    /// This tests the exact real-world scenario.
+    #[test]
+    fn edit_note_tab_back_navigate_add_items_preserves_note() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1
+
+        // Tab into note, edit
+        app.load_editor();
+        app.focus = Focus::Note;
+        if let Some(editor) = &mut app.editor {
+            editor.textarea.insert_str("EDITED TEXT ");
+        }
+
+        // Tab back to tree
+        app.save_editor();
+        app.focus = Focus::Tree;
+        assert!(app.files[0].data.items[0].note.contains("EDITED TEXT"));
+
+        // Navigate to different items
+        app.move_down(); // Child 1.1
+        app.move_down(); // Child 1.2
+
+        // current_note should show Child 1.2's note, not the edited one
+        assert_eq!(app.current_note(), "child12 note");
+
+        // Add new items
+        app.new_sibling();
+        app.cancel_editing();
+
+        // Original edit should still be in the model
+        assert!(
+            app.files[0].data.items[0].note.contains("EDITED TEXT"),
+            "Note was lost! Got: {}",
+            app.files[0].data.items[0].note
+        );
+
+        // All other notes should be intact
+        assert_eq!(app.files[0].data.items[0].items[0].note, "child11 note");
+    }
+
+    /// Verify `current_note` reads from model based on cursor, not from editor.
+    #[test]
+    fn current_note_reads_model_not_editor() {
+        let mut app = make_app_with_tree();
+
+        // Without loading editor, current_note should work from model
+        app.cursor = 1; // Branch 1
+        assert_eq!(app.current_note(), "branch1 note");
+
+        app.cursor = 2; // Child 1.1
+        assert_eq!(app.current_note(), "child11 note");
+
+        app.cursor = 3; // Child 1.2
+        assert_eq!(app.current_note(), "child12 note");
     }
 
     #[test]
