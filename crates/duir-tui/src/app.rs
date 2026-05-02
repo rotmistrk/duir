@@ -960,11 +960,17 @@ impl App {
                     Err(e) => self.status_message = format!("Export error: {e}"),
                 }
             }
-            "docx" => {
-                "docx export not yet implemented".clone_into(&mut self.status_message);
-            }
+            "docx" => match duir_core::docx_export::export_subtree_docx(item) {
+                Ok(bytes) => match std::fs::write(&path, bytes) {
+                    Ok(()) => {
+                        self.set_status(&format!("Exported to {}", path.display()), StatusLevel::Success);
+                    }
+                    Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
+                },
+                Err(e) => self.set_status(&format!("DOCX error: {e}"), StatusLevel::Error),
+            },
             _ => {
-                self.status_message = format!("Unknown format: .{ext} (supported: .md)");
+                self.status_message = format!("Unknown format: .{ext} (supported: .md, .docx)");
             }
         }
     }
@@ -1048,6 +1054,13 @@ impl App {
                             Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
                         }
                     }
+                    "docx" => match duir_core::docx_export::export_docx(&self.files[fi].data) {
+                        Ok(bytes) => match std::fs::write(path, bytes) {
+                            Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
+                            Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
+                        },
+                        Err(e) => self.set_status(&format!("DOCX error: {e}"), StatusLevel::Error),
+                    },
                     _ => match storage.save(path_str, &self.files[fi].data) {
                         Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
                         Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),

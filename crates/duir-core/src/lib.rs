@@ -1,5 +1,6 @@
 pub mod config;
 pub mod crypto;
+pub mod docx_export;
 pub mod error;
 pub mod file_storage;
 pub mod filter;
