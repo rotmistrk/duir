@@ -18,6 +18,7 @@ nursery = { level = "warn", priority = -1 }
 unwrap_used = "deny"
 expect_used = "deny"
 panic = "deny"
+indexing_slicing = "deny"
 cast_possible_truncation = "warn"
 cast_sign_loss = "warn"
 cast_precision_loss = "warn"

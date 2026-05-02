@@ -221,14 +221,17 @@ impl App {
         if row.is_file_root {
             return None;
         }
-        duir_core::tree_ops::get_item(&self.files[row.file_index].data, &row.path)
+        let file = self.files.get(row.file_index)?;
+        duir_core::tree_ops::get_item(&file.data, &row.path)
     }
 
     #[must_use]
     pub fn current_note(&self) -> String {
         self.current_row().map_or_else(String::new, |row| {
             if row.is_file_root {
-                self.files[row.file_index].data.note.clone()
+                self.files
+                    .get(row.file_index)
+                    .map_or_else(String::new, |f| f.data.note.clone())
             } else if let Some(item) = self.current_item() {
                 item.note.clone()
             } else {
@@ -280,21 +283,29 @@ impl App {
     }
 
     pub(crate) fn mark_modified(&mut self, fi: usize, path: &[usize]) {
-        self.files[fi].modified = true;
+        if let Some(file) = self.files.get_mut(fi) {
+            file.modified = true;
+        }
         for len in (1..=path.len()).rev() {
-            let ancestor = &path[..len];
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &ancestor.to_vec()) {
+            if let Some(ancestor) = path.get(..len)
+                && let Some(file) = self.files.get_mut(fi)
+                && let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &ancestor.to_vec())
+            {
                 duir_core::crypto::invalidate_cipher(item);
             }
         }
     }
 
     pub(crate) fn mark_saved(&mut self, fi: usize) {
-        self.files[fi].modified = false;
+        if let Some(file) = self.files.get_mut(fi) {
+            file.modified = false;
+        }
     }
 
     pub(crate) fn mark_file_modified(&mut self, fi: usize) {
-        self.files[fi].modified = true;
+        if let Some(file) = self.files.get_mut(fi) {
+            file.modified = true;
+        }
     }
 }
 
@@ -339,6 +350,7 @@ pub fn find_available_path(base: &str) -> std::path::PathBuf {
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)] // Tests: indices are controlled by test setup
 mod tests {
     use super::*;
 

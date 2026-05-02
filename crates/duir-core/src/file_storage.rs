@@ -111,7 +111,7 @@ pub fn load_path(path: &Path) -> Result<TodoFile> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
+#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use crate::model::TodoItem;

@@ -573,7 +573,12 @@ impl McpServer {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::significant_drop_tightening)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::significant_drop_tightening,
+    clippy::indexing_slicing
+)]
 mod tests {
     use super::*;
     use std::sync::mpsc;

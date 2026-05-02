@@ -30,6 +30,9 @@ impl StatefulWidget for TreeView<'_> {
 
     #[allow(clippy::cast_possible_truncation)]
     #[allow(clippy::too_many_lines)]
+    // ri is bounded by state.scroll_offset..end where end <= state.rows.len().
+    // chars slicing is safe: pos = cursor.min(chars.len()).
+    #[allow(clippy::indexing_slicing)]
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let inner = self.block.as_ref().map_or(area, |block| {
             let inner = block.inner(area);

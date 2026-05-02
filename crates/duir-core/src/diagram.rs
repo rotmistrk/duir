@@ -170,6 +170,7 @@ fn render_via_files(cmd: &str, args_template: &[&str], source: &str, input_ext: 
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

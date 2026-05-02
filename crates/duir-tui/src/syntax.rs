@@ -33,7 +33,9 @@ impl SyntaxHighlighter {
                 .unwrap_or_else(|| self.syntax_set.find_syntax_plain_text())
         };
 
-        let theme = &self.theme_set.themes["base16-ocean.dark"];
+        let Some(theme) = self.theme_set.themes.get("base16-ocean.dark") else {
+            return Vec::new();
+        };
         let mut h = HighlightLines::new(syntax, theme);
         let mut result = Vec::new();
 

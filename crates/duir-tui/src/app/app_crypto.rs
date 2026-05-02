@@ -2,6 +2,9 @@ use duir_core::NodeId;
 
 use super::{App, StatusLevel};
 
+// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
+// path slicing is guarded by path.len() > 0 checks.
+#[allow(clippy::indexing_slicing)]
 impl App {
     pub fn collapse_current(&mut self) {
         if let Some(row) = self.rows.get(self.cursor) {

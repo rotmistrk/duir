@@ -97,8 +97,11 @@ pub fn import_legacy_todo(content: &str) -> crate::Result<TodoFile> {
     }
 
     // Set title from first item if file title is default
-    if file.title == "Imported" && !file.items.is_empty() && !file.items[0].title.is_empty() {
-        file.title.clone_from(&file.items[0].title);
+    if file.title == "Imported"
+        && let Some(first) = file.items.first()
+        && !first.title.is_empty()
+    {
+        file.title.clone_from(&first.title);
     }
 
     Ok(file)
@@ -169,11 +172,11 @@ fn html_to_markdown(html: &str) -> String {
         return String::new();
     }
 
-    lines[start..end].join("\n")
+    lines.get(start..end).unwrap_or_default().join("\n")
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

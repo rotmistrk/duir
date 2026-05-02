@@ -177,11 +177,9 @@ pub fn invalidate_cipher(item: &mut TodoItem) {
 }
 
 fn navigate_mut<'a>(items: &'a mut [TodoItem], path: &[usize]) -> Option<&'a mut TodoItem> {
-    if path.is_empty() {
-        return None;
-    }
-    let mut current = items.get_mut(path[0])?;
-    for &idx in &path[1..] {
+    let (&first, rest) = path.split_first()?;
+    let mut current = items.get_mut(first)?;
+    for &idx in rest {
         current = current.items.get_mut(idx)?;
     }
     Some(current)

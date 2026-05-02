@@ -2,6 +2,8 @@ use duir_core::NodeId;
 
 use super::{App, FocusState};
 
+// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
+#[allow(clippy::indexing_slicing)]
 impl App {
     /// Write editor content back to the model.
     pub fn save_editor(&mut self) {

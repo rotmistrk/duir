@@ -3,6 +3,8 @@ use duir_core::{Completion, TodoItem};
 
 use super::{App, FocusState, LoadedFile, TreeRow};
 
+// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
+#[allow(clippy::indexing_slicing)]
 impl App {
     pub(crate) fn rebuild_rows_raw(&mut self) {
         self.editor_cache.clear();

@@ -7,6 +7,8 @@ use crate::app::{App, FocusState, StatusLevel};
 use crate::completer::Completer;
 use crate::tree_view::TreeView;
 
+// Layout chunk indices match the number of constraints provided to Layout::split.
+#[allow(clippy::indexing_slicing)]
 pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
     let size = frame.area();
 
@@ -71,6 +73,8 @@ fn render_tree_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
 }
 
 #[allow(clippy::too_many_lines)]
+// Layout chunk indices match the number of constraints provided to Layout::split.
+#[allow(clippy::indexing_slicing)]
 fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
     let active_kiron_key = app.active_kiron_for_cursor();
     let has_kiron = active_kiron_key.is_some();
@@ -169,6 +173,8 @@ pub fn render_palette(frame: &mut ratatui::Frame, completer: &Completer, status_
 }
 
 /// Render a `TermBuf` into a ratatui frame area (direct buffer write).
+// col is bounded by `col >= cells.len()` break above; buf[(x,y)] is ratatui's own indexing.
+#[allow(clippy::indexing_slicing)]
 pub fn render_termbuf(frame: &mut ratatui::Frame<'_>, termbuf: &crate::termbuf::TermBuf, area: Rect) {
     let buf = frame.buffer_mut();
     for row in 0..area.height as usize {

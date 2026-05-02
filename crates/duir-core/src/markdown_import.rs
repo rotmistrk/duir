@@ -282,9 +282,15 @@ fn collapse_stack(stack: &mut Vec<(usize, TodoItem)>) {
         let mut i = stack.len();
         while i > 1 {
             i -= 1;
-            if stack[i].0 > stack[i - 1].0 {
+            let deeper = match (stack.get(i), stack.get(i.wrapping_sub(1))) {
+                (Some(cur), Some(prev)) => cur.0 > prev.0,
+                _ => false,
+            };
+            if deeper {
                 let (_, child) = stack.remove(i);
-                stack[i - 1].1.items.push(child);
+                if let Some(parent) = stack.get_mut(i.wrapping_sub(1)) {
+                    parent.1.items.push(child);
+                }
                 changed = true;
             }
         }
@@ -308,7 +314,7 @@ fn flush_headings_to_level(stack: &mut Vec<(usize, TodoItem)>, target_level: usi
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
+#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;

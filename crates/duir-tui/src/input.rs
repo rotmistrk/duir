@@ -282,7 +282,9 @@ fn complete_command_or_path(app: &mut App, reverse: bool) {
         } else {
             idx.map_or(0, |i| (i + 1) % completions.len())
         };
-        *buffer = format!("{cmd_prefix}{}", completions[next_idx]);
+        *buffer = completions
+            .get(next_idx)
+            .map_or_else(String::new, |c| format!("{cmd_prefix}{c}"));
     } else {
         app.completer.update(buffer);
         let completion = if reverse {
@@ -397,7 +399,9 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
                 } = app.state
                 {
                     *history_index = Some(idx);
-                    buffer.clone_from(&app.command_history[idx]);
+                    if let Some(entry) = app.command_history.get(idx) {
+                        buffer.clone_from(entry);
+                    }
                     app.completer.update(buffer);
                 }
             }
@@ -412,7 +416,9 @@ fn handle_command_key(app: &mut App, key: KeyEvent) -> bool {
                 if let Some(idx) = *history_index {
                     if idx + 1 < app.command_history.len() {
                         *history_index = Some(idx + 1);
-                        buffer.clone_from(&app.command_history[idx + 1]);
+                        if let Some(entry) = app.command_history.get(idx + 1) {
+                            buffer.clone_from(entry);
+                        }
                     } else {
                         *history_index = None;
                         buffer.clear();

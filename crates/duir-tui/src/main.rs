@@ -120,4 +120,5 @@ fn main() -> io::Result<()> {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)] // Tests: indices are controlled by test setup
 mod tests;

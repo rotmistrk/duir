@@ -132,9 +132,9 @@ fn render_help_line(line: &str) -> Line<'_> {
 fn render_table_row(line: &str) -> Line<'_> {
     let cells: Vec<&str> = line.split('|').collect();
     // cells[0] is empty (before first |), cells[1] is key, cells[2] is action
-    if cells.len() >= 3 {
-        let key = cells[1].trim();
-        let action = cells[2].trim();
+    if let (Some(key_cell), Some(action_cell)) = (cells.get(1), cells.get(2)) {
+        let key = key_cell.trim();
+        let action = action_cell.trim();
         let key_width = 22;
         Line::from(vec![
             Span::styled(format!("  {key:<key_width$}"), Style::default().fg(Color::Green)),

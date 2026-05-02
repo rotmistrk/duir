@@ -2,6 +2,9 @@ use duir_core::NodeId;
 
 use super::{ActiveKiron, App, PendingResponse, StatusLevel};
 
+// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
+// path slicing is guarded by length checks.
+#[allow(clippy::indexing_slicing)]
 impl App {
     /// Mark or disable a kiron on the current node.
     pub(crate) fn cmd_kiron(&mut self, parts: &[&str]) {

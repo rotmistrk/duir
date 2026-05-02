@@ -4,6 +4,8 @@ use ratatui::text::{Line, Span};
 use crate::syntax::SyntaxHighlighter;
 
 /// Highlight markdown content with optional syntax highlighting for fenced code blocks.
+// All raw_lines[i] accesses are guarded by `while i < raw_lines.len()` loop bounds.
+#[allow(clippy::indexing_slicing)]
 pub fn highlight_lines_with_syntax(
     content: &str,
     cursor_row: usize,
@@ -39,6 +41,8 @@ pub fn highlight_lines_with_syntax(
 }
 
 /// Process a fenced code block starting at `start`, returning the next line index.
+// All raw_lines[] accesses are guarded by bounds checks or loop invariants.
+#[allow(clippy::indexing_slicing)]
 fn process_code_block(
     raw_lines: &[&str],
     start: usize,
@@ -129,6 +133,9 @@ fn owned_line(text: &str, style: Style) -> Line<'static> {
 
 /// Insert a reversed cursor character into an already-styled line.
 /// Preserves all existing styling — only modifies the character at `cursor_col`.
+// Char slicing is safe: col is clamped to chars.len() before use.
+// spans[0] is guarded by spans.len() == 1 check.
+#[allow(clippy::indexing_slicing)]
 fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Line<'static> {
     let rev = Style::default().add_modifier(Modifier::REVERSED);
 
@@ -413,6 +420,7 @@ fn peek_pos(chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>, default:
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)] // Tests: indices are controlled by test setup
 mod tests {
     use super::*;
 

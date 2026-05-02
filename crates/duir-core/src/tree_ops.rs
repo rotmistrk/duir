@@ -150,7 +150,8 @@ pub fn promote(file: &mut TodoFile, path: &TreePath) -> Result<TreePath> {
         return Err(OmelaError::InvalidPath(path.clone()));
     }
     let item = remove_item(file, path)?;
-    let parent_path: TreePath = path[..path.len() - 1].to_vec();
+    let (_, parent_slice) = path.split_last().ok_or_else(|| OmelaError::InvalidPath(path.clone()))?;
+    let parent_path: TreePath = parent_slice.to_vec();
     add_sibling(file, &parent_path, item)?;
     let mut new_path = parent_path.clone();
     if let Some(last) = new_path.last_mut() {
@@ -213,7 +214,7 @@ pub fn find_node_path(file: &TodoFile, node_id: &NodeId) -> Option<TreePath> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
+#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use crate::model::TodoFile;

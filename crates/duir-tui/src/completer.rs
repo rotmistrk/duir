@@ -40,7 +40,7 @@ impl Completer {
         }
         let idx = self.selected.map_or(0, |i| (i + 1) % self.matches.len());
         self.selected = Some(idx);
-        Some(self.matches[idx])
+        self.matches.get(idx).copied()
     }
 
     /// Cycle to previous match.
@@ -52,7 +52,7 @@ impl Completer {
             if i == 0 { self.matches.len() - 1 } else { i - 1 }
         });
         self.selected = Some(idx);
-        Some(self.matches[idx])
+        self.matches.get(idx).copied()
     }
 
     /// Reset selection (e.g., when user types a character).

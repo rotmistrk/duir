@@ -83,7 +83,7 @@ const fn pct(checked: usize, total: usize) -> u8 {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used)]
+#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 

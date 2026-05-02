@@ -111,7 +111,7 @@ fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u
             match reader.read(&mut buf) {
                 Ok(0) | Err(_) => break,
                 Ok(n) => {
-                    if tx.send(buf[..n].to_vec()).is_err() {
+                    if tx.send(buf.get(..n).unwrap_or(&[]).to_vec()).is_err() {
                         break;
                     }
                 }

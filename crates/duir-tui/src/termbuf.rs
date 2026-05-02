@@ -73,6 +73,8 @@ impl TermBuf {
     }
 
     /// Resize the buffer. Preserves content where possible.
+    // Grid indexing is safe: r < copy_rows <= self.rows, copy_cols <= self.cols.
+    #[allow(clippy::indexing_slicing)]
     pub fn resize(&mut self, cols: usize, rows: usize) {
         let mut new_grid = vec![vec![Cell::default(); cols]; rows];
         let copy_rows = self.rows.min(rows);
@@ -88,6 +90,8 @@ impl TermBuf {
     }
 
     /// Get a row for rendering. Negative offsets read from scrollback.
+    // Grid/scrollback indices are clamped to valid ranges via .min().
+    #[allow(clippy::indexing_slicing)]
     pub fn visible_row(&self, screen_row: usize) -> &[Cell] {
         if self.scroll_offset == 0 {
             return &self.grid[screen_row.min(self.rows - 1)];
@@ -142,6 +146,8 @@ impl TermBuf {
         }
     }
 
+    // row is checked against self.rows before indexing.
+    #[allow(clippy::indexing_slicing)]
     fn clear_row(&mut self, row: usize) {
         if row < self.rows {
             self.grid[row] = vec![Cell::default(); self.cols];
@@ -155,6 +161,9 @@ thread_local! {
         std::cell::Cell::new(vte::Parser::new());
 }
 
+// Grid indexing is bounded by cursor_row < self.rows and cursor_col < self.cols checks.
+// params[0] is from vte parser which always provides at least one element per param group.
+#[allow(clippy::indexing_slicing)]
 impl vte::Perform for TermBuf {
     fn print(&mut self, c: char) {
         if self.cursor_col >= self.cols {
@@ -221,6 +230,8 @@ impl vte::Perform for TermBuf {
     }
 }
 
+// Grid/params indexing is bounded by cursor bounds checks and loop invariants.
+#[allow(clippy::indexing_slicing)]
 impl TermBuf {
     const fn cursor_up(&mut self, n: usize) {
         self.cursor_row = self.cursor_row.saturating_sub(n);
@@ -436,6 +447,8 @@ const fn ansi_bright_color(n: u16) -> Color {
 }
 
 #[allow(clippy::cast_possible_truncation)]
+// params[*i] accesses are guarded by `*i >= params.len()` / `*i + 2 < params.len()` checks.
+#[allow(clippy::indexing_slicing)]
 fn parse_extended_color(params: &[u16], i: &mut usize) -> Option<Color> {
     if *i >= params.len() {
         return None;
@@ -484,9 +497,10 @@ pub fn extract_last_output(tb: &TermBuf) -> String {
     let trimmed = trim_trailing_empty(lines);
     // Scan backward for the last prompt line.
     for i in (0..trimmed.len()).rev() {
-        if is_prompt_line(&trimmed[i]) {
-            let output = &trimmed[i + 1..];
-            return output.join("\n");
+        if let Some(line) = trimmed.get(i)
+            && is_prompt_line(line)
+        {
+            return trimmed.get(i + 1..).unwrap_or(&[]).join("\n");
         }
     }
     trimmed.join("\n")
@@ -522,6 +536,7 @@ fn row_to_string(row: &[Cell]) -> String {
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
+#[allow(clippy::indexing_slicing)] // Tests: indices are controlled by test setup
 mod tests {
     use ratatui::style::Color;
 

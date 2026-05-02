@@ -602,7 +602,7 @@ impl NoteEditor<'_> {
                     .history_index
                     .map_or(self.command_history.len() - 1, |i| i.saturating_sub(1));
                 self.history_index = Some(idx);
-                let entry = self.command_history[idx].clone();
+                let entry = self.command_history.get(idx).cloned().unwrap_or_default();
                 entry
                     .strip_prefix('/')
                     .unwrap_or(&entry)
@@ -613,7 +613,7 @@ impl NoteEditor<'_> {
                 if let Some(idx) = self.history_index {
                     if idx + 1 < self.command_history.len() {
                         self.history_index = Some(idx + 1);
-                        let entry = self.command_history[idx + 1].clone();
+                        let entry = self.command_history.get(idx + 1).cloned().unwrap_or_default();
                         entry
                             .strip_prefix('/')
                             .unwrap_or(&entry)
@@ -773,8 +773,7 @@ impl NoteEditor<'_> {
         let mut new_lines = lines.clone();
 
         for i in start..=end {
-            if i < new_lines.len() {
-                let old = &lines[i];
+            if let (Some(old), Some(slot)) = (lines.get(i), new_lines.get_mut(i)) {
                 let new = if global {
                     re.replace_all(old, replacement).to_string()
                 } else {
@@ -782,7 +781,7 @@ impl NoteEditor<'_> {
                 };
                 if *old != new {
                     count += 1;
-                    new_lines[i] = new;
+                    *slot = new;
                 }
             }
         }
@@ -1155,12 +1154,12 @@ fn parse_range(range: &str, cursor: usize, total: usize) -> Option<(usize, usize
     let parts: Vec<&str> = range.splitn(2, ',').collect();
     match parts.len() {
         1 => {
-            let addr = parse_address(parts[0].trim(), cursor, total)?;
+            let addr = parse_address(parts.first()?.trim(), cursor, total)?;
             Some((addr, addr))
         }
         2 => {
-            let start = parse_address(parts[0].trim(), cursor, total)?;
-            let end = parse_address(parts[1].trim(), cursor, total)?;
+            let start = parse_address(parts.first()?.trim(), cursor, total)?;
+            let end = parse_address(parts.get(1)?.trim(), cursor, total)?;
             Some((start, end))
         }
         _ => None,
@@ -1210,8 +1209,8 @@ fn parse_substitute(s: &str) -> Option<(String, String, String)> {
     if parts.len() < 2 {
         return None;
     }
-    let pattern = parts[0].to_owned();
-    let replacement = parts[1].to_owned();
+    let pattern = (*parts.first()?).to_owned();
+    let replacement = (*parts.get(1)?).to_owned();
     let flags = parts.get(2).unwrap_or(&"").to_string();
     Some((pattern, replacement, flags))
 }

@@ -1,6 +1,6 @@
 //! Integration tests for tree operations — verifying data integrity after mutations.
 
-#![allow(clippy::unwrap_used, clippy::assigning_clones)]
+#![allow(clippy::unwrap_used, clippy::assigning_clones, clippy::indexing_slicing)]
 
 use duir_core::model::{Completion, TodoFile, TodoItem};
 use duir_core::storage::TodoStorage;
