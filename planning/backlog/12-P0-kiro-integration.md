@@ -71,10 +71,7 @@ Send node content to kiro as a prompt, capture response as a new sibling.
   - Note: full response text
   - Mark as "kiro response" (visual indicator: 🤖?)
 
-**Alternative capture approach:**
-- Named pipe (like kairn's KAIRN_CAPTURE)
-- Set `DUIR_CAPTURE` env var in the PTY
-- Kiro output redirected to pipe → duir reads and creates node
+****
 
 ### 12.003 — MCP Server
 
@@ -118,30 +115,3 @@ Expose the kiro subtree as MCP tools for Kiro to use as "memory".
 kairn project at `/home/rotmistr/Workplace/kairn/main/`:
 - `src/tab/shell.rs` — PtyTab: spawn, poll, write, resize
 - `src/termbuf.rs` — TermBuf: VTE-based terminal grid
-- `src/capture.rs` — Named pipe capture mechanism
-
-## Execution Plan
-
-1. **Story 12.001** — PTY embedding (can be built independently)
-   - Port PtyTab and TermBuf from kairn
-   - Add KiroTerminal to FocusState
-   - Render terminal grid in note pane area
-   - Toggle with :kiro / Ctrl+K
-
-2. **Story 12.002** — Prompt/Response (depends on 12.001)
-   - Ctrl+Enter sends node content to PTY
-   - Response detection and node creation
-   - Visual indicators for sent/response nodes
-
-3. **Story 12.003** — MCP Server (can be built independently)
-   - Define MCP tool schemas
-   - Implement tool handlers against duir's tree model
-   - Wire into kiro-cli's MCP client
-
-## Notes
-
-- Stories 12.001 and 12.003 can be built in parallel
-- Story 12.002 depends on 12.001
-- The MCP server is the most architecturally novel part
-- Consider: should MCP server be a separate binary or embedded?
-  Embedded is simpler but couples the lifecycle
