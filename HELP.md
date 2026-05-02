@@ -55,7 +55,7 @@ Tab completes commands. Tab also completes file paths for file commands.
 | `:qa` / `:q!` | Quit |
 | `:e <name>` | New empty file |
 | `:o <path>` | Open file (add as top-level tree) |
-| `:open <file>` | Open file (auto-detect .md/.json) |
+| `:open <file>` | Open file (auto-detect .md/.json/.todo) |
 | `:import <file.md>` | Import markdown under current item |
 | `:export [file.md]` | Export subtree as markdown |
 | `:export [file.docx]` | Export subtree as Word document |
@@ -63,6 +63,8 @@ Tab completes commands. Tab also completes file paths for file commands.
 | `:saveas <name>` | Save as todo JSON and switch to it |
 
 All file commands accept `s3://` paths (e.g. `:open s3://bucket/file.todo.json`).
+
+Legacy Qt ToDo `.todo` XML files are auto-detected and imported by `:open`.
 
 ### Tree Operations
 

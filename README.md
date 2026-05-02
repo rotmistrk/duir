@@ -16,6 +16,9 @@ Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 - **Files**: multi-file, autosave, JSON storage, YAML export, S3 support, path completion
 - **Config**: XDG-compliant, project-local `.duir/`, configurable autosave interval
 - **Clipboard**: system clipboard via OSC 52 (works over SSH)
+- **Kiro Integration**: embedded AI terminal (kiro-cli), prompt/response flow, MCP server
+- **Legacy Import**: Qt ToDo `.todo` XML files
+- **Stable Identity**: FileId + NodeId for corruption-proof tree operations
 - **Self-contained**: single 7MB binary, all resources embedded
 
 ## Install
@@ -70,11 +73,37 @@ duir s3://my-bucket/todos/work.todo.json
 
 Credentials use the standard AWS chain (env vars, `~/.aws/credentials`, instance role). Tab completion lists buckets and objects.
 
+## Kiro Integration
+
+Embed kiro-cli as an AI planning assistant:
+
+```
+:kiron              Mark node as AI session
+:kiro start         Launch kiro-cli in embedded terminal
+Ctrl+T              Toggle Note/Kiro tabs
+Ctrl+Enter          Send node as prompt to kiro
+```
+
+Kiro can read and write to the subtree via MCP (Model Context Protocol).
+Configure in config.toml:
+
+```toml
+[kiro]
+command = "kiro-cli"
+args = ["chat", "--resume"]
+```
+
+## Legacy Import
+
+```
+:open file.todo     Import Qt ToDo XML files
+```
+
 ## Project Structure
 
 ```
 crates/
-  duir-core/    — data model, storage, crypto, markdown
+  duir-core/    — data model, storage, crypto, markdown, mcp_server, legacy_import
   duir-tui/     — terminal UI (ratatui)
 planning/       — epics, stories, tasks
 ```
@@ -82,7 +111,7 @@ planning/       — epics, stories, tasks
 ## Tests
 
 ```sh
-make check    # fmt + clippy + 201 tests
+make check    # fmt + clippy + 239 tests
 ```
 
 ## License
@@ -96,4 +125,3 @@ Future ideas (not currently planned):
 - **HTML preview**: `:preview` command to render note as HTML and open in system browser
 - **PDF export**: via the same intermediate representation as docx
 - **Collaborative editing**: CRDT-based real-time sync
-
