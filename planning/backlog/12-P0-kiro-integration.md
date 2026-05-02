@@ -253,9 +253,45 @@ KiroTerminal {
 2. **12.003** — MCP server (parallel with 12.002)
 3. **12.002** — Prompt/Response flow (depends on 12.001)
 
-## Pre-requisites to Check
+## Kiro-CLI Research Results (v1.29.5)
 
-- [ ] Does `kiro-cli` support session persistence? How?
-- [ ] Does `kiro-cli` support MCP server config via CLI/env?
-- [ ] What are the actual trust/confirmation prompt patterns in kiro?
-- [ ] Kiro command template should be in user config (XDG)
+### Session Persistence
+- `--resume` resumes most recent session for current cwd
+- `--resume-picker` interactive picker for cwd sessions
+- **NO `--session-id` flag** — cannot resume specific UUID
+- Sessions stored at `~/.kiro/sessions/cli/<UUID>.json` + `.jsonl`
+- Sessions are CWD-scoped
+- **Workaround**: Set cwd to a kiron-specific directory so `--resume`
+  always picks up the right session. Each kiron gets its own cwd.
+
+### MCP Configuration
+- Global config: `~/.kiro/settings/mcp.json`
+- Format: `{"mcpServers": {"name": {"command": "...", "args": [...]}}}`
+- CLI: `kiro-cli mcp add --name X --command Y --args Z --scope global`
+- Per-project: `.kiro/` directory with project-specific config
+- Agents can include MCP via `includeMcpJson: true`
+
+### Useful Flags
+- `--trust-all-tools` — skip tool approval prompts
+- `--trust-tools <names>` — trust specific tools
+- `--no-interactive` — no user input expected
+- `--require-mcp-startup` — fail if MCP servers don't start
+- `--agent <name>` — use specific agent profile
+- `--classic` / `--legacy-ui` — legacy terminal UI
+
+### Config Template (revised)
+```toml
+[kiro]
+command = "kiro-cli"
+args = ["chat", "--resume"]
+# Each kiron gets a unique cwd so --resume picks the right session
+# trust_all_tools = false  # set true to skip confirmations
+```
+
+### MCP Integration Strategy
+1. On `:kiro start`, duir writes MCP config to a temp `.kiro/` dir
+2. Sets that dir as cwd for the kiro-cli process
+3. `--resume` will find the right session (cwd-scoped)
+4. MCP server binary: `duir --mcp-server --kiron-id <UUID>`
+   (separate process, stdio transport, spawned by duir alongside PTY)
+

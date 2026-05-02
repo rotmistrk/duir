@@ -8,6 +8,19 @@ pub enum Completion {
     Partial,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NodeType {
+    Kiron,
+    Prompt,
+    Response,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KironMeta {
+    pub session_id: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
     pub title: String,
@@ -21,6 +34,10 @@ pub struct TodoItem {
     pub note: String,
     #[serde(default)]
     pub items: Vec<Self>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_type: Option<NodeType>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kiron: Option<KironMeta>,
     /// If set, this node's children and note are encrypted.
     /// The cipher text contains the serialized children + note.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -63,6 +80,8 @@ impl TodoItem {
             folded: false,
             note: String::new(),
             items: Vec::new(),
+            node_type: None,
+            kiron: None,
             cipher: None,
             unlocked: false,
         }
@@ -78,6 +97,12 @@ impl TodoItem {
     #[must_use]
     pub const fn is_locked(&self) -> bool {
         self.cipher.is_some() && !self.unlocked
+    }
+
+    /// Returns true if this node is a Kiron session node.
+    #[must_use]
+    pub const fn is_kiron(&self) -> bool {
+        matches!(self.node_type, Some(NodeType::Kiron))
     }
 }
 
