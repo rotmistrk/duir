@@ -1,5 +1,28 @@
 use serde::{Deserialize, Serialize};
 
+/// Stable node identity — persisted, survives tree mutations.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct NodeId(pub String);
+
+impl NodeId {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(uuid::Uuid::new_v4().to_string())
+    }
+}
+
+impl Default for NodeId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl std::fmt::Display for NodeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Completion {
     #[default]
@@ -23,6 +46,8 @@ pub struct KironMeta {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
+    #[serde(default = "NodeId::new")]
+    pub id: NodeId,
     pub title: String,
     #[serde(default)]
     pub completed: Completion,
@@ -74,6 +99,7 @@ impl TodoItem {
     #[must_use]
     pub fn new(title: &str) -> Self {
         Self {
+            id: NodeId::new(),
             title: title.to_owned(),
             completed: Completion::default(),
             important: false,
@@ -125,5 +151,27 @@ mod tests {
         assert_eq!(parsed.items.len(), 1);
         assert_eq!(parsed.items[0].items.len(), 1);
         assert_eq!(parsed.items[0].items[0].title, "Subtask 1.1");
+    }
+
+    #[test]
+    fn node_id_unique() {
+        let a = TodoItem::new("A");
+        let b = TodoItem::new("B");
+        assert_ne!(a.id, b.id);
+    }
+
+    #[test]
+    fn node_id_serialization_roundtrip() {
+        let item = TodoItem::new("persist me");
+        let json = serde_json::to_string(&item).expect("serialize");
+        let parsed: TodoItem = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed.id, item.id);
+    }
+
+    #[test]
+    fn node_id_legacy_compat() {
+        let json = r#"{"title":"old item"}"#;
+        let parsed: TodoItem = serde_json::from_str(json).expect("deserialize");
+        assert!(!parsed.id.0.is_empty());
     }
 }

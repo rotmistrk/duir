@@ -5,6 +5,10 @@ use duir_core::stats::compute_stats;
 use duir_core::tree_ops::TreePath;
 use duir_core::{Completion, TodoFile, TodoItem};
 
+/// Stable file identity — monotonic, never reused, survives reorder/close.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct FileId(pub u64);
+
 /// An active kiron session: PTY + optional MCP server state.
 pub struct ActiveKiron {
     pub pty: crate::pty_tab::PtyTab,
@@ -28,6 +32,8 @@ pub struct TreeRow {
     pub stats_text: String,
     pub is_file_root: bool,
     pub file_index: usize,
+    #[allow(dead_code)]
+    pub file_id: FileId,
     pub encrypted: bool,
     pub locked: bool,
     pub has_encrypted_children: bool,
@@ -37,6 +43,7 @@ pub struct TreeRow {
 /// Loaded file with its data and metadata.
 #[derive(Debug)]
 pub struct LoadedFile {
+    pub id: FileId,
     pub name: String,
     pub data: TodoFile,
     pub modified: bool,
@@ -94,6 +101,7 @@ pub struct PendingResponse {
 #[allow(clippy::struct_excessive_bools)]
 pub struct App {
     pub files: Vec<LoadedFile>,
+    pub next_file_id: u64,
     pub rows: Vec<TreeRow>,
     pub cursor: usize,
     pub scroll_offset: usize,
@@ -127,6 +135,7 @@ impl App {
     pub fn new() -> Self {
         Self {
             files: Vec::new(),
+            next_file_id: 0,
             rows: Vec::new(),
             cursor: 0,
             scroll_offset: 0,
@@ -154,8 +163,11 @@ impl App {
     }
 
     pub fn add_file(&mut self, name: String, data: TodoFile) {
+        let id = FileId(self.next_file_id);
+        self.next_file_id += 1;
         let autosave = self.autosave_global;
         self.files.push(LoadedFile {
+            id,
             name,
             data,
             modified: false,
@@ -166,6 +178,23 @@ impl App {
 
     pub fn add_empty_file(&mut self, name: &str) {
         self.add_file(name.to_owned(), TodoFile::new(name));
+    }
+
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn file_by_id(&self, id: FileId) -> Option<&LoadedFile> {
+        self.files.iter().find(|f| f.id == id)
+    }
+
+    #[allow(dead_code)]
+    pub fn file_by_id_mut(&mut self, id: FileId) -> Option<&mut LoadedFile> {
+        self.files.iter_mut().find(|f| f.id == id)
+    }
+
+    #[must_use]
+    #[allow(dead_code)]
+    pub fn file_index_for_id(&self, id: FileId) -> Option<usize> {
+        self.files.iter().position(|f| f.id == id)
     }
 
     /// Rebuild the flattened row list from all loaded files.
@@ -196,6 +225,7 @@ impl App {
                 stats_text: String::new(),
                 is_file_root: true,
                 file_index: fi,
+                file_id: file.id,
                 encrypted: false,
                 locked: false,
                 has_encrypted_children: false,
@@ -240,6 +270,7 @@ impl App {
             stats_text,
             is_file_root: false,
             file_index,
+            file_id: self.files[file_index].id,
             encrypted: item.is_encrypted(),
             locked: item.is_locked(),
             has_encrypted_children: has_enc_children,
@@ -1888,4 +1919,32 @@ fn find_available_path(base: &str) -> std::path::PathBuf {
         }
     }
     std::path::PathBuf::from(format!("{stem}.99.{ext}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_id_unique() {
+        let mut app = App::new();
+        app.add_empty_file("a");
+        app.add_empty_file("b");
+        assert_ne!(app.files[0].id, app.files[1].id);
+    }
+
+    #[test]
+    fn file_id_survives_close() {
+        let mut app = App::new();
+        app.add_empty_file("a");
+        app.add_empty_file("b");
+        app.add_empty_file("c");
+        let id_a = app.files[0].id;
+        let id_c = app.files[2].id;
+        // Remove middle file
+        app.files.remove(1);
+        app.rebuild_rows();
+        assert_eq!(app.files[0].id, id_a);
+        assert_eq!(app.files[1].id, id_c);
+    }
 }

@@ -17,6 +17,6 @@ pub mod tree_ops;
 
 pub use error::{OmelaError, Result};
 pub use file_storage::FileStorage;
-pub use model::{Completion, KironMeta, NodeType, TodoFile, TodoItem};
+pub use model::{Completion, KironMeta, NodeId, NodeType, TodoFile, TodoItem};
 pub use storage::TodoStorage;
 pub use tree_ops::TreePath;
