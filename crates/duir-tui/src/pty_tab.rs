@@ -120,3 +120,81 @@ fn spawn_reader_thread(mut reader: Box<dyn Read + Send>) -> mpsc::Receiver<Vec<u
     });
     rx
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::*;
+    use crate::termbuf::extract_text;
+
+    #[test]
+    fn pty_spawn_echo() {
+        let dir = std::env::current_dir().unwrap();
+        let mut pty = PtyTab::spawn("echo", &["hello world"], 80, 24, &dir).unwrap();
+        let start = Instant::now();
+        while !pty.finished && start.elapsed() < Duration::from_secs(3) {
+            pty.poll();
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let text = extract_text(&pty.termbuf);
+        assert!(text.contains("hello world"), "Expected 'hello world' in: {text}");
+    }
+
+    #[test]
+    fn pty_spawn_multiline() {
+        let dir = std::env::current_dir().unwrap();
+        let mut pty = PtyTab::spawn("printf", &["line1\\nline2\\nline3"], 80, 24, &dir).unwrap();
+        let start = Instant::now();
+        while !pty.finished && start.elapsed() < Duration::from_secs(3) {
+            pty.poll();
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        let text = extract_text(&pty.termbuf);
+        assert!(text.contains("line1"), "Missing line1 in: {text}");
+        assert!(text.contains("line2"), "Missing line2 in: {text}");
+        assert!(text.contains("line3"), "Missing line3 in: {text}");
+    }
+
+    #[test]
+    fn pty_resize() {
+        let dir = std::env::current_dir().unwrap();
+        let mut pty = PtyTab::spawn("echo", &["test"], 80, 24, &dir).unwrap();
+        pty.resize(40, 10);
+        assert_eq!(pty.termbuf.cols(), 40);
+        assert_eq!(pty.termbuf.rows(), 10);
+    }
+
+    #[test]
+    fn pty_finished_on_exit() {
+        let dir = std::env::current_dir().unwrap();
+        let mut pty = PtyTab::spawn("true", &[], 80, 24, &dir).unwrap();
+        let start = Instant::now();
+        while !pty.finished && start.elapsed() < Duration::from_secs(3) {
+            pty.poll();
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(pty.finished, "PTY should be finished after 'true' exits");
+    }
+
+    #[test]
+    fn pty_last_output_time_updates() {
+        let dir = std::env::current_dir().unwrap();
+        let mut pty = PtyTab::spawn("echo", &["hi"], 80, 24, &dir).unwrap();
+        let before = pty.last_output_time;
+        std::thread::sleep(Duration::from_millis(100));
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(3) {
+            pty.poll();
+            if pty.last_output_time != before {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert_ne!(
+            pty.last_output_time, before,
+            "last_output_time should update after poll receives data"
+        );
+    }
+}
