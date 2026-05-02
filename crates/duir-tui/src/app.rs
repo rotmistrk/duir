@@ -1040,35 +1040,17 @@ impl App {
     }
 
     fn cmd_write(&mut self, parts: &[&str], storage: &dyn duir_core::TodoStorage) {
-        // :write <path> — write current file as copy (doesn't switch)
-        if let Some(&path_str) = parts.get(1) {
+        // :write <name> — save todo JSON to a different name (doesn't switch)
+        if let Some(&name) = parts.get(1) {
             if let Some(row) = self.current_row().cloned() {
                 let fi = row.file_index;
-                let path = std::path::Path::new(path_str);
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("json");
-                match ext {
-                    "md" => {
-                        let md = duir_core::markdown_export::export_file(&self.files[fi].data);
-                        match std::fs::write(path, &md) {
-                            Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
-                            Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
-                        }
-                    }
-                    "docx" => match duir_core::docx_export::export_docx(&self.files[fi].data) {
-                        Ok(bytes) => match std::fs::write(path, bytes) {
-                            Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
-                            Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
-                        },
-                        Err(e) => self.set_status(&format!("DOCX error: {e}"), StatusLevel::Error),
-                    },
-                    _ => match storage.save(path_str, &self.files[fi].data) {
-                        Ok(()) => self.set_status(&format!("Written to {path_str}"), StatusLevel::Success),
-                        Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
-                    },
+                match storage.save(name, &self.files[fi].data) {
+                    Ok(()) => self.set_status(&format!("Written to {name}"), StatusLevel::Success),
+                    Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
                 }
             }
         } else {
-            "Usage: :write <path>".clone_into(&mut self.status_message);
+            "Usage: :write <name>".clone_into(&mut self.status_message);
         }
     }
 
