@@ -134,8 +134,10 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // F5: send to kiro (works from ANY panel, as long as kiron is active)
-    if key.code == KeyCode::F(5) && app.active_kiron_for_cursor().is_some() {
+    // F5 or macOS ∞ (Opt+5): send to kiro (works from ANY panel)
+    if (matches!(key.code, KeyCode::F(5)) || matches!(key.code, KeyCode::Char('∞')))
+        && app.active_kiron_for_cursor().is_some()
+    {
         if app.is_note_focused() {
             app.save_editor();
             app.state = FocusState::Tree;
@@ -156,18 +158,25 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // F2: focus tree (leave right panel as-is)
-    if key.code == KeyCode::F(2) {
+    // F2 or Alt+2 or macOS ™ (Opt+2): focus tree (leave right panel as-is)
+    if matches!(key.code, KeyCode::F(2))
+        || matches!(key.code, KeyCode::Char('2') if key.modifiers.contains(KeyModifiers::ALT))
+        || matches!(key.code, KeyCode::Char('™'))
+    {
         if app.is_note_focused() {
             app.save_editor();
         }
         app.state = FocusState::Tree;
-        // Don't touch kiro_tab_focused — preserve right panel state
         return true;
     }
 
-    // F3: focus note
-    if key.code == KeyCode::F(3) && !app.is_command_active() && !app.is_filter_active() {
+    // F3 or Alt+3 or macOS £ (Opt+3): focus note
+    if (matches!(key.code, KeyCode::F(3))
+        || matches!(key.code, KeyCode::Char('3') if key.modifiers.contains(KeyModifiers::ALT))
+        || matches!(key.code, KeyCode::Char('£')))
+        && !app.is_command_active()
+        && !app.is_filter_active()
+    {
         if !app.is_note_focused() {
             app.kiro_tab_focused = false;
             app.focus_note();
@@ -175,8 +184,12 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // F4: focus kiro (if active)
-    if key.code == KeyCode::F(4) && app.active_kiron_for_cursor().is_some() {
+    // F4 or Alt+4 or macOS ¢ (Opt+4): focus kiro (if active)
+    if (matches!(key.code, KeyCode::F(4))
+        || matches!(key.code, KeyCode::Char('4') if key.modifiers.contains(KeyModifiers::ALT))
+        || matches!(key.code, KeyCode::Char('¢')))
+        && app.active_kiron_for_cursor().is_some()
+    {
         if app.is_note_focused() {
             app.save_editor();
             app.state = FocusState::Tree;
