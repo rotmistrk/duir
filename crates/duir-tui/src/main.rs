@@ -145,7 +145,7 @@ fn run_loop(
                 (false, true) => format!(" Tree [/{}] ", app.filter_committed_text),
                 (false, false) => " Tree ".to_owned(),
             };
-            let tree_border_style = if app.is_tree_focused() || app.is_editing_title() {
+            let tree_border_style = if (app.is_tree_focused() && !app.kiro_tab_focused) || app.is_editing_title() {
                 Style::default().add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -156,10 +156,82 @@ fn run_loop(
                 .border_style(tree_border_style);
             frame.render_stateful_widget(TreeView::new().block(tree_block), content_chunks[0], app);
 
-            // Note pane
-            // Note pane (or Kiro terminal)
+            // Right panel: Note and/or Kiro terminal
             let active_kiron_key = app.active_kiron_for_cursor();
-            if let FocusState::Note { ref mut editor, .. } = app.state {
+            let has_kiron = active_kiron_key.is_some();
+            let right_focused = app.is_note_focused() || (app.kiro_tab_focused && app.is_tree_focused());
+
+            if has_kiron && !matches!(app.state, FocusState::Note { .. }) {
+                // Tab bar + content when kiron is active (and not editing note)
+                let right_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Length(1), Constraint::Min(3)])
+                    .split(content_chunks[1]);
+
+                // Tab bar
+                let note_tab = if app.kiro_tab_focused {
+                    Span::styled(" Note ", Style::default())
+                } else {
+                    Span::styled(
+                        " Note ",
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .add_modifier(Modifier::UNDERLINED),
+                    )
+                };
+                let kiro_tab = if app.kiro_tab_focused {
+                    Span::styled(
+                        " 🤖 Kiro ",
+                        Style::default()
+                            .add_modifier(Modifier::BOLD)
+                            .add_modifier(Modifier::UNDERLINED),
+                    )
+                } else {
+                    Span::styled(" 🤖 Kiro ", Style::default())
+                };
+                let tab_sep = Span::raw(" │ ");
+                let tab_hint = Span::styled("  Ctrl+T", Style::default().fg(Color::DarkGray));
+                let tab_bar = Line::from(vec![note_tab, tab_sep, kiro_tab, tab_hint]);
+                frame.render_widget(Paragraph::new(tab_bar), right_chunks[0]);
+
+                if app.kiro_tab_focused {
+                    if let Some(ref key) = active_kiron_key
+                        && let Some(kiron) = app.active_kirons.get_mut(key)
+                    {
+                        let border_style = if right_focused {
+                            Style::default().add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default()
+                        };
+                        let kiro_block = Block::default()
+                            .title(" 🤖 Kiro ")
+                            .borders(Borders::ALL)
+                            .border_style(border_style);
+                        let inner = kiro_block.inner(right_chunks[1]);
+                        // Resize PTY to match panel
+                        if kiron.pty.termbuf.cols() != inner.width as usize
+                            || kiron.pty.termbuf.rows() != inner.height as usize
+                        {
+                            kiron.pty.resize(inner.width, inner.height);
+                        }
+                        frame.render_widget(kiro_block, right_chunks[1]);
+                        render_termbuf(frame, &kiron.pty.termbuf, inner);
+                    }
+                } else {
+                    // Note tab selected
+                    let note_content = app.current_note();
+                    let note_block = Block::default().title(" Note ").borders(Borders::ALL);
+                    let lines = crate::markdown_view::highlight_lines_with_syntax(
+                        &note_content,
+                        usize::MAX,
+                        0,
+                        Some(&app.highlighter),
+                    );
+                    let paragraph = Paragraph::new(lines).block(note_block);
+                    frame.render_widget(paragraph, right_chunks[1]);
+                }
+            } else if let FocusState::Note { ref mut editor, .. } = app.state {
+                // Editing note (full panel, no tab bar)
                 let has_cmdline = matches!(
                     editor.mode,
                     crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
@@ -177,27 +249,10 @@ fn run_loop(
                     editor.set_block(" Note", true);
                     editor.render(frame, content_chunks[1], &app.highlighter);
                 }
-            } else if app.kiro_tab_focused
-                && let Some(ref key) = active_kiron_key
-                && let Some(kiron) = app.active_kirons.get(key)
-            {
-                // Render Kiro terminal
-                let kiro_block = Block::default()
-                    .title(" 🤖 Kiro ")
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().add_modifier(Modifier::BOLD));
-                let inner = kiro_block.inner(content_chunks[1]);
-                frame.render_widget(kiro_block, content_chunks[1]);
-                render_termbuf(frame, &kiron.pty.termbuf, inner);
             } else {
-                // Render note from model (with tab indicator if kiron active)
+                // Plain note view (no kiron active)
                 let note_content = app.current_note();
-                let title = if active_kiron_key.is_some() {
-                    " Note [Ctrl+T: 🤖 Kiro] "
-                } else {
-                    " Note "
-                };
-                let note_block = Block::default().title(title).borders(Borders::ALL);
+                let note_block = Block::default().title(" Note ").borders(Borders::ALL);
                 let lines = crate::markdown_view::highlight_lines_with_syntax(
                     &note_content,
                     usize::MAX,
