@@ -128,14 +128,14 @@ fn handle_overlay_input(app: &mut App, key: crossterm::event::KeyEvent) -> bool 
 /// Handle global key bindings (Ctrl+Enter, Ctrl+S, Ctrl+T, kiro routing, Esc from kiro).
 /// Returns true if the event was consumed.
 fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_dir: &PathBuf) -> bool {
-    // F11: toggle zoom on focused panel (works from ANY state)
-    if key.code == KeyCode::F(11) {
+    // F11 or macOS ∞ (Opt+5): toggle zoom
+    if matches!(key.code, KeyCode::F(11) | KeyCode::Char('∞')) {
         app.zoomed = !app.zoomed;
         return true;
     }
 
-    // F5 or macOS ∞ (Opt+5): send to kiro (works from ANY panel)
-    if (matches!(key.code, KeyCode::F(5)) || matches!(key.code, KeyCode::Char('∞')))
+    // F5 or « (macOS Opt+\): send to kiro (works from ANY panel)
+    if (matches!(key.code, KeyCode::F(5)) || matches!(key.code, KeyCode::Char('«')))
         && app.active_kiron_for_cursor().is_some()
     {
         if app.is_note_focused() {

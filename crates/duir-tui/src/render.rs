@@ -244,10 +244,11 @@ pub fn build_status_line(app: &App) -> Line<'_> {
         ])
     } else {
         let bold = Style::default().add_modifier(Modifier::BOLD);
-        let dim = Style::default().add_modifier(Modifier::DIM);
         let mut spans = vec![
             Span::styled(" q", bold),
             Span::raw("uit "),
+            Span::styled("e", bold),
+            Span::raw("dit "),
             Span::styled("n", bold),
             Span::raw("ew "),
             Span::styled("b", bold),
@@ -266,15 +267,9 @@ pub fn build_status_line(app: &App) -> Line<'_> {
             Span::raw("filter "),
             Span::styled("^S", bold),
             Span::raw("ave "),
-            Span::styled("F2", dim),
-            Span::raw("tree "),
-            Span::styled("F3", dim),
-            Span::raw("note "),
         ];
         if app.active_kiron_for_cursor().is_some() {
-            spans.push(Span::styled("F4", dim));
-            spans.push(Span::raw("kiro "));
-            spans.push(Span::styled("F5", dim));
+            spans.push(Span::styled("⏎", bold));
             spans.push(Span::raw("send "));
         }
         spans.extend_from_slice(&[Span::styled(":", bold), Span::raw("cmd "), Span::styled(":help", bold)]);

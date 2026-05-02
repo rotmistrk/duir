@@ -74,6 +74,13 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             true
         }
         (KeyCode::Enter, false) => {
+            // Enter: send to kiro if inside kiron subtree, otherwise no-op
+            if app.active_kiron_for_cursor().is_some() {
+                app.send_to_kiro();
+            }
+            true
+        }
+        (KeyCode::Char('e'), false) => {
             app.start_editing();
             true
         }

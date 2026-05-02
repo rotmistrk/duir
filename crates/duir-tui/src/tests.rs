@@ -1234,11 +1234,20 @@ fn space_toggles_completion() {
 }
 
 #[test]
-fn enter_starts_editing() {
+fn e_starts_editing() {
     let mut app = make_app_with_tree();
     app.cursor = 1;
-    input::handle_key(&mut app, key(KeyCode::Enter));
+    input::handle_key(&mut app, key(KeyCode::Char('e')));
     assert!(app.is_editing_title());
+}
+
+#[test]
+fn enter_sends_to_kiro_or_noop() {
+    let mut app = make_app_with_tree();
+    app.cursor = 1;
+    // Without active kiron, Enter is a no-op (not editing)
+    input::handle_key(&mut app, key(KeyCode::Enter));
+    assert!(!app.is_editing_title());
 }
 
 #[test]
