@@ -133,6 +133,8 @@ pub struct App {
     pub kiro_tab_focused: bool,
     /// Pending response captures awaiting idle timeout.
     pub pending_responses: Vec<PendingResponse>,
+    /// Zoom: show focused panel fullscreen with no border.
+    pub zoomed: bool,
 }
 
 impl App {
@@ -164,6 +166,7 @@ impl App {
             active_kirons: std::collections::HashMap::new(),
             kiro_tab_focused: false,
             pending_responses: Vec::new(),
+            zoomed: false,
         }
     }
 

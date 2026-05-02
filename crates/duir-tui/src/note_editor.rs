@@ -68,10 +68,10 @@ impl NoteEditor<'_> {
     }
 
     pub fn set_block(&mut self, title: &str, focused: bool) {
-        let border_style = if focused {
-            Style::default().add_modifier(Modifier::BOLD)
+        let border_type = if focused {
+            ratatui::widgets::BorderType::Double
         } else {
-            Style::default()
+            ratatui::widgets::BorderType::Plain
         };
         let mode_str = match self.mode {
             EditorMode::Normal => "NORMAL",
@@ -83,7 +83,7 @@ impl NoteEditor<'_> {
             Block::default()
                 .title(format!("{title} [{mode_str}]"))
                 .borders(Borders::ALL)
-                .border_style(border_style),
+                .border_type(border_type),
         );
     }
 

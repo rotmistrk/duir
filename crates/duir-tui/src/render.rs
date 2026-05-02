@@ -17,16 +17,26 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
         .constraints([Constraint::Min(3), Constraint::Length(1)])
         .split(size);
 
-    let content_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(100 - app.note_panel_pct),
-            Constraint::Percentage(app.note_panel_pct),
-        ])
-        .split(main_chunks[0]);
+    if app.zoomed {
+        // Fullscreen: show only the focused panel, no borders
+        let area = main_chunks[0];
+        if app.is_note_focused() || (app.kiro_tab_focused && app.is_tree_focused()) {
+            render_note_panel(frame, app, area);
+        } else {
+            render_tree_panel(frame, app, area);
+        }
+    } else {
+        let content_chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Percentage(100 - app.note_panel_pct),
+                Constraint::Percentage(app.note_panel_pct),
+            ])
+            .split(main_chunks[0]);
 
-    render_tree_panel(frame, app, content_chunks[0]);
-    render_note_panel(frame, app, content_chunks[1]);
+        render_tree_panel(frame, app, content_chunks[0]);
+        render_note_panel(frame, app, content_chunks[1]);
+    }
 
     // Status bar
     let status = build_status_line(app);
@@ -111,6 +121,11 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
             frame.render_widget(paragraph, area);
         }
     } else if let FocusState::Note { ref mut editor, .. } = app.state {
+        let title = if has_kiron {
+            " 📝 Note │ 🤖 Kiro  ^T "
+        } else {
+            " 📝 Note"
+        };
         let has_cmdline = matches!(
             editor.mode,
             crate::note_editor::EditorMode::Command | crate::note_editor::EditorMode::Search
@@ -120,12 +135,12 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Min(3), Constraint::Length(1)])
                 .split(area);
-            editor.set_block(" Note", true);
+            editor.set_block(title, true);
             editor.render(frame, note_chunks[0], &app.highlighter);
             let cmd_line = editor.status_line();
             frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
         } else {
-            editor.set_block(" Note", true);
+            editor.set_block(title, true);
             editor.render(frame, area, &app.highlighter);
         }
     } else {
