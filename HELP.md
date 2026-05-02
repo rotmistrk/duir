@@ -57,9 +57,10 @@ Tab completes commands. Tab also completes file paths for file commands.
 | `:o <path>` | Open file (add as top-level tree) |
 | `:open <file>` | Open file (auto-detect .md/.json) |
 | `:import <file.md>` | Import markdown under current item |
-| `:export [file.md]` | Export subtree (auto-names from title) |
-| `:write <path>` | Write copy (.md exports markdown) |
-| `:saveas <name>` | Save as new name and switch |
+| `:export [file.md]` | Export subtree as markdown |
+| `:export [file.docx]` | Export subtree as Word document |
+| `:write <name>` | Save copy as todo JSON (doesn't switch) |
+| `:saveas <name>` | Save as todo JSON and switch to it |
 
 ### Tree Operations
 
