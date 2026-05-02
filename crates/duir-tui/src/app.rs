@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use duir_core::mcp_server::McpMutation;
 use duir_core::stats::compute_stats;
 use duir_core::tree_ops::TreePath;
-use duir_core::{Completion, TodoFile, TodoItem};
+use duir_core::{Completion, NodeId, TodoFile, TodoItem};
 
 /// Stable file identity — monotonic, never reused, survives reorder/close.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,8 +60,8 @@ pub enum FocusState {
     },
     Note {
         editor: Box<crate::note_editor::NoteEditor<'static>>,
-        file_index: usize,
-        path: Vec<usize>,
+        file_id: FileId,
+        node_id: NodeId,
     },
     Command {
         buffer: String,
@@ -91,10 +91,10 @@ pub enum StatusLevel {
 /// A pending response capture: tracks which kiron PTY to monitor
 /// and which prompt node to insert the response after.
 pub struct PendingResponse {
-    pub kiron_fi: usize,
-    pub kiron_path: Vec<usize>,
-    pub prompt_fi: usize,
-    pub prompt_path: Vec<usize>,
+    pub kiron_file_id: FileId,
+    pub kiron_node_id: NodeId,
+    pub prompt_file_id: FileId,
+    pub prompt_node_id: NodeId,
     pub start_time: std::time::Instant,
 }
 
@@ -115,15 +115,15 @@ pub struct App {
     pub note_panel_pct: u16,
     pub pending_delete: bool,
     pub password_prompt: Option<crate::password::PasswordPrompt>,
-    pub passwords: std::collections::HashMap<(usize, Vec<usize>), String>,
+    pub passwords: std::collections::HashMap<(FileId, NodeId), String>,
     pub pending_crypto: Option<(String, crate::password::PasswordAction)>,
     pub completer: crate::completer::Completer,
-    pub editor_cache: std::collections::HashMap<(usize, Vec<usize>), crate::note_editor::NoteEditor<'static>>,
+    pub editor_cache: std::collections::HashMap<(FileId, NodeId), crate::note_editor::NoteEditor<'static>>,
     pub filter_committed_text: String,
     pub filter_committed_exclude: bool,
     pub highlighter: crate::syntax::SyntaxHighlighter,
-    /// Active kiron PTY sessions, keyed by (`file_index`, path).
-    pub active_kirons: std::collections::HashMap<(usize, Vec<usize>), ActiveKiron>,
+    /// Active kiron PTY sessions, keyed by (`FileId`, `NodeId`).
+    pub active_kirons: std::collections::HashMap<(FileId, NodeId), ActiveKiron>,
     /// Whether the Kiro tab is focused (vs Note tab) in the note panel.
     pub kiro_tab_focused: bool,
     /// Pending response captures awaiting idle timeout.
@@ -192,7 +192,6 @@ impl App {
     }
 
     #[must_use]
-    #[allow(dead_code)]
     pub fn file_index_for_id(&self, id: FileId) -> Option<usize> {
         self.files.iter().position(|f| f.id == id)
     }
@@ -321,18 +320,21 @@ impl App {
     pub fn save_editor(&mut self) {
         if let FocusState::Note {
             ref editor,
-            file_index: fi,
-            ref path,
+            file_id,
+            ref node_id,
         } = self.state
         {
             let content = editor.content();
-            let path = path.clone();
-            if path.is_empty() {
-                if fi < self.files.len() && self.files[fi].data.note != content {
+            let Some(fi) = self.file_index_for_id(file_id) else {
+                return;
+            };
+            if node_id.0.is_empty() {
+                // File-level note
+                if self.files[fi].data.note != content {
                     self.files[fi].data.note = content;
-                    self.mark_modified(fi, &path);
+                    self.mark_modified(fi, &[]);
                 }
-            } else if fi < self.files.len()
+            } else if let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, node_id)
                 && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 && item.note != content
             {
@@ -345,22 +347,26 @@ impl App {
     /// Reload the editor from the model (used after commands that modify the note
     /// while in Note state, like :collapse/:expand).
     pub fn reload_editor(&mut self) {
-        if let FocusState::Note {
-            ref mut editor,
-            file_index,
-            ref path,
+        let note = if let FocusState::Note {
+            file_id, ref node_id, ..
         } = self.state
         {
-            let note = if path.is_empty() {
-                self.files
-                    .get(file_index)
+            let fi = self.file_index_for_id(file_id);
+            if node_id.0.is_empty() {
+                fi.and_then(|i| self.files.get(i))
                     .map_or(String::new(), |f| f.data.note.clone())
             } else {
-                self.files
-                    .get(file_index)
-                    .and_then(|f| duir_core::tree_ops::get_item(&f.data, path))
-                    .map_or(String::new(), |item| item.note.clone())
-            };
+                fi.and_then(|i| {
+                    let file = self.files.get(i)?;
+                    let path = duir_core::tree_ops::find_node_path(&file.data, node_id)?;
+                    duir_core::tree_ops::get_item(&file.data, &path).map(|item| item.note.clone())
+                })
+                .unwrap_or_default()
+            }
+        } else {
+            return;
+        };
+        if let FocusState::Note { ref mut editor, .. } = self.state {
             **editor = crate::note_editor::NoteEditor::new(&note);
         }
     }
@@ -376,10 +382,16 @@ impl App {
         self.editor_cache.clear();
         if let Some(row) = self.current_row().cloned() {
             let note = self.current_note();
+            let node_id = if row.is_file_root || row.path.is_empty() {
+                NodeId(String::new())
+            } else {
+                duir_core::tree_ops::get_item(&self.files[row.file_index].data, &row.path)
+                    .map_or_else(|| NodeId(String::new()), |item| item.id.clone())
+            };
             self.state = FocusState::Note {
                 editor: Box::new(crate::note_editor::NoteEditor::new(&note)),
-                file_index: row.file_index,
-                path: row.path,
+                file_id: row.file_id,
+                node_id,
             };
         }
     }
@@ -475,13 +487,15 @@ impl App {
             }
             let fi = row.file_index;
             let path = row.path.clone();
+            let file_id = self.files[fi].id;
             if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
                 && !item.folded
                 && !item.items.is_empty()
             {
                 // If unlocked encrypted node, re-encrypt and forget password
                 if item.unlocked {
-                    let key = (fi, path.clone());
+                    let node_id = item.id.clone();
+                    let key = (file_id, node_id);
                     if let Some(pw) = self.passwords.get(&key) {
                         duir_core::crypto::encrypt_item(item, pw).ok();
                     }
@@ -913,11 +927,14 @@ impl App {
     fn save_current(&mut self, storage: &dyn duir_core::TodoStorage) {
         if let Some(row) = self.current_row().cloned() {
             let fi = row.file_index;
+            let file_id = self.files[fi].id;
             let pw_map: std::collections::HashMap<Vec<usize>, String> = self
                 .passwords
                 .iter()
-                .filter(|((f, _), _)| *f == fi)
-                .map(|((_, path), pw)| (path.clone(), pw.clone()))
+                .filter(|((fid, _), _)| *fid == file_id)
+                .filter_map(|((_, nid), pw)| {
+                    duir_core::tree_ops::find_node_path(&self.files[fi].data, nid).map(|path| (path, pw.clone()))
+                })
                 .collect();
 
             let file = &mut self.files[fi];
@@ -1224,21 +1241,17 @@ impl App {
             let fi = row.file_index;
             let item = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path);
             let already_encrypted = item.is_some_and(duir_core::TodoItem::is_encrypted);
+            let node_id = item.map_or_else(|| NodeId(String::new()), |it| it.id.clone());
+            let file_id = self.files[fi].id;
             let title = if already_encrypted {
                 "Change encryption password"
             } else {
                 "Encrypt subtree"
             };
             let action = if already_encrypted {
-                crate::password::PasswordAction::ChangePassword {
-                    file_index: fi,
-                    path: row.path,
-                }
+                crate::password::PasswordAction::ChangePassword { file_id, node_id }
             } else {
-                crate::password::PasswordAction::Encrypt {
-                    file_index: fi,
-                    path: row.path,
-                }
+                crate::password::PasswordAction::Encrypt { file_id, node_id }
             };
             self.password_prompt = Some(crate::password::PasswordPrompt::new(title, action));
         }
@@ -1259,8 +1272,9 @@ impl App {
                     self.set_status("Unlock first: press → and enter password", StatusLevel::Warning);
                     return;
                 }
+                let node_id = item.id.clone();
                 duir_core::crypto::strip_encryption(item);
-                self.passwords.remove(&(fi, row.path));
+                self.passwords.remove(&(self.files[fi].id, node_id));
                 self.files[fi].modified = true;
                 self.rebuild_rows();
                 self.set_status("Encryption removed", StatusLevel::Success);
@@ -1271,12 +1285,18 @@ impl App {
     /// Handle password prompt result.
     pub fn handle_password_result(&mut self, password: &str, action: crate::password::PasswordAction) {
         match action {
-            crate::password::PasswordAction::Encrypt { file_index, path } => {
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
+            crate::password::PasswordAction::Encrypt { file_id, node_id } => {
+                let Some(fi) = self.file_index_for_id(file_id) else {
+                    return;
+                };
+                let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &node_id) else {
+                    return;
+                };
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
                     match duir_core::crypto::encrypt_item(item, password) {
                         Ok(()) => {
-                            self.passwords.insert((file_index, path), password.to_owned());
-                            self.files[file_index].modified = true;
+                            self.passwords.insert((file_id, node_id), password.to_owned());
+                            self.files[fi].modified = true;
                             self.rebuild_rows();
                             self.set_status("Subtree encrypted", StatusLevel::Success);
                         }
@@ -1284,12 +1304,18 @@ impl App {
                     }
                 }
             }
-            crate::password::PasswordAction::Decrypt { file_index, path } => {
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
+            crate::password::PasswordAction::Decrypt { file_id, node_id } => {
+                let Some(fi) = self.file_index_for_id(file_id) else {
+                    return;
+                };
+                let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &node_id) else {
+                    return;
+                };
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
                     match duir_core::crypto::decrypt_item(item, password) {
                         Ok(()) => {
-                            self.passwords.insert((file_index, path), password.to_owned());
-                            self.files[file_index].modified = true;
+                            self.passwords.insert((file_id, node_id), password.to_owned());
+                            self.files[fi].modified = true;
                             self.rebuild_rows();
                             self.set_status("Subtree unlocked", StatusLevel::Success);
                         }
@@ -1297,13 +1323,18 @@ impl App {
                     }
                 }
             }
-            crate::password::PasswordAction::ChangePassword { file_index, path } => {
-                // Already decrypted — re-encrypt with new password
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[file_index].data, &path) {
+            crate::password::PasswordAction::ChangePassword { file_id, node_id } => {
+                let Some(fi) = self.file_index_for_id(file_id) else {
+                    return;
+                };
+                let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &node_id) else {
+                    return;
+                };
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
                     match duir_core::crypto::encrypt_item(item, password) {
                         Ok(()) => {
-                            self.passwords.insert((file_index, path), password.to_owned());
-                            self.files[file_index].modified = true;
+                            self.passwords.insert((file_id, node_id), password.to_owned());
+                            self.files[fi].modified = true;
                             self.rebuild_rows();
                             self.set_status("Password changed", StatusLevel::Success);
                         }
@@ -1321,14 +1352,14 @@ impl App {
                 return;
             }
             let fi = row.file_index;
-            let is_locked = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
-                .is_some_and(duir_core::model::TodoItem::is_locked);
-            if is_locked {
+            let item = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path);
+            if item.is_some_and(duir_core::model::TodoItem::is_locked) {
+                let node_id = item.map_or_else(|| NodeId(String::new()), |it| it.id.clone());
                 self.password_prompt = Some(crate::password::PasswordPrompt::new(
                     "Unlock encrypted node",
                     crate::password::PasswordAction::Decrypt {
-                        file_index: fi,
-                        path: row.path,
+                        file_id: self.files[fi].id,
+                        node_id,
                     },
                 ));
             }
@@ -1399,7 +1430,13 @@ impl App {
         let fi = row.file_index;
         let path = row.path;
         // Block if active
-        if self.active_kirons.contains_key(&(fi, path.clone())) {
+        let item = if path.is_empty() {
+            None
+        } else {
+            duir_core::tree_ops::get_item(&self.files[fi].data, &path)
+        };
+        let node_id = item.map_or_else(|| NodeId(String::new()), |it| it.id.clone());
+        if self.active_kirons.contains_key(&(self.files[fi].id, node_id)) {
             self.set_status("Stop kiro first (:kiro stop)", StatusLevel::Error);
             return;
         }
@@ -1455,7 +1492,9 @@ impl App {
             self.set_status("Not a kiron node. Use :kiron first", StatusLevel::Error);
             return;
         }
-        let key = (fi, path);
+        let file_id = self.files[fi].id;
+        let node_id = item.id.clone();
+        let key = (file_id, node_id);
         if self.active_kirons.contains_key(&key) {
             self.set_status("Kiron already active", StatusLevel::Warning);
             return;
@@ -1467,7 +1506,7 @@ impl App {
         match crate::pty_tab::PtyTab::spawn(&cmd, &arg_refs, 80, 24, &cwd) {
             Ok(pty) => {
                 // Create MCP snapshot from kiron subtree
-                let subtree = duir_core::tree_ops::get_item(&self.files[fi].data, &key.1).map_or_else(
+                let subtree = duir_core::tree_ops::get_item(&self.files[fi].data, &path).map_or_else(
                     || TodoFile::new("kiron"),
                     |item| {
                         let mut file = TodoFile::new(&item.title);
@@ -1505,7 +1544,14 @@ impl App {
             "No node selected".clone_into(&mut self.status_message);
             return;
         };
-        let key = (row.file_index, row.path);
+        let fi = row.file_index;
+        let node_id = if row.path.is_empty() {
+            NodeId(String::new())
+        } else {
+            duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
+                .map_or_else(|| NodeId(String::new()), |it| it.id.clone())
+        };
+        let key = (self.files[fi].id, node_id);
         if self.active_kirons.remove(&key).is_some() {
             self.kiro_tab_focused = false;
             self.set_status("Kiro session stopped", StatusLevel::Success);
@@ -1517,17 +1563,30 @@ impl App {
     /// Find the active kiron for the current cursor position.
     /// Returns the key of the most specific (deepest) active kiron
     /// whose subtree contains the current node.
-    pub fn active_kiron_for_cursor(&self) -> Option<(usize, Vec<usize>)> {
+    pub fn active_kiron_for_cursor(&self) -> Option<(FileId, NodeId)> {
         let row = self.current_row()?;
         let fi = row.file_index;
+        let file_id = self.files[fi].id;
         let path = &row.path;
-        let mut best: Option<&(usize, Vec<usize>)> = None;
-        for key in self.active_kirons.keys() {
-            if key.0 == fi && path.starts_with(&key.1) && best.is_none_or(|b| key.1.len() > b.1.len()) {
-                best = Some(key);
+
+        // Check the current node and each ancestor
+        let mut best: Option<(&(FileId, NodeId), usize)> = None;
+        for len in (1..=path.len()).rev() {
+            let ancestor_path = &path[..len];
+            if let Some(item) = duir_core::tree_ops::get_item(&self.files[fi].data, &ancestor_path.to_vec()) {
+                let key_candidate = (file_id, item.id.clone());
+                if self.active_kirons.contains_key(&key_candidate) {
+                    // Find the actual key reference in the map
+                    for key in self.active_kirons.keys() {
+                        if *key == key_candidate && best.as_ref().is_none_or(|(_, d)| len > *d) {
+                            best = Some((key, len));
+                            break;
+                        }
+                    }
+                }
             }
         }
-        best.cloned()
+        best.map(|(k, _)| k.clone())
     }
 
     /// Poll all active kiron PTYs for new output.
@@ -1570,22 +1629,27 @@ impl App {
         kiron.pty.write(payload.as_bytes());
 
         // Mark node as prompt type
-        if !path.is_empty() {
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
-                item.node_type = Some(duir_core::NodeType::Prompt);
-                if !item.title.starts_with("📤 ") {
-                    item.title = format!("📤 {}", item.title);
-                }
+        let prompt_node_id = if path.is_empty() {
+            NodeId(String::new())
+        } else if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+            item.node_type = Some(duir_core::NodeType::Prompt);
+            if !item.title.starts_with("📤 ") {
+                item.title = format!("📤 {}", item.title);
             }
+            item.id.clone()
+        } else {
+            NodeId(String::new())
+        };
+        if !path.is_empty() {
             self.mark_modified(fi, &path);
         }
 
         // Record pending response
         self.pending_responses.push(PendingResponse {
-            kiron_fi: kiron_key.0,
-            kiron_path: kiron_key.1,
-            prompt_fi: fi,
-            prompt_path: path,
+            kiron_file_id: kiron_key.0,
+            kiron_node_id: kiron_key.1,
+            prompt_file_id: self.files[fi].id,
+            prompt_node_id,
             start_time: std::time::Instant::now(),
         });
 
@@ -1604,7 +1668,7 @@ impl App {
             if now.duration_since(pr.start_time) < idle_threshold {
                 continue;
             }
-            let key = (pr.kiron_fi, pr.kiron_path.clone());
+            let key = (pr.kiron_file_id, pr.kiron_node_id.clone());
             let Some(kiron) = self.active_kirons.get(&key) else {
                 completed.push(i);
                 continue;
@@ -1619,7 +1683,7 @@ impl App {
         // Process in reverse to preserve indices
         for &i in completed.iter().rev() {
             let pr = self.pending_responses.remove(i);
-            let key = (pr.kiron_fi, pr.kiron_path.clone());
+            let key = (pr.kiron_file_id, pr.kiron_node_id.clone());
             let Some(kiron) = self.active_kirons.get(&key) else {
                 continue;
             };
@@ -1633,8 +1697,16 @@ impl App {
             let truncated: String = first_line.chars().take(80).collect();
             let title = format!("📥 {truncated}");
 
-            // Get kiron session_id for the marker
-            let session_id = duir_core::tree_ops::get_item(&self.files[pr.kiron_fi].data, &pr.kiron_path)
+            // Resolve kiron file index and path for session_id lookup
+            let Some(kiron_fi) = self.file_index_for_id(pr.kiron_file_id) else {
+                continue;
+            };
+            let Some(kiron_path) = duir_core::tree_ops::find_node_path(&self.files[kiron_fi].data, &pr.kiron_node_id)
+            else {
+                continue;
+            };
+
+            let session_id = duir_core::tree_ops::get_item(&self.files[kiron_fi].data, &kiron_path)
                 .and_then(|item| item.kiron.as_ref())
                 .map_or_else(|| "unknown".to_owned(), |k| k.session_id.clone());
 
@@ -1648,13 +1720,23 @@ impl App {
             response_node.note = note;
             response_node.node_type = Some(duir_core::NodeType::Response);
 
+            // Resolve prompt file index and path
+            let Some(prompt_fi) = self.file_index_for_id(pr.prompt_file_id) else {
+                continue;
+            };
+            let Some(prompt_path) =
+                duir_core::tree_ops::find_node_path(&self.files[prompt_fi].data, &pr.prompt_node_id)
+            else {
+                continue;
+            };
+
             if let Err(e) =
-                duir_core::tree_ops::add_sibling(&mut self.files[pr.prompt_fi].data, &pr.prompt_path, response_node)
+                duir_core::tree_ops::add_sibling(&mut self.files[prompt_fi].data, &prompt_path, response_node)
             {
                 self.set_status(&format!("Failed to insert response: {e}"), StatusLevel::Error);
                 continue;
             }
-            self.mark_modified(pr.prompt_fi, &pr.prompt_path);
+            self.mark_modified(prompt_fi, &prompt_path);
         }
 
         if !completed.is_empty() {
@@ -1674,7 +1756,13 @@ impl App {
                 continue;
             };
             let mutations: Vec<McpMutation> = rx.try_iter().collect();
-            let (fi, ref base_path) = key;
+            let (file_id, ref node_id) = key;
+            let Some(fi) = self.file_index_for_id(file_id) else {
+                continue;
+            };
+            let Some(base_path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, node_id) else {
+                continue;
+            };
             for mutation in mutations {
                 match mutation {
                     McpMutation::AddChild {
@@ -1682,7 +1770,7 @@ impl App {
                         title,
                         note,
                     } => {
-                        let abs = absolute_path(base_path, &parent_path);
+                        let abs = absolute_path(&base_path, &parent_path);
                         let mut item = TodoItem::new(&title);
                         item.note = note;
                         if duir_core::tree_ops::add_child(&mut self.files[fi].data, &abs, item).is_ok() {
@@ -1691,7 +1779,7 @@ impl App {
                         }
                     }
                     McpMutation::AddSibling { path, title, note } => {
-                        let abs = absolute_path(base_path, &path);
+                        let abs = absolute_path(&base_path, &path);
                         let mut item = TodoItem::new(&title);
                         item.note = note;
                         if duir_core::tree_ops::add_sibling(&mut self.files[fi].data, &abs, item).is_ok() {
@@ -1700,7 +1788,7 @@ impl App {
                         }
                     }
                     McpMutation::MarkDone { path } => {
-                        let abs = absolute_path(base_path, &path);
+                        let abs = absolute_path(&base_path, &path);
                         if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &abs) {
                             item.completed = Completion::Done;
                             changed = true;
@@ -1708,7 +1796,7 @@ impl App {
                         }
                     }
                     McpMutation::MarkImportant { path } => {
-                        let abs = absolute_path(base_path, &path);
+                        let abs = absolute_path(&base_path, &path);
                         if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &abs) {
                             item.important = !item.important;
                             changed = true;
@@ -1716,7 +1804,7 @@ impl App {
                         }
                     }
                     McpMutation::Reorder { path, direction } => {
-                        let abs = absolute_path(base_path, &path);
+                        let abs = absolute_path(&base_path, &path);
                         let result = match direction {
                             duir_core::mcp_server::ReorderDirection::Up => {
                                 duir_core::tree_ops::swap_up(&mut self.files[fi].data, &abs)
@@ -1739,14 +1827,16 @@ impl App {
     }
 
     pub fn save_all(&mut self, storage: &dyn duir_core::TodoStorage) {
-        for (fi, file) in self.files.iter_mut().enumerate() {
+        for file in &mut self.files {
             if file.modified {
-                // Build password map for this file (strip file_index from keys)
+                // Build password map for this file (resolve NodeId to path)
                 let pw_map: std::collections::HashMap<Vec<usize>, String> = self
                     .passwords
                     .iter()
-                    .filter(|((f, _), _)| *f == fi)
-                    .map(|((_, path), pw)| (path.clone(), pw.clone()))
+                    .filter(|((fid, _), _)| *fid == file.id)
+                    .filter_map(|((_, nid), pw)| {
+                        duir_core::tree_ops::find_node_path(&file.data, nid).map(|path| (path, pw.clone()))
+                    })
                     .collect();
 
                 // Re-encrypt unlocked nodes for save

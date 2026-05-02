@@ -1,7 +1,7 @@
 //! Tree operations for navigating and mutating the hierarchical todo structure.
 
 use crate::error::{OmelaError, Result};
-use crate::model::{TodoFile, TodoItem};
+use crate::model::{NodeId, TodoFile, TodoItem};
 
 /// A path addressing a `TodoItem` by index at each nesting level.
 ///
@@ -191,6 +191,25 @@ pub fn sort_children(file: &mut TodoFile, path: &TreePath) -> Result<()> {
     let parent = get_item_mut(file, path).ok_or_else(|| OmelaError::InvalidPath(path.clone()))?;
     parent.items.sort_by(|a, b| a.title.cmp(&b.title));
     Ok(())
+}
+
+/// Search the tree for a node with the given `NodeId` and return its path.
+#[must_use]
+pub fn find_node_path(file: &TodoFile, node_id: &NodeId) -> Option<TreePath> {
+    fn search(items: &[TodoItem], node_id: &NodeId, prefix: &mut Vec<usize>) -> Option<TreePath> {
+        for (i, item) in items.iter().enumerate() {
+            prefix.push(i);
+            if item.id == *node_id {
+                return Some(prefix.clone());
+            }
+            if let Some(found) = search(&item.items, node_id, prefix) {
+                return Some(found);
+            }
+            prefix.pop();
+        }
+        None
+    }
+    search(&file.items, node_id, &mut Vec::new())
 }
 
 #[cfg(test)]

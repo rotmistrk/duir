@@ -1,4 +1,6 @@
+use crate::app::FileId;
 use crossterm::event::{KeyCode, KeyEvent};
+use duir_core::NodeId;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -13,9 +15,9 @@ pub struct PasswordPrompt {
 
 /// What to do after password is entered.
 pub enum PasswordAction {
-    Decrypt { file_index: usize, path: Vec<usize> },
-    Encrypt { file_index: usize, path: Vec<usize> },
-    ChangePassword { file_index: usize, path: Vec<usize> },
+    Decrypt { file_id: FileId, node_id: NodeId },
+    Encrypt { file_id: FileId, node_id: NodeId },
+    ChangePassword { file_id: FileId, node_id: NodeId },
 }
 
 /// Result of handling a key in the password prompt.
