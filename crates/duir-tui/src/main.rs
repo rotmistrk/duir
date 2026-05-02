@@ -359,6 +359,7 @@ fn run_loop(
                 && app.is_tree_focused()
                 && app.active_kiron_for_cursor().is_some()
                 && key.code != KeyCode::Esc
+                && key.code != KeyCode::Tab
                 && !(key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL))
             {
                 // Route input to active kiron PTY
@@ -372,6 +373,9 @@ fn run_loop(
                 }
             } else if key.code == KeyCode::Esc && app.kiro_tab_focused && app.is_tree_focused() {
                 // Esc from kiro tab returns to tree
+                app.kiro_tab_focused = false;
+            } else if key.code == KeyCode::Tab && app.kiro_tab_focused && app.is_tree_focused() {
+                // Tab from kiro tab returns to tree
                 app.kiro_tab_focused = false;
             } else if app.is_command_active() && key.code == KeyCode::Enter {
                 // Execute command with storage access

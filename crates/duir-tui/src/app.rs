@@ -1531,7 +1531,7 @@ impl App {
         match crate::pty_tab::PtyTab::spawn(&cmd, &arg_refs, 80, 24, &cwd) {
             Ok(pty) => {
                 self.active_kirons.insert(key, ActiveKiron { pty });
-                self.kiro_tab_focused = true;
+                self.kiro_tab_focused = false;
                 self.set_status("Kiro session started", StatusLevel::Success);
             }
             Err(e) => {
