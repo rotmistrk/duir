@@ -211,6 +211,7 @@ fn run_loop(
         // Process pending crypto after redraw (so "Working..." is visible)
         if let Some((password, action)) = app.pending_crypto.take() {
             app.handle_password_result(&password, action);
+            continue; // redraw to show result
         }
 
         // Block for input, with timeout only for autosave
@@ -228,9 +229,14 @@ fn run_loop(
                 match prompt.handle_key(key) {
                     crate::password::PromptResult::Submitted(password) => {
                         if let Some(prompt) = app.password_prompt.take() {
+                            let msg = match &prompt.callback {
+                                password::PasswordAction::Decrypt { .. } => "⏳ Decrypting...",
+                                password::PasswordAction::Encrypt { .. } => "⏳ Encrypting...",
+                                password::PasswordAction::ChangePassword { .. } => "⏳ Re-encrypting...",
+                            };
+                            app.set_status(msg, app::StatusLevel::Warning);
                             app.pending_crypto = Some((password, prompt.callback));
                         }
-                        app.set_status("⏳ Working...", app::StatusLevel::Warning);
                         continue;
                     }
                     crate::password::PromptResult::Cancelled => {
