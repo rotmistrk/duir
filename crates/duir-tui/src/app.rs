@@ -46,8 +46,15 @@ pub struct LoadedFile {
     pub id: FileId,
     pub name: String,
     pub data: TodoFile,
-    pub modified: bool,
+    modified: bool,
     pub autosave: bool,
+}
+
+impl LoadedFile {
+    #[must_use]
+    pub const fn is_modified(&self) -> bool {
+        self.modified
+    }
 }
 
 /// Focus area in the UI — each variant carries the state specific to that mode.
@@ -454,6 +461,47 @@ impl App {
                 duir_core::crypto::invalidate_cipher(item);
             }
         }
+        // Sync MCP snapshot if the modified node is inside an active kiron's subtree
+        self.sync_mcp_snapshot(fi, path);
+    }
+
+    /// Update the MCP snapshot for any active kiron whose subtree contains the given path.
+    fn sync_mcp_snapshot(&self, fi: usize, path: &[usize]) {
+        let file_id = self.files[fi].id;
+        for (key, kiron) in &self.active_kirons {
+            if key.0 != file_id {
+                continue;
+            }
+            let Some(kiron_path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &key.1) else {
+                continue;
+            };
+            // Check if the modified path is within this kiron's subtree
+            if !path.starts_with(&kiron_path) {
+                continue;
+            }
+            let Some(ref snapshot) = kiron.mcp_snapshot else {
+                continue;
+            };
+            if let Some(item) = duir_core::tree_ops::get_item(&self.files[fi].data, &kiron_path) {
+                let mut file = TodoFile::new(&item.title);
+                file.items.clone_from(&item.items);
+                file.note.clone_from(&item.note);
+                if let Ok(mut guard) = snapshot.lock() {
+                    *guard = file;
+                }
+            }
+        }
+    }
+
+    /// Mark a file as saved (only valid after successful save).
+    fn mark_saved(&mut self, fi: usize) {
+        self.files[fi].modified = false;
+    }
+
+    /// Mark a file as modified without invalidating cipher caches.
+    /// Used for operations that don't change encrypted content (e.g., unlock).
+    fn mark_file_modified(&mut self, fi: usize) {
+        self.files[fi].modified = true;
     }
 
     fn navigate_to(&mut self, file_index: usize, path: &[usize]) {
@@ -496,8 +544,11 @@ impl App {
                 if item.unlocked {
                     let node_id = item.id.clone();
                     let key = (file_id, node_id);
-                    if let Some(pw) = self.passwords.get(&key) {
-                        duir_core::crypto::encrypt_item(item, pw).ok();
+                    if let Some(pw) = self.passwords.get(&key)
+                        && let Err(e) = duir_core::crypto::encrypt_item(item, pw)
+                    {
+                        self.set_status(&format!("Encrypt error, node stays unlocked: {e}"), StatusLevel::Error);
+                        return;
                     }
                     self.passwords.remove(&key);
                 } else {
@@ -561,7 +612,7 @@ impl App {
                     _ => Completion::Done,
                 };
             }
-            self.files[fi].modified = true;
+            self.mark_modified(fi, &path);
             for item in &mut self.files[fi].data.items {
                 duir_core::stats::update_completion(item);
             }
@@ -579,7 +630,7 @@ impl App {
             if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
                 item.important = !item.important;
             }
-            self.files[fi].modified = true;
+            self.mark_modified(fi, &path);
             self.rebuild_rows();
         }
     }
@@ -600,7 +651,7 @@ impl App {
                 for item in &mut self.files[fi].data.items {
                     duir_core::stats::update_completion(item);
                 }
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 self.navigate_to(fi, &new_path);
                 self.start_editing();
@@ -614,7 +665,7 @@ impl App {
             if row.is_file_root {
                 let child_idx = self.files[fi].data.items.len();
                 self.files[fi].data.items.push(TodoItem::new("<new task>"));
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &[child_idx]);
                 self.rebuild_rows();
                 self.navigate_to(fi, &[child_idx]);
                 self.start_editing();
@@ -633,7 +684,7 @@ impl App {
                 for item in &mut self.files[fi].data.items {
                     duir_core::stats::update_completion(item);
                 }
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 self.navigate_to(fi, &new_path);
                 self.start_editing();
@@ -675,7 +726,7 @@ impl App {
                 for item in &mut self.files[fi].data.items {
                     duir_core::stats::update_completion(item);
                 }
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
                 self.status_message.clear();
             }
@@ -689,7 +740,7 @@ impl App {
             }
             let fi = row.file_index;
             if let Ok(new_path) = duir_core::tree_ops::swap_up(&mut self.files[fi].data, &row.path) {
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 // Find new position
                 if let Some(pos) = self
@@ -710,7 +761,7 @@ impl App {
             }
             let fi = row.file_index;
             if let Ok(new_path) = duir_core::tree_ops::swap_down(&mut self.files[fi].data, &row.path) {
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 if let Some(pos) = self
                     .rows
@@ -730,7 +781,7 @@ impl App {
             }
             let fi = row.file_index;
             if let Ok(new_path) = duir_core::tree_ops::promote(&mut self.files[fi].data, &row.path) {
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 if let Some(pos) = self
                     .rows
@@ -750,7 +801,7 @@ impl App {
             }
             let fi = row.file_index;
             if let Ok(new_path) = duir_core::tree_ops::demote(&mut self.files[fi].data, &row.path) {
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 if let Some(pos) = self
                     .rows
@@ -770,7 +821,7 @@ impl App {
             }
             let fi = row.file_index;
             if duir_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
             }
         }
@@ -788,7 +839,7 @@ impl App {
                 *last += 1;
             }
             if duir_core::tree_ops::clone_subtree(&mut self.files[fi].data, &row.path).is_ok() {
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &new_path);
                 self.rebuild_rows();
                 self.navigate_to(fi, &new_path);
             }
@@ -821,7 +872,7 @@ impl App {
                     && item.title != new_title
                 {
                     item.title.clone_from(&new_title);
-                    self.files[fi].modified = true;
+                    self.mark_modified(fi, &row.path);
                 }
             }
             self.state = FocusState::Tree;
@@ -941,14 +992,16 @@ impl App {
             let saved = duir_core::crypto::lock_for_save(&mut file.data.items, &pw_map, &[]);
             match saved {
                 Ok(saved_state) => {
-                    match storage.save(&file.name, &file.data) {
+                    let save_result = storage.save(&file.name, &file.data);
+                    duir_core::crypto::restore_after_save(&mut file.data.items, &saved_state);
+                    match save_result {
                         Ok(()) => {
-                            file.modified = false;
-                            self.status_message = format!("Saved {}", file.name);
+                            let name = self.files[fi].name.clone();
+                            self.mark_saved(fi);
+                            self.status_message = format!("Saved {name}");
                         }
                         Err(e) => self.status_message = format!("Save error: {e}"),
                     }
-                    duir_core::crypto::restore_after_save(&mut file.data.items, &saved_state);
                 }
                 Err(e) => self.status_message = format!("Encrypt error on save: {e}"),
             }
@@ -958,10 +1011,16 @@ impl App {
     pub(crate) fn close_current_file(&mut self) {
         if let Some(row) = self.current_row().cloned() {
             let fi = row.file_index;
-            if self.files[fi].modified {
+            if self.files[fi].is_modified() {
                 "File has unsaved changes. Use :q! to force".clone_into(&mut self.status_message);
                 return;
             }
+            let closed_id = self.files[fi].id;
+            // Clean up active kirons and pending responses for the closed file
+            self.active_kirons.retain(|k, _| k.0 != closed_id);
+            self.pending_responses
+                .retain(|pr| pr.kiron_file_id != closed_id && pr.prompt_file_id != closed_id);
+            self.passwords.retain(|k, _| k.0 != closed_id);
             self.files.remove(fi);
             if self.files.is_empty() {
                 self.should_quit = true;
@@ -1081,7 +1140,7 @@ impl App {
                         item.items.extend(parsed.items);
                         item.folded = false;
                     }
-                    self.files[fi].modified = true;
+                    self.mark_modified(fi, &row.path);
                     self.rebuild_rows();
                     self.set_status(&format!("Imported {}", path.display()), StatusLevel::Success);
                 }
@@ -1153,7 +1212,7 @@ impl App {
                 match storage.save(name, &self.files[fi].data) {
                     Ok(()) => {
                         name.clone_into(&mut self.files[fi].name);
-                        self.files[fi].modified = false;
+                        self.mark_saved(fi);
                         self.rebuild_rows();
                         self.set_status(&format!("Saved as {name}"), StatusLevel::Success);
                     }
@@ -1188,7 +1247,7 @@ impl App {
                 item.note.push_str("<!-- duir:collapsed -->\n");
                 item.note.push_str(&md);
                 item.items.clear();
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
                 self.reload_editor();
                 "Children collapsed to note".clone_into(&mut self.status_message);
@@ -1224,7 +1283,7 @@ impl App {
                 item.items.extend(parsed.items);
                 item.note = keep_note;
                 item.folded = false;
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
                 self.reload_editor();
                 "Note expanded to children".clone_into(&mut self.status_message);
@@ -1233,6 +1292,7 @@ impl App {
     }
 
     pub(crate) fn cmd_encrypt(&mut self) {
+        self.save_editor();
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
                 "Cannot encrypt file root".clone_into(&mut self.status_message);
@@ -1258,6 +1318,7 @@ impl App {
     }
 
     pub(crate) fn cmd_decrypt(&mut self) {
+        self.save_editor();
         if let Some(row) = self.rows.get(self.cursor).cloned() {
             if row.is_file_root {
                 return;
@@ -1275,7 +1336,7 @@ impl App {
                 let node_id = item.id.clone();
                 duir_core::crypto::strip_encryption(item);
                 self.passwords.remove(&(self.files[fi].id, node_id));
-                self.files[fi].modified = true;
+                self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
                 self.set_status("Encryption removed", StatusLevel::Success);
             }
@@ -1296,7 +1357,7 @@ impl App {
                     match duir_core::crypto::encrypt_item(item, password) {
                         Ok(()) => {
                             self.passwords.insert((file_id, node_id), password.to_owned());
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &path);
                             self.rebuild_rows();
                             self.set_status("Subtree encrypted", StatusLevel::Success);
                         }
@@ -1315,7 +1376,7 @@ impl App {
                     match duir_core::crypto::decrypt_item(item, password) {
                         Ok(()) => {
                             self.passwords.insert((file_id, node_id), password.to_owned());
-                            self.files[fi].modified = true;
+                            self.mark_file_modified(fi);
                             self.rebuild_rows();
                             self.set_status("Subtree unlocked", StatusLevel::Success);
                         }
@@ -1324,6 +1385,7 @@ impl App {
                 }
             }
             crate::password::PasswordAction::ChangePassword { file_id, node_id } => {
+                self.save_editor();
                 let Some(fi) = self.file_index_for_id(file_id) else {
                     return;
                 };
@@ -1334,7 +1396,7 @@ impl App {
                     match duir_core::crypto::encrypt_item(item, password) {
                         Ok(()) => {
                             self.passwords.insert((file_id, node_id), password.to_owned());
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &path);
                             self.rebuild_rows();
                             self.set_status("Password changed", StatusLevel::Success);
                         }
@@ -1760,6 +1822,9 @@ impl App {
             let Some(fi) = self.file_index_for_id(file_id) else {
                 continue;
             };
+            if fi >= self.files.len() {
+                continue;
+            }
             let Some(base_path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, node_id) else {
                 continue;
             };
@@ -1775,7 +1840,7 @@ impl App {
                         item.note = note;
                         if duir_core::tree_ops::add_child(&mut self.files[fi].data, &abs, item).is_ok() {
                             changed = true;
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &abs);
                         }
                     }
                     McpMutation::AddSibling { path, title, note } => {
@@ -1784,7 +1849,7 @@ impl App {
                         item.note = note;
                         if duir_core::tree_ops::add_sibling(&mut self.files[fi].data, &abs, item).is_ok() {
                             changed = true;
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &abs);
                         }
                     }
                     McpMutation::MarkDone { path } => {
@@ -1792,7 +1857,7 @@ impl App {
                         if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &abs) {
                             item.completed = Completion::Done;
                             changed = true;
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &abs);
                         }
                     }
                     McpMutation::MarkImportant { path } => {
@@ -1800,7 +1865,7 @@ impl App {
                         if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &abs) {
                             item.important = !item.important;
                             changed = true;
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &abs);
                         }
                     }
                     McpMutation::Reorder { path, direction } => {
@@ -1815,7 +1880,7 @@ impl App {
                         };
                         if result.is_ok() {
                             changed = true;
-                            self.files[fi].modified = true;
+                            self.mark_modified(fi, &abs);
                         }
                     }
                 }
@@ -1827,46 +1892,49 @@ impl App {
     }
 
     pub fn save_all(&mut self, storage: &dyn duir_core::TodoStorage) {
+        let mut errors: Vec<String> = Vec::new();
         for file in &mut self.files {
-            if file.modified {
-                // Build password map for this file (resolve NodeId to path)
-                let pw_map: std::collections::HashMap<Vec<usize>, String> = self
-                    .passwords
-                    .iter()
-                    .filter(|((fid, _), _)| *fid == file.id)
-                    .filter_map(|((_, nid), pw)| {
-                        duir_core::tree_ops::find_node_path(&file.data, nid).map(|path| (path, pw.clone()))
-                    })
-                    .collect();
+            if !file.is_modified() {
+                continue;
+            }
+            // Build password map for this file (resolve NodeId to path)
+            let pw_map: std::collections::HashMap<Vec<usize>, String> = self
+                .passwords
+                .iter()
+                .filter(|((fid, _), _)| *fid == file.id)
+                .filter_map(|((_, nid), pw)| {
+                    duir_core::tree_ops::find_node_path(&file.data, nid).map(|path| (path, pw.clone()))
+                })
+                .collect();
 
-                // Re-encrypt unlocked nodes for save
-                let saved = duir_core::crypto::lock_for_save(&mut file.data.items, &pw_map, &[]);
+            // Re-encrypt unlocked nodes for save
+            let saved = duir_core::crypto::lock_for_save(&mut file.data.items, &pw_map, &[]);
 
-                match saved {
-                    Ok(saved_state) => {
-                        match storage.save(&file.name, &file.data) {
-                            Ok(()) => file.modified = false,
-                            Err(e) => {
-                                self.status_message = format!("Save error: {e}");
-                            }
-                        }
-                        // Restore decrypted state in memory
-                        duir_core::crypto::restore_after_save(&mut file.data.items, &saved_state);
+            match saved {
+                Ok(saved_state) => {
+                    match storage.save(&file.name, &file.data) {
+                        Ok(()) => file.modified = false,
+                        Err(e) => errors.push(format!("{}: {e}", file.name)),
                     }
-                    Err(e) => {
-                        self.status_message = format!("Encrypt error on save: {e}");
-                        return;
-                    }
+                    // Restore decrypted state in memory
+                    duir_core::crypto::restore_after_save(&mut file.data.items, &saved_state);
+                }
+                Err(e) => {
+                    errors.push(format!("{}: encrypt error: {e}", file.name));
                 }
             }
         }
-        self.set_status("Saved", StatusLevel::Success);
+        if errors.is_empty() {
+            self.set_status("Saved", StatusLevel::Success);
+        } else {
+            self.set_status(&format!("Save errors: {}", errors.join("; ")), StatusLevel::Error);
+        }
     }
 
     /// Check if any file has unsaved modifications.
     #[must_use]
     pub fn has_unsaved(&self) -> bool {
-        self.files.iter().any(|f| f.modified)
+        self.files.iter().any(LoadedFile::is_modified)
     }
 
     /// Apply the current committed filter text, searching titles and notes.

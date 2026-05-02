@@ -236,7 +236,7 @@ fn run_loop(
         }
 
         // Block for input, with timeout only for autosave or active kirons
-        let has_pending_save = app.is_tree_focused() && app.files.iter().any(|f| f.autosave && f.modified);
+        let has_pending_save = app.is_tree_focused() && app.files.iter().any(|f| f.autosave && f.is_modified());
         let has_active_kirons = !app.active_kirons.is_empty();
         let timeout = if app.pending_crypto.is_some() {
             Duration::from_millis(1) // process crypto immediately
@@ -349,7 +349,7 @@ fn run_loop(
         // Autosave — fires when poll timeout expires (no input for autosave_interval)
         if app.is_tree_focused()
             && last_save.elapsed() >= Duration::from_secs(autosave_interval)
-            && app.files.iter().any(|f| f.autosave && f.modified)
+            && app.files.iter().any(|f| f.autosave && f.is_modified())
             && let Ok(storage) = FileStorage::new(storage_dir)
         {
             app.save_all(&storage);
@@ -931,7 +931,7 @@ mod tests {
     #[test]
     fn save_preserves_unencrypted_data() {
         let mut app = make_app_with_tree();
-        app.files[0].modified = true;
+        app.mark_modified(0, &[]);
         let dir = tempfile::tempdir().unwrap();
         let storage = duir_core::FileStorage::new(dir.path()).unwrap();
         app.save_all(&storage);
@@ -1645,7 +1645,7 @@ mod tests {
     #[test]
     fn close_current_file_unsaved_blocked() {
         let mut app = make_app_with_tree();
-        app.files[0].modified = true;
+        app.mark_modified(0, &[]);
         app.close_current_file();
         assert_eq!(app.files.len(), 1); // not removed
         assert!(app.status_message.contains("unsaved"));
@@ -1654,7 +1654,7 @@ mod tests {
     #[test]
     fn close_current_file_saved_removes() {
         let mut app = make_app_with_tree();
-        app.files[0].modified = false;
+        // modified defaults to false from add_file
         app.close_current_file();
         assert!(app.should_quit); // last file → quit
     }
