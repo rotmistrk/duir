@@ -101,7 +101,7 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
                     ratatui::widgets::BorderType::Plain
                 };
                 let kiro_block = Block::default()
-                    .title(" 🤖 Kiro │ 📝 Note  ^T ")
+                    .title(" 📝 Note │ [🤖 Kiro] ")
                     .borders(Borders::ALL)
                     .border_type(border_type);
                 let inner = kiro_block.inner(area);
@@ -113,8 +113,9 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
                 render_termbuf(frame, &kiron.pty.termbuf, inner);
             }
         } else {
+            // Note view (not editing) with kiron available
             let note_content = app.current_note();
-            let note_block = Block::default().title(" 📝 Note │ 🤖 Kiro  ^T ").borders(Borders::ALL);
+            let note_block = Block::default().title(" [📝 Note] │ 🤖 Kiro ").borders(Borders::ALL);
             let lines =
                 crate::markdown_view::highlight_lines_with_syntax(&note_content, usize::MAX, 0, Some(&app.highlighter));
             let paragraph = Paragraph::new(lines).block(note_block);
@@ -122,9 +123,9 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
         }
     } else if let FocusState::Note { ref mut editor, .. } = app.state {
         let title = if has_kiron {
-            " 📝 Note │ 🤖 Kiro  ^T "
+            " [📝 Note] │ 🤖 Kiro ".to_owned()
         } else {
-            " 📝 Note"
+            " 📝 Note".to_owned()
         };
         let has_cmdline = matches!(
             editor.mode,
@@ -135,12 +136,12 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
                 .direction(Direction::Vertical)
                 .constraints([Constraint::Min(3), Constraint::Length(1)])
                 .split(area);
-            editor.set_block(title, true);
+            editor.set_block(&title, true);
             editor.render(frame, note_chunks[0], &app.highlighter);
             let cmd_line = editor.status_line();
             frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
         } else {
-            editor.set_block(title, true);
+            editor.set_block(&title, true);
             editor.render(frame, area, &app.highlighter);
         }
     } else {

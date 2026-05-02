@@ -155,26 +155,61 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    if key.code == KeyCode::Char('t')
+    // Ctrl+1: focus tree
+    if key.code == KeyCode::Char('1') && key.modifiers.contains(KeyModifiers::CONTROL) {
+        if app.is_note_focused() {
+            app.save_editor();
+        }
+        app.state = FocusState::Tree;
+        app.kiro_tab_focused = false;
+        return true;
+    }
+
+    // Ctrl+2: focus note
+    if key.code == KeyCode::Char('2')
         && key.modifiers.contains(KeyModifiers::CONTROL)
-        && !app.is_note_focused()
         && !app.is_command_active()
         && !app.is_filter_active()
-        && !app.is_editing_title()
     {
-        if app.kiro_tab_focused {
+        if !app.is_note_focused() {
             app.kiro_tab_focused = false;
-        } else if app.is_tree_focused() {
             app.focus_note();
         }
         return true;
     }
 
-    if key.code == KeyCode::Char('t') && key.modifiers.contains(KeyModifiers::CONTROL) && app.is_note_focused() {
-        app.save_editor();
-        app.state = FocusState::Tree;
-        if app.active_kiron_for_cursor().is_some() {
-            app.kiro_tab_focused = true;
+    // Ctrl+3: focus kiro (if active)
+    if key.code == KeyCode::Char('3')
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && app.active_kiron_for_cursor().is_some()
+    {
+        if app.is_note_focused() {
+            app.save_editor();
+            app.state = FocusState::Tree;
+        }
+        app.kiro_tab_focused = true;
+        return true;
+    }
+
+    // Ctrl+T: cycle Tree → Note → Kiro → Tree
+    if key.code == KeyCode::Char('t')
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && !app.is_command_active()
+        && !app.is_filter_active()
+        && !app.is_editing_title()
+    {
+        let has_kiron = app.active_kiron_for_cursor().is_some();
+        if app.kiro_tab_focused {
+            app.kiro_tab_focused = false; // Kiro → Tree
+        } else if app.is_note_focused() {
+            app.save_editor();
+            app.state = FocusState::Tree;
+            if has_kiron {
+                app.kiro_tab_focused = true; // Note → Kiro
+            }
+            // else: Note → Tree
+        } else {
+            app.focus_note(); // Tree → Note
         }
         return true;
     }

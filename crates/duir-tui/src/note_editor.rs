@@ -81,7 +81,8 @@ impl NoteEditor<'_> {
         };
         self.textarea.set_block(
             Block::default()
-                .title(format!("{title} [{mode_str}]"))
+                .title(title.to_owned())
+                .title_bottom(format!(" {mode_str} "))
                 .borders(Borders::ALL)
                 .border_type(border_type),
         );
