@@ -1,48 +1,71 @@
 # duir 🌳
 
-Hierarchical todo tree manager with markdown notes and vim-like editor.
+Hierarchical todo tree manager with vim-like editor and per-subtree encryption.
 
 Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 "druid" (oak-knower), and it sounds like "do it".
 
 ## Features
 
-- Tree of tasks with checkboxes, importance flags, completion percentages
-- Vim-like markdown note editor per item (visual mode, search, ex-commands, shell pipe)
-- Multiple files as top-level tree nodes
-- Move items between files
-- Filter/search across tree and notes
-- Export subtree as `.md`, import `.md` as tree
-- JSON storage (YAML import/export supported)
-- Autosave (on by default)
-- Command mode (`:`) for file ops, export, collapse/expand
+- **Tree**: checkboxes, importance, completion %, drag-reorder, clone, filter
+- **Editor**: vim keybindings (normal/insert/visual), ex-commands, search, shell pipe
+- **Markdown**: syntax highlighting, export/import, collapse subtree ↔ markdown
+- **Encryption**: per-subtree with password, hierarchical, auto-lock on collapse
+- **Files**: multi-file, autosave, JSON storage, YAML export, path completion
+- **Config**: XDG-compliant, project-local `.duir/`, configurable autosave interval
+- **Clipboard**: system clipboard via OSC 52 (works over SSH)
+- **Self-contained**: single 5.7MB binary, all resources embedded
 
-## Building
-
-```sh
-cargo build --release
-```
-
-## Running
+## Install
 
 ```sh
-cargo run -p duir-tui --release
+make install          # → /usr/local/bin/duir (sudo)
+make install-local    # → ~/.local/bin/duir (no sudo)
 ```
+
+## Usage
+
+```sh
+duir                          # load from ~/.local/share/duir/
+duir -d ~/projects/.duir      # load from specific directory
+duir file1.todo.json file2.todo.json  # open specific files
+```
+
+Press `F1` or `:help` for the full key reference.
 
 ## Config
 
-- `$XDG_CONFIG_HOME/duir/config.toml` — global config
-- `~/.duirrc` — user shorthand
-- `.duir/config.toml` — project-local config
-- Data: `$XDG_DATA_HOME/duir/` (central), `.duir/` (local, opt-in via `:init`)
+```
+~/.config/duir/config.toml    — global
+~/.duirrc                      — user shorthand
+.duir/config.toml              — project-local
+```
+
+```toml
+[storage]
+central = "~/.local/share/duir"
+
+[editor]
+autosave = true
+autosave_interval_secs = 30
+
+[ui]
+note_panel_pct = 50
+```
 
 ## Project Structure
 
 ```
 crates/
-  duir-core/    — data model, storage, markdown import/export
+  duir-core/    — data model, storage, crypto, markdown
   duir-tui/     — terminal UI (ratatui)
-planning/       — epics, stories, tasks (agent-driven development)
+planning/       — epics, stories, tasks
+```
+
+## Tests
+
+```sh
+make check    # fmt + clippy + 201 tests
 ```
 
 ## License
