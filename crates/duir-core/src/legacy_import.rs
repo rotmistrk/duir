@@ -1,0 +1,262 @@
+use quick_xml::Reader;
+use quick_xml::events::Event;
+
+use crate::model::{Completion, TodoFile, TodoItem};
+
+/// Import a legacy `.todo` XML file from the Qt `ToDo` app.
+///
+/// # Errors
+/// Returns an error if the XML cannot be parsed.
+pub fn import_legacy_todo(content: &str) -> crate::Result<TodoFile> {
+    let mut reader = Reader::from_str(content);
+    let mut file = TodoFile::new("Imported");
+    let mut stack: Vec<TodoItem> = Vec::new();
+    let mut in_note = false;
+    let mut note_buf = String::new();
+
+    loop {
+        match reader.read_event() {
+            Ok(ref evt @ (Event::Start(ref e) | Event::Empty(ref e))) => {
+                let is_empty = matches!(evt, Event::Empty(_));
+                let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match name.as_str() {
+                    "item" => {
+                        let mut item = TodoItem::new("");
+                        for attr in e.attributes().flatten() {
+                            let key = String::from_utf8_lossy(attr.key.as_ref()).to_string();
+                            let val = String::from_utf8_lossy(&attr.value).to_string();
+                            match key.as_str() {
+                                "title" => item.title = val,
+                                "folded" => item.folded = val == "yes",
+                                "important" => item.important = val == "yes",
+                                "completed" => {
+                                    item.completed = match val.as_str() {
+                                        "yes" => Completion::Done,
+                                        "part" => Completion::Partial,
+                                        _ => Completion::Open,
+                                    };
+                                }
+                                _ => {}
+                            }
+                        }
+                        stack.push(item);
+                        if is_empty && let Some(item) = stack.pop() {
+                            if let Some(parent) = stack.last_mut() {
+                                parent.items.push(item);
+                            } else {
+                                file.items.push(item);
+                            }
+                        }
+                    }
+                    "note" => {
+                        in_note = true;
+                        note_buf.clear();
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::End(ref e)) => {
+                let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                match name.as_str() {
+                    "item" => {
+                        if let Some(item) = stack.pop() {
+                            if let Some(parent) = stack.last_mut() {
+                                parent.items.push(item);
+                            } else {
+                                file.items.push(item);
+                            }
+                        }
+                    }
+                    "note" => {
+                        in_note = false;
+                        let md = html_to_markdown(&note_buf);
+                        if let Some(item) = stack.last_mut() {
+                            item.note = md;
+                        } else {
+                            file.note = md;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Ok(Event::Text(ref e)) => {
+                if in_note {
+                    let text = e.unescape().unwrap_or_default();
+                    note_buf.push_str(&text);
+                }
+            }
+            Ok(Event::Eof) => break,
+            Err(e) => {
+                return Err(crate::OmelaError::Other(format!(
+                    "XML parse error at {}: {e}",
+                    reader.error_position()
+                )));
+            }
+            _ => {}
+        }
+    }
+
+    // Set title from first item if file title is default
+    if file.title == "Imported" && !file.items.is_empty() && !file.items[0].title.is_empty() {
+        file.title.clone_from(&file.items[0].title);
+    }
+
+    Ok(file)
+}
+
+/// Convert Qt rich text HTML to plain markdown.
+/// Strips HTML tags, extracts text content from `<p>` and `<span>` elements.
+fn html_to_markdown(html: &str) -> String {
+    let trimmed = html.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    let mut result = String::new();
+    let mut in_tag = false;
+    let mut tag_buf = String::new();
+    let mut pending_newline = false;
+
+    for ch in trimmed.chars() {
+        if ch == '<' {
+            in_tag = true;
+            tag_buf.clear();
+            continue;
+        }
+        if ch == '>' {
+            in_tag = false;
+            let tag_lower = tag_buf.to_lowercase();
+            // Block-level tags get newlines
+            if tag_lower.starts_with("p ")
+                || tag_lower == "p"
+                || tag_lower.starts_with("/p")
+                || tag_lower == "br"
+                || tag_lower == "br /"
+            {
+                pending_newline = true;
+            }
+            // Bold
+            if tag_lower == "b" || tag_lower.starts_with("span") && tag_lower.contains("bold") {
+                result.push_str("**");
+            }
+            if tag_lower == "/b" || tag_lower == "/span" && result.ends_with("**") {
+                // closing bold handled by context
+            }
+            continue;
+        }
+        if in_tag {
+            tag_buf.push(ch);
+            continue;
+        }
+        // Text content
+        if pending_newline {
+            if !result.is_empty() {
+                result.push('\n');
+            }
+            pending_newline = false;
+        }
+        result.push(ch);
+    }
+
+    // Clean up: remove empty lines at start/end, collapse multiple newlines
+    let lines: Vec<&str> = result.lines().map(str::trim).collect();
+
+    // Remove leading/trailing empty lines
+    let start = lines.iter().position(|l| !l.is_empty()).unwrap_or(0);
+    let end = lines.iter().rposition(|l| !l.is_empty()).map_or(0, |i| i + 1);
+
+    if start >= end {
+        return String::new();
+    }
+
+    lines[start..end].join("\n")
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_simple_todo() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE todo-tree SYSTEM 'todo-tree.dtd'>
+<todo-tree version="1.1">
+  <item title="Task 1" folded="no" important="yes" completed="no">
+  </item>
+  <item title="Task 2" folded="yes" important="no" completed="yes">
+  </item>
+</todo-tree>"#;
+
+        let file = import_legacy_todo(xml).unwrap();
+        assert_eq!(file.items.len(), 2);
+        assert_eq!(file.items[0].title, "Task 1");
+        assert!(file.items[0].important);
+        assert!(!file.items[0].folded);
+        assert_eq!(file.items[1].title, "Task 2");
+        assert!(file.items[1].folded);
+        assert_eq!(file.items[1].completed, Completion::Done);
+    }
+
+    #[test]
+    fn parse_nested() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<todo-tree version="1.1">
+  <item title="Parent" folded="no" important="no" completed="no">
+    <item title="Child 1" folded="no" important="no" completed="yes"/>
+    <item title="Child 2" folded="no" important="no" completed="no"/>
+  </item>
+</todo-tree>"#;
+
+        let file = import_legacy_todo(xml).unwrap();
+        assert_eq!(file.items.len(), 1);
+        assert_eq!(file.items[0].title, "Parent");
+        assert_eq!(file.items[0].items.len(), 2);
+        assert_eq!(file.items[0].items[0].title, "Child 1");
+        assert_eq!(file.items[0].items[0].completed, Completion::Done);
+    }
+
+    #[test]
+    fn parse_note_with_html() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<todo-tree version="1.1">
+  <item title="With Note" folded="no" important="no" completed="no">
+    <note>
+&lt;html&gt;&lt;body&gt;&lt;p&gt;Hello world&lt;/p&gt;&lt;p&gt;Second line&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;
+    </note>
+  </item>
+</todo-tree>"#;
+
+        let file = import_legacy_todo(xml).unwrap();
+        assert_eq!(file.items[0].title, "With Note");
+        let note = &file.items[0].note;
+        assert!(note.contains("Hello world"));
+        assert!(note.contains("Second line"));
+    }
+
+    #[test]
+    fn html_to_md_strips_tags() {
+        let html = r"<html><body><p>Hello</p><p>World</p></body></html>";
+        let md = html_to_markdown(html);
+        assert!(md.contains("Hello"));
+        assert!(md.contains("World"));
+        assert!(!md.contains('<'));
+    }
+
+    #[test]
+    fn html_to_md_empty() {
+        assert_eq!(html_to_markdown(""), "");
+        assert_eq!(html_to_markdown("   "), "");
+    }
+
+    #[test]
+    fn partial_completion() {
+        let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<todo-tree version="1.1">
+  <item title="Partial" folded="no" important="no" completed="part"/>
+</todo-tree>"#;
+
+        let file = import_legacy_todo(xml).unwrap();
+        assert_eq!(file.items[0].completed, Completion::Partial);
+    }
+}

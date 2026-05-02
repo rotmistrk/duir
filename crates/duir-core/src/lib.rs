@@ -5,6 +5,7 @@ pub mod docx_export;
 pub mod error;
 pub mod file_storage;
 pub mod filter;
+pub mod legacy_import;
 pub mod markdown_export;
 pub mod markdown_import;
 pub mod model;

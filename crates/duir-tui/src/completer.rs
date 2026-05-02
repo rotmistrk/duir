@@ -142,6 +142,7 @@ pub fn complete_path(partial: &str) -> Vec<String> {
                     results.push(format!("{full}/"));
                 } else if name_str.ends_with(".md")
                     || name_str.ends_with(".todo.json")
+                    || name_str.ends_with(".todo")
                     || name_str.ends_with(".json")
                     || name_str.ends_with(".yaml")
                     || name_str.ends_with(".yml")

@@ -88,3 +88,12 @@ make check    # fmt + clippy + 201 tests
 ## License
 
 MIT
+
+## Roadmap
+
+Future ideas (not currently planned):
+- **Unicode diagram rendering**: Rust library to render mermaid/plantuml/graphviz as Unicode box-drawing art in the terminal (separate project)
+- **HTML preview**: `:preview` command to render note as HTML and open in system browser
+- **PDF export**: via the same intermediate representation as docx
+- **Collaborative editing**: CRDT-based real-time sync
+

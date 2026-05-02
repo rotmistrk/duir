@@ -1019,7 +1019,7 @@ impl App {
         let path = std::path::Path::new(path_str);
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
         match ext {
-            "md" => match std::fs::read_to_string(path) {
+            "md" => match read_file(path_str) {
                 Ok(content) => {
                     let parsed = duir_core::markdown_import::import_markdown(&content);
                     let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("imported");
@@ -1028,11 +1028,18 @@ impl App {
                 }
                 Err(e) => self.set_status(&format!("Open error: {e}"), StatusLevel::Error),
             },
-            "json" | "yaml" | "yml" => {
-                self.open_file_path(path_str, storage);
-            }
+            "todo" => match read_file(path_str) {
+                Ok(content) => match duir_core::legacy_import::import_legacy_todo(&content) {
+                    Ok(parsed) => {
+                        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("imported");
+                        self.add_file(name.to_owned(), parsed);
+                        self.set_status(&format!("Imported legacy {name}"), StatusLevel::Success);
+                    }
+                    Err(e) => self.set_status(&format!("Import error: {e}"), StatusLevel::Error),
+                },
+                Err(e) => self.set_status(&format!("Open error: {e}"), StatusLevel::Error),
+            },
             _ => {
-                // Try as JSON first, then markdown
                 self.open_file_path(path_str, storage);
             }
         }
