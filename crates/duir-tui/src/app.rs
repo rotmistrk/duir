@@ -842,7 +842,7 @@ impl App {
             }
             "encrypt" => self.cmd_encrypt(),
             "decrypt" => self.cmd_decrypt(),
-            "kiron" => self.cmd_kiron(),
+            "kiron" => self.cmd_kiron(&parts),
             "kiro" => self.cmd_kiro(&parts),
             "about" => {
                 self.state = FocusState::About;
@@ -1295,8 +1295,12 @@ impl App {
         }
     }
 
-    /// Mark the current node as a kiron (AI session node).
-    pub(crate) fn cmd_kiron(&mut self) {
+    /// Mark or disable a kiron on the current node.
+    pub(crate) fn cmd_kiron(&mut self, parts: &[&str]) {
+        if parts.get(1).copied() == Some("disable") {
+            self.kiron_disable();
+            return;
+        }
         let Some(row) = self.current_row().cloned() else {
             "No node selected".clone_into(&mut self.status_message);
             return;
@@ -1304,7 +1308,6 @@ impl App {
         let fi = row.file_index;
         let path = &row.path;
         let item = if path.is_empty() {
-            // File root — not supported as kiron
             "Cannot mark file root as kiron".clone_into(&mut self.status_message);
             return;
         } else {
@@ -1329,6 +1332,38 @@ impl App {
             &format!("Marked as kiron (session {})", &session_id[..8]),
             StatusLevel::Success,
         );
+    }
+
+    fn kiron_disable(&mut self) {
+        let Some(row) = self.current_row().cloned() else {
+            "No node selected".clone_into(&mut self.status_message);
+            return;
+        };
+        let fi = row.file_index;
+        let path = row.path;
+        // Block if active
+        if self.active_kirons.contains_key(&(fi, path.clone())) {
+            self.set_status("Stop kiro first (:kiro stop)", StatusLevel::Error);
+            return;
+        }
+        let item = if path.is_empty() {
+            None
+        } else {
+            duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+        };
+        let Some(item) = item else {
+            "Node not found".clone_into(&mut self.status_message);
+            return;
+        };
+        if !item.is_kiron() {
+            self.set_status("Not a kiron node", StatusLevel::Warning);
+            return;
+        }
+        item.node_type = None;
+        item.kiron = None;
+        self.mark_modified(fi, &path);
+        self.rebuild_rows();
+        self.set_status("Kiron disabled", StatusLevel::Success);
     }
 
     /// Start or stop a kiro session on the current kiron node.

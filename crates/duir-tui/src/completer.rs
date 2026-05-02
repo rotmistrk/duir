@@ -80,6 +80,7 @@ pub const APP_COMMANDS: &[&str] = &[
     "kiro start",
     "kiro stop",
     "kiron",
+    "kiron disable",
     "o ",
     "open ",
     "q",
