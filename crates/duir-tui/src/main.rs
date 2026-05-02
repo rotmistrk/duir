@@ -1838,4 +1838,95 @@ mod tests {
         input::handle_key(&mut app, key(KeyCode::Char('[')));
         assert_eq!(app.note_panel_pct, before);
     }
+
+    // ── Kiro focus / key routing state tests ────────────────────────
+
+    #[test]
+    fn kiro_tab_focus_state() {
+        let mut app = App::new();
+        assert!(!app.kiro_tab_focused);
+        assert!(app.active_kiron_for_cursor().is_none());
+        // Setting flag without active kiron is harmless
+        app.kiro_tab_focused = true;
+        assert!(app.active_kiron_for_cursor().is_none());
+    }
+
+    #[test]
+    fn kiro_start_keeps_tree_focus() {
+        let mut app = make_app_with_tree();
+        app.cursor = 1; // Branch 1
+        app.cmd_kiron(&["kiron"]);
+        assert!(app.files[0].data.items[0].is_kiron());
+        assert!(!app.kiro_tab_focused);
+    }
+
+    fn make_app_with_active_kiron() -> App {
+        let mut app = make_app_with_tree();
+        // Mark Branch 1 as kiron
+        app.cursor = 1;
+        app.cmd_kiron(&["kiron"]);
+        // Manually insert an ActiveKiron (can't spawn real PTY in tests)
+        let fi = app.rows[app.cursor].file_index;
+        let node_id = duir_core::tree_ops::get_item(&app.files[fi].data, &app.rows[app.cursor].path)
+            .unwrap()
+            .id
+            .clone();
+        let file_id = app.files[fi].id;
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let pty = crate::pty_tab::PtyTab::spawn("true", &[], 80, 24, &cwd).unwrap();
+        app.active_kirons.insert((file_id, node_id), app::ActiveKiron { pty });
+        app
+    }
+
+    #[test]
+    fn active_kiron_for_cursor_finds_ancestor() {
+        let mut app = make_app_with_active_kiron();
+        // Cursor on Child 1.1 (inside Branch 1's subtree)
+        app.cursor = 2;
+        let key = app.active_kiron_for_cursor();
+        assert!(key.is_some());
+    }
+
+    #[test]
+    fn active_kiron_for_cursor_none_outside() {
+        let mut app = make_app_with_active_kiron();
+        // Branch 2 is outside the kiron subtree
+        let pos = app.rows.iter().position(|r| r.title == "Branch 2").unwrap();
+        app.cursor = pos;
+        assert!(app.active_kiron_for_cursor().is_none());
+    }
+
+    #[test]
+    fn kiro_tab_toggle_cycle() {
+        let mut app = make_app_with_active_kiron();
+        app.cursor = 1; // on the kiron node
+        assert!(!app.kiro_tab_focused);
+        // Simulate Ctrl+T: tree → kiro
+        if app.active_kiron_for_cursor().is_some() {
+            app.kiro_tab_focused = true;
+        }
+        assert!(app.kiro_tab_focused);
+        // Simulate Ctrl+T: kiro → tree
+        app.kiro_tab_focused = false;
+        assert!(!app.kiro_tab_focused);
+    }
+
+    #[test]
+    fn kiro_stop_clears_focus() {
+        let mut app = make_app_with_active_kiron();
+        app.kiro_tab_focused = true;
+        app.cursor = 1;
+        app.cmd_kiro(&["kiro", "stop"]);
+        assert!(!app.kiro_tab_focused);
+        assert!(app.active_kirons.is_empty());
+    }
+
+    #[test]
+    fn kiron_disable_blocked_while_active() {
+        let mut app = make_app_with_active_kiron();
+        app.cursor = 1;
+        app.cmd_kiron(&["kiron", "disable"]);
+        assert!(app.files[0].data.items[0].is_kiron());
+        assert_eq!(app.status_level, StatusLevel::Error);
+    }
 }

@@ -91,18 +91,21 @@ Legacy Qt ToDo `.todo` XML files are auto-detected and imported by `:open`.
 | `:kiron disable` | Remove kiron marking (must stop first) |
 | `:kiro start` | Start kiro-cli on current kiron node |
 | `:kiro stop` | Stop kiro session |
-| `Ctrl+T` | Toggle between Note and Kiro tabs |
+| `Ctrl+T` | Cycle focus: Tree ↔ Kiro panel |
 | `Ctrl+Enter` | Send current node as prompt to kiro |
-| `Esc` | Return from Kiro tab to tree |
+| `Esc` | Return to tree from kiro panel |
+| `Tab` | In kiro panel: tab completion (passed to kiro) |
+|  | In tree: open note editor (normal behavior) |
 
 Kiron nodes show 🤖 icon in the tree.
-When inside an active kiron's subtree, the note panel shows
-`[Note]` and `[Kiro]` tabs. `Ctrl+T` switches between them.
+When inside an active kiron's subtree, the right panel shows
+tabs: 📝 Note │ 🤖 Kiro. Active panel has double border.
 
-`Ctrl+Enter` serializes the current node and its descendants
-as markdown and sends it to kiro as a prompt. After kiro
-responds (5s idle), the response is captured as a new sibling
-node marked with 📥.
+Ctrl+T switches between tree and kiro panel. All typing goes
+to kiro when its panel is focused. Ctrl+S still saves.
+Ctrl+Enter sends the current node and its descendants as
+markdown to kiro. After kiro responds (5s idle), the response
+is captured as a new sibling node marked with 📥.
 
 Kiro configuration in `config.toml`:
 
