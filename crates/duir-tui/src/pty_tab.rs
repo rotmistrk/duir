@@ -13,6 +13,8 @@ pub struct PtyTab {
     writer: Box<dyn Write + Send>,
     rx: mpsc::Receiver<Vec<u8>>,
     pub termbuf: TermBuf,
+    pub last_output_time: std::time::Instant,
+    pub finished: bool,
 }
 
 impl PtyTab {
@@ -34,12 +36,24 @@ impl PtyTab {
             writer,
             rx,
             termbuf: TermBuf::new(cols as usize, rows as usize),
+            last_output_time: std::time::Instant::now(),
+            finished: false,
         })
     }
 
     pub fn poll(&mut self) {
-        while let Ok(data) = self.rx.try_recv() {
-            self.termbuf.process(&data);
+        loop {
+            match self.rx.try_recv() {
+                Ok(data) => {
+                    self.termbuf.process(&data);
+                    self.last_output_time = std::time::Instant::now();
+                }
+                Err(mpsc::TryRecvError::Empty) => break,
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.finished = true;
+                    break;
+                }
+            }
         }
         // Send any responses (e.g. cursor position reports) back to PTY
         for resp in self.termbuf.responses.drain(..) {

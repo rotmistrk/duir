@@ -252,7 +252,6 @@ fn run_loop(
         if has_active_kirons {
             app.poll_kirons();
             app.check_response_capture();
-            app.process_mcp_mutations();
         }
 
         if let Some(Event::Key(key)) = input::poll_event(timeout)? {
