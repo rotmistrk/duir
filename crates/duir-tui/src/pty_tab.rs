@@ -55,10 +55,11 @@ impl PtyTab {
                 }
             }
         }
-        // Discard terminal query responses — the child is a TUI app
-        // that manages its own terminal. Sending CPR responses back
-        // creates a feedback loop (child redraws → more queries → loop).
-        self.termbuf.responses.clear();
+        // Send any responses (e.g. cursor position reports) back to PTY
+        for resp in self.termbuf.responses.drain(..) {
+            let _ = self.writer.write_all(&resp);
+            let _ = self.writer.flush();
+        }
     }
 
     pub fn write(&mut self, data: &[u8]) {
