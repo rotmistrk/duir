@@ -11,6 +11,44 @@ pub struct Config {
     pub editor: EditorConfig,
     pub ui: UiConfig,
     pub diagrams: crate::diagram::ToolPaths,
+    pub kiro: KiroConfig,
+}
+
+/// Kiro AI assistant integration configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KiroConfig {
+    #[serde(default = "default_kiro_command")]
+    pub command: String,
+    #[serde(default = "default_kiro_args")]
+    pub args: Vec<String>,
+    #[serde(default)]
+    pub trust_all_tools: bool,
+}
+
+fn default_kiro_command() -> String {
+    String::from("kiro-cli")
+}
+
+fn default_kiro_args() -> Vec<String> {
+    vec![String::from("chat"), String::from("--resume")]
+}
+
+impl Default for KiroConfig {
+    fn default() -> Self {
+        Self {
+            command: default_kiro_command(),
+            args: default_kiro_args(),
+            trust_all_tools: false,
+        }
+    }
+}
+
+impl KiroConfig {
+    /// Build the command and arguments for launching kiro-cli.
+    #[must_use]
+    pub fn build_command(&self, _session_dir: &Path) -> (String, Vec<String>) {
+        (self.command.clone(), self.args.clone())
+    }
 }
 
 /// Storage paths configuration.

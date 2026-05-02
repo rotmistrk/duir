@@ -8,6 +8,10 @@ mod note_editor;
 mod syntax;
 
 mod password;
+#[allow(dead_code)]
+mod pty_tab;
+#[allow(dead_code)]
+mod termbuf;
 mod tree_view;
 
 use std::io;
