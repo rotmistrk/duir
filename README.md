@@ -25,38 +25,38 @@ Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 
 ```
 ┌─ Tree (*) ──────────────────┬─ 📝 Note ─────────────────────────┐
-│ ▼ project-plan              │ ## Sprint Goals                    │
-│   ☑ Define architecture 100%│                                    │
-│   ▼ ☐ Backend tasks    33%  │ - Finalize API design              │
-│     ☑ Database schema       │ - Set up CI pipeline               │
-│     ☐ API endpoints         │                                    │
-│     ☐ Auth middleware        │ ```rust                            │
-│   ▶ ☐ Frontend tasks    0%  │ fn main() {                        │
-│   ☐ Documentation           │     println!("hello");             │
-│ ▶ shopping                  │ }                                  │
-│ ▶ reading-list              │ ```                                │
-│                              │                                    │
-│                              │                                    │
-├──────────────────────────────┤                                    │
-│ :export sprint.pdf           │                                    │
-└──────────────────────────────┴────────────────────────────────────┘
+│ ▼ project-plan              │ ## Sprint Goals                   │
+│   ☑ Define architecture 100%│                                   │
+│   ▼ ☐ Backend tasks    33%  │ - Finalize API design             │
+│     ☑ Database schema       │ - Set up CI pipeline              │
+│     ☐ API endpoints         │                                   │
+│     ☐ Auth middleware       │ ```rust                           │
+│   ▶ ☐ Frontend tasks    0%  │ fn main() {                       │
+│   ☐ Documentation           │     println!("hello");            │
+│ ▶ shopping                  │ }                                 │
+│ ▶ reading-list              │ ```                               │
+│                             │                                   │
+│                             │                                   │
+├─────────────────────────────┤                                   │
+│ :export sprint.pdf          │                                   │
+└─────────────────────────────┴───────────────────────────────────┘
 ```
 
 ```
 ┌─ Tree ──────────────────────┬─ 🤖 Kiro ─────────────────────────┐
-│ ▼ project-plan              │ You: Plan the API endpoints for    │
-│   ☑ Define architecture 100%│ the user service                   │
-│   ▼ ☐ Backend tasks    33%  │                                    │
-│     ☑ Database schema       │ Kiro: I'll create the following    │
-│     ☐ API endpoints    🤖▶  │ endpoints under "API endpoints":   │
-│     ☐ Auth middleware        │                                    │
-│   ▶ ☐ Frontend tasks    0%  │ - GET  /users                      │
-│                              │ - POST /users                      │
-│                              │ - GET  /users/:id                  │
-│                              │ - PUT  /users/:id                  │
-│                              │                                    │
-│                              │ Adding via MCP...                  │
-└──────────────────────────────┴────────────────────────────────────┘
+│ ▼ project-plan              │ You: Plan the API endpoints for   │
+│   ☑ Define architecture 100%│ the user service                  │
+│   ▼ ☐ Backend tasks    33%  │                                   │
+│     ☑ Database schema       │ Kiro: I'll create the following   │
+│     ☐ API endpoints    🤖▶  │ endpoints under "API endpoints":  │
+│     ☐ Auth middleware       │                                   │
+│   ▶ ☐ Frontend tasks    0%  │ - GET  /users                     │
+│                             │ - POST /users                     │
+│                             │ - GET  /users/:id                 │
+│                             │ - PUT  /users/:id                 │
+│                             │                                   │
+│                             │ Adding via MCP...                 │
+└─────────────────────────────┴───────────────────────────────────┘
 ```
 
 ## Install
