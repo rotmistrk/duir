@@ -19,10 +19,15 @@ pub struct Config {
 pub struct KiroConfig {
     #[serde(default = "default_kiro_command")]
     pub command: String,
+
     #[serde(default = "default_kiro_args")]
     pub args: Vec<String>,
+
     #[serde(default)]
     pub trust_all_tools: bool,
+
+    #[serde(default = "default_kiro_sop")]
+    pub sop: String,
 }
 
 fn default_kiro_command() -> String {
@@ -33,12 +38,23 @@ fn default_kiro_args() -> Vec<String> {
     vec![String::from("chat"), String::from("--resume")]
 }
 
+fn default_kiro_sop() -> String {
+    String::from(concat!(
+        "You have access to the duir task tree via MCP tools.\n",
+        "After completing each user request, use add_child to record what you did:\n",
+        "- Title: brief summary of the action taken\n",
+        "- Note: details, commands run, or files changed\n",
+        "Use mark_done on completed items. Use get_context to understand the tree first.",
+    ))
+}
+
 impl Default for KiroConfig {
     fn default() -> Self {
         Self {
             command: default_kiro_command(),
             args: default_kiro_args(),
             trust_all_tools: false,
+            sop: default_kiro_sop(),
         }
     }
 }

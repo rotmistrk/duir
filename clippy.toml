@@ -1,0 +1,2 @@
+# File-level line limits are enforced by `make lint-length` (360 lines).
+# Function-level: clippy::too_many_lines uses the default threshold (100).

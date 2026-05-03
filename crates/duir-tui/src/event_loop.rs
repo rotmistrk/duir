@@ -21,6 +21,7 @@ pub fn run_loop(
 ) -> io::Result<()> {
     let mut last_save = std::time::Instant::now();
     let autosave_interval = config.editor.autosave_interval_secs;
+
     loop {
         terminal.draw(|frame| render::render_frame(frame, app))?;
 
@@ -33,6 +34,7 @@ pub fn run_loop(
         // Block for input, with timeout only for autosave or active kirons
         let has_pending_save = app.is_tree_focused() && app.files.iter().any(|f| f.autosave && f.is_modified());
         let has_active_kirons = !app.active_kirons.is_empty();
+
         let timeout = if app.pending_crypto.is_some() {
             Duration::from_millis(1)
         } else if has_active_kirons {
@@ -46,7 +48,6 @@ pub fn run_loop(
         // Poll active kirons for new output
         if has_active_kirons {
             app.poll_kirons();
-            app.check_response_capture();
         }
 
         if let Some(Event::Key(key)) = crate::input::poll_event(timeout)? {
@@ -79,12 +80,14 @@ pub fn run_loop(
             break;
         }
     }
+
     Ok(())
 }
 
 /// Handle overlay input (password prompt, about screen, help screen).
 /// Returns true if the event was consumed by an overlay.
 fn handle_overlay_input(app: &mut App, key: crossterm::event::KeyEvent) -> bool {
+    // Password prompt overlay
     if let Some(prompt) = &mut app.password_prompt {
         match prompt.handle_key(key) {
             crate::password::PromptResult::Submitted(pw) => {
@@ -98,35 +101,50 @@ fn handle_overlay_input(app: &mut App, key: crossterm::event::KeyEvent) -> bool 
                     app.pending_crypto = Some((pw, prompt.callback));
                 }
             }
+
             crate::password::PromptResult::Cancelled => {
                 app.password_prompt = None;
             }
+
             crate::password::PromptResult::Pending => {}
         }
+
         return true;
     }
+
+    // About screen overlay
     if app.is_about_shown() {
         app.state = FocusState::Tree;
         return true;
     }
+
+    // Help screen overlay
     if let FocusState::Help { ref mut scroll } = app.state {
         match key.code {
             KeyCode::Esc | KeyCode::Char('q') => app.state = FocusState::Tree,
+
             KeyCode::Down | KeyCode::Char('j') => *scroll += 1,
+
             KeyCode::Up | KeyCode::Char('k') => {
                 *scroll = scroll.saturating_sub(1);
             }
+
             KeyCode::PageDown => *scroll += 20,
+
             KeyCode::PageUp => *scroll = scroll.saturating_sub(20),
+
             _ => {}
         }
+
         return true;
     }
+
     false
 }
 
-/// Handle global key bindings (Ctrl+Enter, Ctrl+S, Ctrl+T, kiro routing, Esc from kiro).
+/// Handle global key bindings (Ctrl+S, Ctrl+T, Ctrl+R, kiro routing).
 /// Returns true if the event was consumed.
+#[allow(clippy::too_many_lines)]
 fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_dir: &PathBuf) -> bool {
     // F5 or macOS ∞ (Opt+5): toggle zoom
     if matches!(key.code, KeyCode::F(5) | KeyCode::Char('∞')) {
@@ -134,8 +152,11 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // « (macOS Opt+\): send to kiro (works from ANY panel)
-    if matches!(key.code, KeyCode::Char('«')) && app.active_kiron_for_cursor().is_some() {
+    // « (macOS Opt+\) or Ctrl+\: send to kiro (works from ANY panel)
+    if (matches!(key.code, KeyCode::Char('«'))
+        || (key.code == KeyCode::Char('\\') && key.modifiers.contains(KeyModifiers::CONTROL)))
+        && app.active_kiron_for_cursor().is_some()
+    {
         if app.is_note_focused() {
             app.save_editor();
             app.state = FocusState::Tree;
@@ -144,6 +165,7 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
+    // Ctrl+S: save all
     if key.code == KeyCode::Char('s')
         && key.modifiers.contains(KeyModifiers::CONTROL)
         && !app.is_editing_title()
@@ -156,7 +178,18 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         return true;
     }
 
-    // F2 or Alt+2 or macOS ™ (Opt+2): focus tree (leave right panel as-is)
+    // Ctrl+R: capture kiro response (only when tree-focused, not in kiro PTY)
+    if key.code == KeyCode::Char('r')
+        && key.modifiers.contains(KeyModifiers::CONTROL)
+        && !app.is_kiro_focused()
+        && app.is_tree_focused()
+        && app.active_kiron_for_cursor().is_some()
+    {
+        app.capture_kiro_response();
+        return true;
+    }
+
+    // F2 or Alt+2 or macOS ™ (Opt+2): keyboard to tree, right panel unchanged
     if matches!(key.code, KeyCode::F(2))
         || matches!(key.code, KeyCode::Char('2') if key.modifiers.contains(KeyModifiers::ALT))
         || matches!(key.code, KeyCode::Char('™'))
@@ -190,9 +223,10 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
     {
         if app.is_note_focused() {
             app.save_editor();
-            app.state = FocusState::Tree;
         }
+        app.state = FocusState::Kiro;
         app.kiro_tab_focused = true;
+        app.clear_response_ready();
         return true;
     }
 
@@ -204,40 +238,65 @@ fn handle_global_keys(app: &mut App, key: crossterm::event::KeyEvent, storage_di
         && !app.is_editing_title()
     {
         let has_kiron = app.active_kiron_for_cursor().is_some();
-        if app.kiro_tab_focused {
-            app.kiro_tab_focused = false; // Kiro → Tree
+
+        if app.is_kiro_focused() {
+            app.state = FocusState::Tree; // Kiro → Tree
         } else if app.is_note_focused() {
             app.save_editor();
-            app.state = FocusState::Tree;
             if has_kiron {
-                app.kiro_tab_focused = true; // Note → Kiro
+                app.state = FocusState::Kiro; // Note → Kiro
+                app.kiro_tab_focused = true;
+                app.clear_response_ready();
+            } else {
+                app.state = FocusState::Tree; // Note → Tree
             }
-            // else: Note → Tree
         } else {
             app.focus_note(); // Tree → Note
         }
+
         return true;
     }
 
-    // Route ALL keys to kiro PTY when focused (including Esc — kiro uses it)
-    // Use F2 to exit kiro focus
-    if app.kiro_tab_focused
-        && app.is_tree_focused()
-        && app.active_kiron_for_cursor().is_some()
-        && !key.modifiers.contains(KeyModifiers::CONTROL)
-    {
+    // Route keys to kiro PTY when focused (including Esc — kiro uses it).
+    // Ctrl+S and Ctrl+T are already handled above; pass other Ctrl keys through.
+    // PgUp/PgDn scroll the terminal buffer instead of being sent to the PTY.
+    if app.is_kiro_focused() && app.active_kiron_for_cursor().is_some() {
+        // PgUp/PgDn: scroll kiro terminal buffer
+        if matches!(key.code, KeyCode::PageUp | KeyCode::PageDown) {
+            if let Some(kiron_key) = app.active_kiron_for_cursor()
+                && let Some(kiron) = app.active_kirons.get_mut(&kiron_key)
+            {
+                let half = kiron.pty.termbuf.rows() / 2;
+                match key.code {
+                    KeyCode::PageUp => kiron.pty.termbuf.scroll_up(half),
+                    KeyCode::PageDown => kiron.pty.termbuf.scroll_down(half),
+                    _ => {}
+                }
+            }
+            return true;
+        }
+
         if let Some(kiron_key) = app.active_kiron_for_cursor()
             && let Some(kiron) = app.active_kirons.get_mut(&kiron_key)
         {
+            // Snap to bottom on any non-scroll input
+            kiron.pty.termbuf.scroll_to_bottom();
             let bytes = key_to_bytes(key);
             if !bytes.is_empty() {
                 kiron.pty.write(&bytes);
             }
         }
+
         return true;
     }
 
     false
+}
+
+/// Test-only wrapper for `handle_global_keys`.
+#[cfg(test)]
+pub fn handle_global_keys_for_test(app: &mut App, key: crossterm::event::KeyEvent, storage_dir: &PathBuf) -> bool {
+    handle_global_keys(app, key, storage_dir)
 }
 
 /// Convert a crossterm `KeyEvent` to bytes for PTY input.
@@ -253,19 +312,33 @@ pub fn key_to_bytes(key: crossterm::event::KeyEvent) -> Vec<u8> {
                 s.as_bytes().to_vec()
             }
         }
+
         KeyCode::Enter => vec![b'\r'],
+
         KeyCode::Backspace => vec![0x7f],
+
         KeyCode::Tab => vec![b'\t'],
+
         KeyCode::Esc => vec![0x1b],
+
         KeyCode::Up => b"\x1b[A".to_vec(),
+
         KeyCode::Down => b"\x1b[B".to_vec(),
+
         KeyCode::Right => b"\x1b[C".to_vec(),
+
         KeyCode::Left => b"\x1b[D".to_vec(),
+
         KeyCode::Home => b"\x1b[H".to_vec(),
+
         KeyCode::End => b"\x1b[F".to_vec(),
+
         KeyCode::PageUp => b"\x1b[5~".to_vec(),
+
         KeyCode::PageDown => b"\x1b[6~".to_vec(),
+
         KeyCode::Delete => b"\x1b[3~".to_vec(),
+
         _ => Vec::new(),
     }
 }

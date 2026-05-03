@@ -7,6 +7,9 @@ cargo fmt --all -- --check
 echo "=== pre-commit: clippy ==="
 cargo clippy --workspace --all-targets -- -D warnings
 
+echo "=== pre-commit: file length ==="
+make lint-length
+
 echo "=== pre-commit: test ==="
 cargo test --workspace --quiet
 

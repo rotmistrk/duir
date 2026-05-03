@@ -8,7 +8,8 @@
 | `←` | Collapse node / go to parent |
 | `→` | Expand node (prompts password if encrypted) |
 | `Space` | Toggle completed |
-| `Enter` | Edit item title |
+| `Enter` | Send to kiro (in kiron subtree) / no-op otherwise |
+| `e` | Edit item title |
 | `Tab` | Switch to note editor |
 | `]`/`[` | Grow/shrink note panel |
 | `F1` | Open help |
@@ -89,23 +90,37 @@ Legacy Qt ToDo `.todo` XML files are auto-detected and imported by `:open`.
 |---------|--------|
 | `:kiron` | Mark current node as AI session (kiron) |
 | `:kiron disable` | Remove kiron marking (must stop first) |
-| `:kiro start` | Start kiro-cli on current kiron node |
+| `:kiro start` | Start kiro-cli on current kiron node (with MCP) |
 | `:kiro stop` | Stop kiro session |
-| `Ctrl+T` | Cycle focus: Tree ↔ Kiro panel |
-| `Ctrl+Enter` | Send current node as prompt to kiro |
-| `Esc` | Return to tree from kiro panel |
+| `:kiro new` | New session (stop, new session ID, start fresh) |
+| `:kiro capture` | Capture kiro response as sibling node |
+| `Ctrl+\` / `Opt+\` | Send current node as prompt to kiro |
+| `Ctrl+T` | Cycle focus: Tree → Note → Kiro → Tree |
+| `Ctrl+R` | Capture kiro response (tree focus, in kiron subtree) |
+| `F2` / `Alt+2` | Focus tree (keep right panel as-is) |
+| `F3` / `Alt+3` | Focus note panel |
+| `F4` / `Alt+4` | Focus kiro panel |
+| `PgUp` / `PgDn` | Scroll kiro terminal buffer (in kiro panel) |
 | `Tab` | In kiro panel: tab completion (passed to kiro) |
 |  | In tree: open note editor (normal behavior) |
 
-Kiron nodes show 🤖 icon in the tree.
+Kiron (kiro node; the -on suffix like in electron, proton, neutron) nodes show 🤖 in the tree.
+Running kiro shows 🤖▶ on the kiron node.
 When inside an active kiron's subtree, the right panel shows
-tabs: 📝 Note │ 🤖 Kiro. Active panel has double border.
+tabs: 📝 Note │ 🤖 Kiro. Active panel has cyan border.
 
 Ctrl+T switches between tree and kiro panel. All typing goes
-to kiro when its panel is focused. Ctrl+S still saves.
-Ctrl+Enter sends the current node and its descendants as
-markdown to kiro. After kiro responds (5s idle), the response
-is captured as a new sibling node marked with 📥.
+to kiro when its panel is focused (including Ctrl keys like
+Ctrl+C, Ctrl+J). Ctrl+S still saves globally.
+
+Ctrl+\ (or Opt+\ on macOS) sends the current node and its
+descendants as markdown to kiro. Use Ctrl+R or `:kiro capture`
+to grab the response as a new sibling node marked with 💡.
+Sending a new prompt auto-captures any pending previous response.
+
+MCP server starts automatically with `:kiro start`. Kiro can
+read and modify the task tree via MCP tools (read_node,
+list_children, add_child, mark_done, etc.).
 
 Kiro configuration in `config.toml`:
 
@@ -113,6 +128,11 @@ Kiro configuration in `config.toml`:
 [kiro]
 command = "kiro-cli"
 args = ["chat", "--resume"]
+sop = """
+After each user request, use add_child to record what you did.
+Use the user's request as title and your summary as note.
+Mark completed items with mark_done.
+"""
 ```
 
 ### Settings

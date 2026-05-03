@@ -24,9 +24,10 @@ impl PtyTab {
         cols: u16,
         rows: u16,
         cwd: &std::path::Path,
+        envs: &[(&str, &str)],
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let pair = open_pty(cols, rows)?;
-        spawn_command(&pair, cmd, args, cwd)?;
+        spawn_command(&pair, cmd, args, cwd, envs)?;
         let reader = pair.master.try_clone_reader()?;
         let writer = pair.master.take_writer()?;
         let rx = spawn_reader_thread(reader);
@@ -92,12 +93,16 @@ fn spawn_command(
     cmd: &str,
     args: &[&str],
     cwd: &std::path::Path,
+    envs: &[(&str, &str)],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut builder = CommandBuilder::new(cmd);
     for arg in args {
         builder.arg(arg);
     }
     builder.env("TERM", "xterm-256color");
+    for (k, v) in envs {
+        builder.env(k, v);
+    }
     builder.cwd(cwd);
     pair.slave.spawn_command(builder)?;
     Ok(())
@@ -132,7 +137,7 @@ mod tests {
     #[test]
     fn pty_spawn_echo() {
         let dir = std::env::current_dir().unwrap();
-        let mut pty = PtyTab::spawn("echo", &["hello world"], 80, 24, &dir).unwrap();
+        let mut pty = PtyTab::spawn("echo", &["hello world"], 80, 24, &dir, &[]).unwrap();
         let start = Instant::now();
         while !pty.finished && start.elapsed() < Duration::from_secs(3) {
             pty.poll();
@@ -145,7 +150,7 @@ mod tests {
     #[test]
     fn pty_spawn_multiline() {
         let dir = std::env::current_dir().unwrap();
-        let mut pty = PtyTab::spawn("printf", &["line1\\nline2\\nline3"], 80, 24, &dir).unwrap();
+        let mut pty = PtyTab::spawn("printf", &["line1\\nline2\\nline3"], 80, 24, &dir, &[]).unwrap();
         let start = Instant::now();
         while !pty.finished && start.elapsed() < Duration::from_secs(3) {
             pty.poll();
@@ -160,7 +165,7 @@ mod tests {
     #[test]
     fn pty_resize() {
         let dir = std::env::current_dir().unwrap();
-        let mut pty = PtyTab::spawn("echo", &["test"], 80, 24, &dir).unwrap();
+        let mut pty = PtyTab::spawn("echo", &["test"], 80, 24, &dir, &[]).unwrap();
         pty.resize(40, 10);
         assert_eq!(pty.termbuf.cols(), 40);
         assert_eq!(pty.termbuf.rows(), 10);
@@ -169,7 +174,7 @@ mod tests {
     #[test]
     fn pty_finished_on_exit() {
         let dir = std::env::current_dir().unwrap();
-        let mut pty = PtyTab::spawn("true", &[], 80, 24, &dir).unwrap();
+        let mut pty = PtyTab::spawn("true", &[], 80, 24, &dir, &[]).unwrap();
         let start = Instant::now();
         while !pty.finished && start.elapsed() < Duration::from_secs(3) {
             pty.poll();
@@ -181,7 +186,7 @@ mod tests {
     #[test]
     fn pty_last_output_time_updates() {
         let dir = std::env::current_dir().unwrap();
-        let mut pty = PtyTab::spawn("echo", &["hi"], 80, 24, &dir).unwrap();
+        let mut pty = PtyTab::spawn("echo", &["hi"], 80, 24, &dir, &[]).unwrap();
         let before = pty.last_output_time;
         std::thread::sleep(Duration::from_millis(100));
         let start = Instant::now();

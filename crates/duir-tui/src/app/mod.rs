@@ -1,9 +1,20 @@
 mod app_commands;
+mod app_commands_file;
 mod app_crypto;
 mod app_editor;
-mod app_kiron;
+mod app_io;
+pub mod app_kiron;
+pub mod app_kiron_capture;
+pub mod app_kiron_mcp;
 mod app_tree;
+mod app_tree_move;
 
+pub use app_io::{find_available_path, read_file, write_file};
+
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use duir_core::mcp_server::McpMutation;
 use duir_core::tree_ops::TreePath;
 use duir_core::{Completion, NodeId, TodoFile, TodoItem};
 
@@ -11,9 +22,19 @@ use duir_core::{Completion, NodeId, TodoFile, TodoItem};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FileId(pub u64);
 
-/// An active kiron session: PTY process.
+/// An active kiron session: PTY process + optional MCP server.
 pub struct ActiveKiron {
     pub pty: crate::pty_tab::PtyTab,
+    /// True when kiro has gone idle after receiving output (response likely ready).
+    pub response_ready: bool,
+    /// Whether the PTY produced output during the last poll cycle.
+    pub had_output: bool,
+    /// Shared snapshot of the kiron subtree for the MCP server.
+    pub mcp_snapshot: Option<Arc<Mutex<TodoFile>>>,
+    /// Channel receiving mutations from the MCP server thread.
+    pub mutation_rx: Option<std::sync::mpsc::Receiver<McpMutation>>,
+    /// Unix socket path for cleanup on stop.
+    pub socket_path: Option<PathBuf>,
 }
 
 /// A flattened row in the tree view, used for rendering and navigation.
@@ -36,6 +57,7 @@ pub struct TreeRow {
     pub locked: bool,
     pub has_encrypted_children: bool,
     pub is_kiron: bool,
+    pub kiro_active: bool,
 }
 
 /// Loaded file with its data and metadata.
@@ -58,6 +80,7 @@ impl LoadedFile {
 /// Focus area in the UI — each variant carries the state specific to that mode.
 pub enum FocusState {
     Tree,
+    Kiro,
     EditingTitle {
         buffer: String,
         cursor: usize,
@@ -93,14 +116,15 @@ pub enum StatusLevel {
     Error,
 }
 
-/// A pending response capture: tracks which kiron PTY to monitor
-/// and which prompt node to insert the response after.
+/// A pending response capture: tracks the buffer position at which a prompt
+/// was sent so that everything after it can be captured as the response.
 pub struct PendingResponse {
     pub kiron_file_id: FileId,
     pub kiron_node_id: NodeId,
     pub prompt_file_id: FileId,
     pub prompt_node_id: NodeId,
-    pub start_time: std::time::Instant,
+    /// Line number in the combined scrollback+grid at the time the prompt was sent.
+    pub capture_start_line: usize,
 }
 
 #[allow(clippy::struct_excessive_bools)]
@@ -129,7 +153,7 @@ pub struct App {
     pub highlighter: crate::syntax::SyntaxHighlighter,
     /// Active kiron PTY sessions, keyed by (`FileId`, `NodeId`).
     pub active_kirons: std::collections::HashMap<(FileId, NodeId), ActiveKiron>,
-    /// Whether the Kiro tab is focused (vs Note tab) in the note panel.
+    /// Whether the right panel shows Kiro (true) or Note (false).
     pub kiro_tab_focused: bool,
     /// Pending response captures awaiting idle timeout.
     pub pending_responses: Vec<PendingResponse>,
@@ -169,7 +193,7 @@ impl App {
             kiro_tab_focused: false,
             pending_responses: Vec::new(),
             zoomed: false,
-            kbd_mac: detect_mac_terminal(),
+            kbd_mac: app_io::detect_mac_terminal(),
         }
     }
 
@@ -257,6 +281,11 @@ impl App {
     }
 
     #[must_use]
+    pub const fn is_kiro_focused(&self) -> bool {
+        matches!(self.state, FocusState::Kiro)
+    }
+
+    #[must_use]
     #[allow(dead_code)]
     pub const fn is_note_focused(&self) -> bool {
         matches!(self.state, FocusState::Note { .. })
@@ -287,85 +316,6 @@ impl App {
     pub const fn is_about_shown(&self) -> bool {
         matches!(self.state, FocusState::About)
     }
-
-    pub(crate) fn mark_modified(&mut self, fi: usize, path: &[usize]) {
-        if let Some(file) = self.files.get_mut(fi) {
-            file.modified = true;
-        }
-        for len in (1..=path.len()).rev() {
-            if let Some(ancestor) = path.get(..len)
-                && let Some(file) = self.files.get_mut(fi)
-                && let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &ancestor.to_vec())
-            {
-                duir_core::crypto::invalidate_cipher(item);
-            }
-        }
-    }
-
-    pub(crate) fn mark_saved(&mut self, fi: usize) {
-        if let Some(file) = self.files.get_mut(fi) {
-            file.modified = false;
-        }
-    }
-
-    pub(crate) fn mark_file_modified(&mut self, fi: usize) {
-        if let Some(file) = self.files.get_mut(fi) {
-            file.modified = true;
-        }
-    }
-}
-
-/// Read a file from local filesystem or S3.
-pub fn read_file(path: &str) -> Result<String, String> {
-    if duir_core::s3_storage::S3Path::is_s3(path) {
-        let s3path = duir_core::s3_storage::S3Path::parse(path).ok_or("Invalid S3 path")?;
-        let s3 = duir_core::s3_storage::S3Storage::new().map_err(|e| format!("{e}"))?;
-        let bytes = s3.read_bytes(&s3path.bucket, &s3path.key).map_err(|e| format!("{e}"))?;
-        String::from_utf8(bytes).map_err(|e| format!("{e}"))
-    } else {
-        std::fs::read_to_string(path).map_err(|e| format!("{e}"))
-    }
-}
-
-/// Write bytes to local filesystem or S3.
-pub fn write_file(path: &str, data: &[u8]) -> Result<(), String> {
-    if duir_core::s3_storage::S3Path::is_s3(path) {
-        let s3path = duir_core::s3_storage::S3Path::parse(path).ok_or("Invalid S3 path")?;
-        let s3 = duir_core::s3_storage::S3Storage::new().map_err(|e| format!("{e}"))?;
-        s3.write_bytes(&s3path.bucket, &s3path.key, data.to_vec())
-            .map_err(|e| format!("{e}"))
-    } else {
-        std::fs::write(path, data).map_err(|e| format!("{e}"))
-    }
-}
-
-pub fn find_available_path(base: &str) -> std::path::PathBuf {
-    let path = std::path::PathBuf::from(base);
-    if !path.exists() {
-        return path;
-    }
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("export");
-    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
-    for i in 1..100 {
-        let candidate = std::path::PathBuf::from(format!("{stem}.{i}.{ext}"));
-        if !candidate.exists() {
-            return candidate;
-        }
-    }
-    std::path::PathBuf::from(format!("{stem}.99.{ext}"))
-}
-
-/// Detect macOS terminal by checking `TERM_PROGRAM` env var.
-fn detect_mac_terminal() -> bool {
-    std::env::var("TERM_PROGRAM")
-        .map(|v| {
-            let lower = v.to_lowercase();
-            lower.contains("iterm") || lower.contains("apple_terminal") || lower.contains("terminal.app")
-        })
-        .unwrap_or(false)
-        || std::env::var("LC_TERMINAL")
-            .map(|v| v.to_lowercase().contains("iterm"))
-            .unwrap_or(false)
 }
 
 #[cfg(test)]

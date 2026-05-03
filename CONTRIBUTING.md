@@ -14,7 +14,8 @@ cargo build
 The `.githooks/pre-commit` hook runs:
 1. `cargo fmt --check`
 2. `cargo clippy -D warnings` (pedantic)
-3. `cargo test`
+3. `make lint-length` (360-line file limit)
+4. `cargo test`
 
 Commits are rejected if any step fails.
 
@@ -23,6 +24,7 @@ Commits are rejected if any step fails.
 - **Clippy pedantic** with `-D warnings`
 - **No `unsafe`** (`forbid(unsafe_code)`)
 - **No `unwrap`/`expect`/`panic`** in non-test code
+- **360-line file limit**: enforced by `make lint-length`
 - **Typestate pattern**: use the type system to prevent illegal states
 - **FileId + NodeId**: never use raw indices as identity keys
 - **Private modified flag**: all mutations go through `mark_modified()`
@@ -46,7 +48,7 @@ Key invariants:
 ## Testing
 
 ```sh
-make check            # fmt + clippy + tests
+make check            # fmt + clippy + lint-length + tests
 cargo test --workspace # just tests
 cargo tarpaulin       # coverage
 ```

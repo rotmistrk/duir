@@ -19,7 +19,7 @@ Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 - **Kiro Integration**: embedded AI terminal (kiro-cli), prompt/response flow, MCP server
 - **Legacy Import**: Qt ToDo `.todo` XML files
 - **Stable Identity**: FileId + NodeId for corruption-proof tree operations
-- **Self-contained**: single 7MB binary, all resources embedded
+- **Self-contained**: single binary, all resources embedded
 
 ## Install
 
@@ -75,22 +75,30 @@ Credentials use the standard AWS chain (env vars, `~/.aws/credentials`, instance
 
 ## Kiro Integration
 
-Embed kiro-cli as an AI planning assistant:
+Embed kiro-cli as an AI planning assistant.
+A *kiron* (kiro node; the -on suffix like in electron, proton, neutron) is a tree node
+that hosts an AI session:
 
 ```
-:kiron              Mark node as AI session
-:kiro start         Launch kiro-cli in embedded terminal
-Ctrl+T              Toggle Note/Kiro tabs
-Ctrl+Enter          Send node as prompt to kiro
+:kiron              Mark node as AI session (shows 🤖)
+:kiro start         Launch kiro-cli in embedded terminal (shows 🤖▶)
+Enter               Send node as prompt to kiro (in kiron subtree)
+Ctrl+\ / Opt+\      Send from any panel
+Ctrl+T              Cycle focus: Tree → Note → Kiro
+F2/F3/F4            Focus tree / note / kiro directly
+Ctrl+R              Capture kiro response as 💡 node
 ```
 
 Kiro can read and write to the subtree via MCP (Model Context Protocol).
+Active panel has cyan border; inactive has gray.
+
 Configure in config.toml:
 
 ```toml
 [kiro]
 command = "kiro-cli"
 args = ["chat", "--resume"]
+sop = "After each request, use add_child to record what you did."
 ```
 
 ## Legacy Import
@@ -111,7 +119,7 @@ planning/       — epics, stories, tasks
 ## Tests
 
 ```sh
-make check    # fmt + clippy + 239 tests
+make check    # fmt + clippy + lint checks + 298 tests
 ```
 
 ## License

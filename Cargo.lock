@@ -1289,6 +1289,7 @@ dependencies = [
  "pretty_assertions",
  "ratatui",
  "regex",
+ "serde_json",
  "syntect",
  "tempfile",
  "tokio",

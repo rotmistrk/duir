@@ -28,6 +28,7 @@ impl App {
                 locked: false,
                 has_encrypted_children: false,
                 is_kiron: false,
+                kiro_active: false,
             });
             let items: Vec<(usize, TodoItem)> = self.files[fi]
                 .data
@@ -72,6 +73,11 @@ impl App {
             locked: item.is_locked(),
             has_encrypted_children: has_enc_children,
             is_kiron: item.is_kiron(),
+            kiro_active: item.is_kiron() && {
+                let node_id = item.id.clone();
+                let file_id = self.files[file_index].id;
+                self.active_kirons.contains_key(&(file_id, node_id))
+            },
         });
 
         if expanded {
@@ -262,117 +268,6 @@ impl App {
                 self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
                 self.status_message.clear();
-            }
-        }
-    }
-
-    pub fn swap_up(&mut self) {
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            if let Ok(new_path) = duir_core::tree_ops::swap_up(&mut self.files[fi].data, &row.path) {
-                self.mark_modified(fi, &new_path);
-                self.rebuild_rows();
-                if let Some(pos) = self
-                    .rows
-                    .iter()
-                    .position(|r| r.file_index == fi && !r.is_file_root && r.path == new_path)
-                {
-                    self.cursor = pos;
-                }
-            }
-        }
-    }
-
-    pub fn swap_down(&mut self) {
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            if let Ok(new_path) = duir_core::tree_ops::swap_down(&mut self.files[fi].data, &row.path) {
-                self.mark_modified(fi, &new_path);
-                self.rebuild_rows();
-                if let Some(pos) = self
-                    .rows
-                    .iter()
-                    .position(|r| r.file_index == fi && !r.is_file_root && r.path == new_path)
-                {
-                    self.cursor = pos;
-                }
-            }
-        }
-    }
-
-    pub fn promote(&mut self) {
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            if let Ok(new_path) = duir_core::tree_ops::promote(&mut self.files[fi].data, &row.path) {
-                self.mark_modified(fi, &new_path);
-                self.rebuild_rows();
-                if let Some(pos) = self
-                    .rows
-                    .iter()
-                    .position(|r| r.file_index == fi && !r.is_file_root && r.path == new_path)
-                {
-                    self.cursor = pos;
-                }
-            }
-        }
-    }
-
-    pub fn demote(&mut self) {
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            if let Ok(new_path) = duir_core::tree_ops::demote(&mut self.files[fi].data, &row.path) {
-                self.mark_modified(fi, &new_path);
-                self.rebuild_rows();
-                if let Some(pos) = self
-                    .rows
-                    .iter()
-                    .position(|r| r.file_index == fi && !r.is_file_root && r.path == new_path)
-                {
-                    self.cursor = pos;
-                }
-            }
-        }
-    }
-
-    pub fn sort_children(&mut self) {
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            if duir_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
-                self.mark_modified(fi, &row.path);
-                self.rebuild_rows();
-            }
-        }
-    }
-
-    pub fn clone_subtree(&mut self) {
-        if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
-            let fi = row.file_index;
-            let mut new_path = row.path.clone();
-            if let Some(last) = new_path.last_mut() {
-                *last += 1;
-            }
-            if duir_core::tree_ops::clone_subtree(&mut self.files[fi].data, &row.path).is_ok() {
-                self.mark_modified(fi, &new_path);
-                self.rebuild_rows();
-                self.navigate_to(fi, &new_path);
             }
         }
     }

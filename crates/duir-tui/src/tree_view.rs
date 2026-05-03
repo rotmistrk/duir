@@ -55,6 +55,9 @@ impl StatefulWidget for TreeView<'_> {
 
         let end = (state.scroll_offset + visible_height).min(state.rows.len());
 
+        // Collect kiron paths with response_ready for bubble-up indicator
+        let ready_paths = state.response_ready_paths();
+
         for (vi, ri) in (state.scroll_offset..end).enumerate() {
             let row = &state.rows[ri];
             let y = inner.y + vi as u16;
@@ -78,7 +81,23 @@ impl StatefulWidget for TreeView<'_> {
                 ""
             };
 
-            let kiron_icon = if row.is_kiron { "🤖" } else { "" };
+            let kiron_icon = if row.kiro_active {
+                "🤖▶"
+            } else if row.is_kiron {
+                "🤖"
+            } else {
+                ""
+            };
+
+            // Show 💬 if this row is (or is an ancestor of) a kiron with response_ready
+            let response_icon = if ready_paths
+                .iter()
+                .any(|(fi, kp)| *fi == row.file_index && kp.starts_with(&row.path))
+            {
+                "💬"
+            } else {
+                ""
+            };
 
             let checkbox = if row.is_file_root {
                 String::new()
@@ -90,7 +109,7 @@ impl StatefulWidget for TreeView<'_> {
                 }
             };
 
-            let prefix = format!("{indent}{arrow}{checkbox}{lock_icon}{kiron_icon}");
+            let prefix = format!("{indent}{arrow}{checkbox}{lock_icon}{kiron_icon}{response_icon}");
             let prefix_width = prefix.chars().count();
 
             let title = if is_selected && let FocusState::EditingTitle { ref buffer, cursor, .. } = state.state {
