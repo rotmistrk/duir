@@ -8,10 +8,10 @@ use crate::model::{Completion, TodoFile, TodoItem};
 
 /// Embedded Liberation Sans fonts for self-contained PDF generation.
 mod embedded_fonts {
-    pub const REGULAR: &[u8] = include_bytes!("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf");
-    pub const BOLD: &[u8] = include_bytes!("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf");
-    pub const ITALIC: &[u8] = include_bytes!("/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf");
-    pub const BOLD_ITALIC: &[u8] = include_bytes!("/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf");
+    pub const REGULAR: &[u8] = include_bytes!("../fonts/LiberationSans-Regular.ttf");
+    pub const BOLD: &[u8] = include_bytes!("../fonts/LiberationSans-Bold.ttf");
+    pub const ITALIC: &[u8] = include_bytes!("../fonts/LiberationSans-Italic.ttf");
+    pub const BOLD_ITALIC: &[u8] = include_bytes!("../fonts/LiberationSans-BoldItalic.ttf");
 }
 
 fn build_font_family() -> crate::Result<genpdf::fonts::FontFamily<genpdf::fonts::FontData>> {

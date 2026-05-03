@@ -1,0 +1,5 @@
+Liberation Sans fonts are licensed under the SIL Open Font License, Version 1.1.
+https://github.com/liberationfonts/liberation-fonts
+
+These fonts are metrically compatible with Arial/Helvetica and are embedded
+in the duir binary for self-contained PDF export on all platforms.
