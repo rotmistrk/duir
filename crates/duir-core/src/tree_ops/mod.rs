@@ -202,7 +202,9 @@ pub fn demote(file: &mut TodoFile, path: &TreePath) -> Result<TreePath> {
 /// Returns `OmelaError::InvalidPath` if `path` is empty or out of bounds.
 pub fn sort_children(file: &mut TodoFile, path: &TreePath) -> Result<()> {
     let parent = get_item_mut(file, path).ok_or_else(|| OmelaError::InvalidPath(path.clone()))?;
-    parent.items.sort_by(|a, b| a.title.cmp(&b.title));
+    parent
+        .items
+        .sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
     Ok(())
 }
 

@@ -85,14 +85,21 @@ impl App {
 
     pub fn sort_children(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
-                return;
-            }
             let fi = row.file_index;
-            if duir_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
+
+            if row.is_file_root {
+                self.files[fi]
+                    .data
+                    .items
+                    .sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+                self.mark_modified(fi, &[]);
+                self.set_status("Sorted", super::StatusLevel::Success);
+            } else if duir_core::tree_ops::sort_children(&mut self.files[fi].data, &row.path).is_ok() {
                 self.mark_modified(fi, &row.path);
-                self.rebuild_rows();
+                self.set_status("Sorted", super::StatusLevel::Success);
             }
+
+            self.rebuild_rows();
         }
     }
 

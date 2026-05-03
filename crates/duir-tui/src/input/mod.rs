@@ -27,9 +27,9 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
         app.status_message.clear();
     }
 
-    // Shift+Arrow or HJKL: move items
+    // Shift+Arrow: move items
     if shift && !ctrl {
-        return match key.code {
+        let handled = match key.code {
             KeyCode::Up => {
                 app.swap_up();
                 true
@@ -48,6 +48,10 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             }
             _ => false,
         };
+
+        if handled {
+            return true;
+        }
     }
 
     match (key.code, ctrl) {
