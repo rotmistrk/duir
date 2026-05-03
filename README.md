@@ -10,14 +10,14 @@ Named after *duir* — Irish for "oak" in the Ogham tree alphabet, root of
 - **Tree**: checkboxes, importance, completion %, drag-reorder, clone, filter
 - **Editor**: vim keybindings (normal/insert/visual), ex-commands, search, shell pipe
 - **Markdown**: syntax highlighting, fenced code blocks (100+ languages via syntect)
-- **Export**: markdown, Word .docx (with diagram rendering), clipboard
+- **Export**: markdown, Word .docx (with diagram rendering), PDF, clipboard
+- **Import**: markdown, Word .docx (headings, tables, code blocks), Qt ToDo XML
 - **Diagrams**: mermaid, plantuml, graphviz rendered as images in docx export
 - **Encryption**: per-subtree with password, hierarchical, auto-lock on collapse
 - **Files**: multi-file, autosave, JSON storage, YAML export, S3 support, path completion
 - **Config**: XDG-compliant, project-local `.duir/`, configurable autosave interval
 - **Clipboard**: system clipboard via OSC 52 (works over SSH)
 - **Kiro Integration**: embedded AI terminal (kiro-cli), prompt/response flow, MCP server
-- **Legacy Import**: Qt ToDo `.todo` XML files
 - **Stable Identity**: FileId + NodeId for corruption-proof tree operations
 - **Self-contained**: single binary, all resources embedded
 
@@ -131,5 +131,4 @@ MIT
 Future ideas (not currently planned):
 - **Unicode diagram rendering**: Rust library to render mermaid/plantuml/graphviz as Unicode box-drawing art in the terminal (separate project)
 - **HTML preview**: `:preview` command to render note as HTML and open in system browser
-- **PDF export**: via the same intermediate representation as docx
 - **Collaborative editing**: CRDT-based real-time sync

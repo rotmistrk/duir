@@ -56,10 +56,12 @@ Tab completes commands. Tab also completes file paths for file commands.
 | `:qa` / `:q!` | Quit |
 | `:e <name>` | New empty file |
 | `:o <path>` | Open file (add as top-level tree) |
-| `:open <file>` | Open file (auto-detect .md/.json/.todo) |
+| `:open <file>` | Open file (auto-detect .md/.json/.todo/.docx) |
 | `:import <file.md>` | Import markdown under current item |
+| `:import <file.docx>` | Import Word document under current item |
 | `:export [file.md]` | Export subtree as markdown |
 | `:export [file.docx]` | Export subtree as Word document |
+| `:export [file.pdf]` | Export subtree as PDF |
 | `:write <name>` | Save copy as todo JSON (doesn't switch) |
 | `:saveas <name>` | Save as todo JSON and switch to it |
 

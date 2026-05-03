@@ -18,10 +18,12 @@ toml = "0.8"
 age = { package = "age", version = "0.11", features = ["armor"] }
 base64 = "0.22"
 docx-rs = "0.4"
+genpdf = "0.2"
 aws-sdk-s3 = "1"
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 tokio = { version = "1", features = ["rt"] }
 quick-xml = "0.37"
+zip = "2"
 uuid = { version = "1", features = ["v4"] }
 dirs = "6"
 chrono = { version = "0.4", features = ["serde"] }

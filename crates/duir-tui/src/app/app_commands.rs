@@ -277,8 +277,15 @@ impl App {
                 },
                 Err(e) => self.set_status(&format!("DOCX error: {e}"), StatusLevel::Error),
             },
+            "pdf" => match duir_core::pdf_export::export_subtree_pdf(item) {
+                Ok(bytes) => match write_file(&path_s, &bytes) {
+                    Ok(()) => self.set_status(&format!("Exported to {path_s}"), StatusLevel::Success),
+                    Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
+                },
+                Err(e) => self.set_status(&format!("PDF error: {e}"), StatusLevel::Error),
+            },
             _ => {
-                self.status_message = format!("Unknown format: .{ext} (supported: .md, .docx)");
+                self.status_message = format!("Unknown format: .{ext} (supported: .md, .docx, .pdf)");
             }
         }
     }
@@ -289,27 +296,47 @@ impl App {
         } else if parts.len() >= 2 {
             parts[1]
         } else {
-            "Usage: :import <file.md>".clone_into(&mut self.status_message);
+            "Usage: :import <file.md|file.docx>".clone_into(&mut self.status_message);
             return;
         };
         let path = std::path::Path::new(path_str);
-        match read_file(path_str) {
-            Ok(content) => {
-                let parsed = duir_core::markdown_import::import_markdown(&content);
-                if let Some(row) = self.rows.get(self.cursor).cloned() {
-                    let fi = row.file_index;
-                    if row.is_file_root {
-                        self.files[fi].data.items.extend(parsed.items);
-                    } else if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
-                        item.items.extend(parsed.items);
-                        item.folded = false;
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("md");
+
+        let parsed = if ext == "docx" {
+            match std::fs::File::open(path) {
+                Ok(f) => match duir_core::docx_import::import_docx(std::io::BufReader::new(f)) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        self.set_status(&format!("Import error: {e}"), StatusLevel::Error);
+                        return;
                     }
-                    self.mark_modified(fi, &row.path);
-                    self.rebuild_rows();
-                    self.set_status(&format!("Imported {}", path.display()), StatusLevel::Success);
+                },
+                Err(e) => {
+                    self.set_status(&format!("Import error: {e}"), StatusLevel::Error);
+                    return;
                 }
             }
-            Err(e) => self.set_status(&format!("Import error: {e}"), StatusLevel::Error),
+        } else {
+            match read_file(path_str) {
+                Ok(content) => duir_core::markdown_import::import_markdown(&content),
+                Err(e) => {
+                    self.set_status(&format!("Import error: {e}"), StatusLevel::Error);
+                    return;
+                }
+            }
+        };
+
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            let fi = row.file_index;
+            if row.is_file_root {
+                self.files[fi].data.items.extend(parsed.items);
+            } else if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+                item.items.extend(parsed.items);
+                item.folded = false;
+            }
+            self.mark_modified(fi, &row.path);
+            self.rebuild_rows();
+            self.set_status(&format!("Imported {}", path.display()), StatusLevel::Success);
         }
     }
 

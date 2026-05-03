@@ -24,6 +24,17 @@ impl App {
                 }
                 Err(e) => self.set_status(&format!("Open error: {e}"), StatusLevel::Error),
             },
+            "docx" => match std::fs::File::open(path) {
+                Ok(f) => match duir_core::docx_import::import_docx(std::io::BufReader::new(f)) {
+                    Ok(parsed) => {
+                        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("imported");
+                        self.add_file(name.to_owned(), parsed);
+                        self.set_status(&format!("Imported {name}.docx"), StatusLevel::Success);
+                    }
+                    Err(e) => self.set_status(&format!("Import error: {e}"), StatusLevel::Error),
+                },
+                Err(e) => self.set_status(&format!("Open error: {e}"), StatusLevel::Error),
+            },
             "todo" => match read_file(path_str) {
                 Ok(content) => match duir_core::legacy_import::import_legacy_todo(&content) {
                     Ok(parsed) => {
