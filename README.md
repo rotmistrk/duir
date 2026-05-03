@@ -119,7 +119,7 @@ planning/       — epics, stories, tasks
 ## Tests
 
 ```sh
-make check    # fmt + clippy + lint checks + 298 tests
+make check    # fmt + clippy + lint checks + 306 tests
 ```
 
 ## License
