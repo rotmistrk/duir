@@ -95,16 +95,14 @@ fn mcp_apply_with_kiron_path_offset() {
 }
 
 #[test]
-fn mcp_ensure_agent_file_creates_and_preserves() {
+fn mcp_ensure_agent_file_creates_with_mcp() {
     let dir = tempfile::tempdir().unwrap();
     let agents_dir = dir.path().join(".kiro/agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
     let path = agents_dir.join("duir.json");
 
-    // Should not exist yet
     assert!(!path.exists());
 
-    // Run ensure in the temp dir
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(dir.path()).unwrap();
     crate::app::app_kiron_mcp::ensure_agent_file("duir", "test sop");
@@ -114,13 +112,49 @@ fn mcp_ensure_agent_file_creates_and_preserves() {
     let content = std::fs::read_to_string(&path).unwrap();
     assert!(content.contains("DUIR_MCP_SOCKET"));
     assert!(content.contains("includeMcpJson"));
+    assert!(content.contains("test sop"));
+}
 
-    // Write custom content, ensure it's preserved
-    std::fs::write(&path, "custom").unwrap();
+#[test]
+fn mcp_ensure_agent_file_merges_base_agent() {
+    let dir = tempfile::tempdir().unwrap();
+    let agents_dir = dir.path().join(".kiro/agents");
+    std::fs::create_dir_all(&agents_dir).unwrap();
+
+    // Create a base agent with its own MCP server
+    let base = serde_json::json!({
+        "name": "my-agent",
+        "customInstructions": "base instructions",
+        "mcpServers": {
+            "other": {"command": "other-tool", "args": []}
+        },
+        "allowedTools": ["@other"]
+    });
+    std::fs::write(agents_dir.join("my-agent.json"), serde_json::to_string(&base).unwrap()).unwrap();
+
+    let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(dir.path()).unwrap();
-    crate::app::app_kiron_mcp::ensure_agent_file("duir", "test sop");
+    crate::app::app_kiron_mcp::ensure_agent_file("my-agent", "duir sop");
     std::env::set_current_dir(&original_dir).unwrap();
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), "custom");
+
+    let content = std::fs::read_to_string(agents_dir.join("duir.json")).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();
+
+    // Has both MCP servers
+    assert!(parsed["mcpServers"]["duir"]["command"].is_string());
+    assert!(parsed["mcpServers"]["other"]["command"].is_string());
+    // Merged instructions
+    assert!(
+        parsed["customInstructions"]
+            .as_str()
+            .unwrap()
+            .contains("base instructions")
+    );
+    assert!(parsed["customInstructions"].as_str().unwrap().contains("duir sop"));
+    // Merged allowedTools
+    let tools = parsed["allowedTools"].as_array().unwrap();
+    assert!(tools.contains(&serde_json::json!("@other")));
+    assert!(tools.contains(&serde_json::json!("@duir")));
 }
 
 #[test]

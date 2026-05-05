@@ -69,7 +69,7 @@ impl App {
         };
 
         app_kiron_mcp::ensure_agent_file(agent_name, &config.kiro.sop);
-        let (cmd, args) = config.kiro.build_command(std::path::Path::new("."), Some(agent_name));
+        let (cmd, args) = config.kiro.build_command(std::path::Path::new("."), Some("duir"));
 
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
         let socket_str = socket_path.to_string_lossy().into_owned();

@@ -80,34 +80,81 @@ pub fn start_mcp_listener(
 
 /// Ensure the `.kiro/agents/duir.json` agent file exists.
 /// Includes the SOP from config as `customInstructions`.
+/// Build `.kiro/agents/duir.json` by merging the user's agent config with duir MCP.
+/// Always rewrites so that the latest binary path and SOP are used.
 pub fn ensure_agent_file(agent_name: &str, sop: &str) {
-    let path = std::path::PathBuf::from(format!(".kiro/agents/{agent_name}.json"));
-
-    if path.exists() {
-        return;
-    }
-
+    let out_path = std::path::PathBuf::from(".kiro/agents/duir.json");
     let _ = std::fs::create_dir_all(".kiro/agents");
 
     let bin = std::env::current_exe().map_or_else(|_| "duir".to_owned(), |p| p.to_string_lossy().into_owned());
 
-    let sop_escaped = sop.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+    let duir_mcp = serde_json::json!({
+        "command": bin,
+        "args": ["--mcp-connect"],
+        "env": {"DUIR_MCP_SOCKET": "${DUIR_MCP_SOCKET}"},
+        "autoApprove": ["*"]
+    });
 
-    let config = format!(
-        concat!(
-            r#"{{"name":"{name}","#,
-            r#""description":"AI assistant with access to duir task tree via MCP","#,
-            r#""customInstructions":"{sop}","#,
-            r#""mcpServers":{{"duir":{{"command":"{bin}","args":["--mcp-connect"],"#,
-            r#""env":{{"DUIR_MCP_SOCKET":"${{DUIR_MCP_SOCKET}}"}},"autoApprove":["*"]}}}},"#,
-            r#""includeMcpJson":true,"tools":["*"],"allowedTools":["@duir"]}}"#,
-        ),
-        name = agent_name,
-        sop = sop_escaped,
-        bin = bin,
-    );
+    // Load base agent if not "duir"
+    let mut config = if agent_name == "duir" {
+        serde_json::Map::new()
+    } else {
+        load_agent_config(agent_name).unwrap_or_default()
+    };
 
-    let _ = std::fs::write(&path, config);
+    config.insert("name".to_owned(), serde_json::json!("duir"));
+
+    // Merge MCP servers
+    let servers = config.entry("mcpServers").or_insert_with(|| serde_json::json!({}));
+    if let Some(obj) = servers.as_object_mut() {
+        obj.insert("duir".to_owned(), duir_mcp);
+    }
+
+    // Append duir SOP to existing instructions
+    let existing = config
+        .get("customInstructions")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_owned();
+    let merged = if existing.is_empty() {
+        sop.to_owned()
+    } else {
+        format!("{existing}\n\n{sop}")
+    };
+    config.insert("customInstructions".to_owned(), serde_json::json!(merged));
+
+    config.entry("includeMcpJson").or_insert(serde_json::json!(true));
+    config.entry("tools").or_insert(serde_json::json!(["*"]));
+
+    // Ensure @duir in allowedTools
+    let tools = config.entry("allowedTools").or_insert_with(|| serde_json::json!([]));
+    if let Some(arr) = tools.as_array_mut() {
+        let tag = serde_json::json!("@duir");
+        if !arr.contains(&tag) {
+            arr.push(tag);
+        }
+    }
+
+    let json = serde_json::to_string_pretty(&config).unwrap_or_default();
+    let _ = std::fs::write(&out_path, json);
+}
+
+fn load_agent_config(name: &str) -> Option<serde_json::Map<String, serde_json::Value>> {
+    let filename = format!("{name}.json");
+    let candidates = [
+        std::path::PathBuf::from(format!(".kiro/agents/{filename}")),
+        dirs::home_dir()
+            .unwrap_or_default()
+            .join(format!(".kiro/agents/{filename}")),
+    ];
+    for path in &candidates {
+        if let Ok(content) = std::fs::read_to_string(path)
+            && let Ok(serde_json::Value::Object(map)) = serde_json::from_str(&content)
+        {
+            return Some(map);
+        }
+    }
+    None
 }
 
 /// Test-only wrapper for `mcp_socket_path`.
