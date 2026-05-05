@@ -90,6 +90,7 @@ pub struct EditorConfig {
 #[serde(default)]
 pub struct UiConfig {
     pub note_panel_pct: u16,
+    pub file_order: Vec<String>,
 }
 
 impl Default for StorageConfig {
@@ -115,7 +116,10 @@ impl Default for EditorConfig {
 
 impl Default for UiConfig {
     fn default() -> Self {
-        Self { note_panel_pct: 50 }
+        Self {
+            note_panel_pct: 50,
+            file_order: Vec::new(),
+        }
     }
 }
 

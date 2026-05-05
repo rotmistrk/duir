@@ -16,4 +16,10 @@ impl App {
             .collect();
         self.status_message = lines.join(" │ ");
     }
+
+    pub fn apply_file_order(&mut self, order: &[String]) {
+        self.files
+            .sort_by_key(|f| order.iter().position(|n| n == &f.name).unwrap_or(usize::MAX));
+        self.rebuild_rows();
+    }
 }

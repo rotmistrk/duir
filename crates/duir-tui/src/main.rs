@@ -196,6 +196,11 @@ fn main() -> io::Result<()> {
         }
     }
 
+    // Apply saved file order
+    if !config.ui.file_order.is_empty() {
+        app.apply_file_order(&config.ui.file_order);
+    }
+
     // Handle first-run experience
     let first_run = app.files.is_empty();
 
