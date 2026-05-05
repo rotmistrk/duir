@@ -162,13 +162,19 @@ fn main() -> io::Result<()> {
 
     // Load files from storage or CLI arguments
     if cli.files.is_empty() {
+        let central = config.storage.central.clone();
         for dir in &config.storage_dirs() {
+            let source = if dir == &central {
+                app::FileSource::Central
+            } else {
+                app::FileSource::Local
+            };
             if let Ok(storage) = FileStorage::new(dir)
                 && let Ok(names) = storage.list()
             {
                 for name in &names {
                     match storage.load(name) {
-                        Ok(data) => app.add_file(name.clone(), data),
+                        Ok(data) => app.add_file_with_source(name.clone(), data, source),
                         Err(e) => eprintln!("Error loading {name}: {e}"),
                     }
                 }

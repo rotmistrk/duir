@@ -2,6 +2,7 @@ mod app_commands;
 mod app_commands_file;
 mod app_crypto;
 mod app_editor;
+mod app_files;
 mod app_io;
 pub mod app_kiron;
 pub mod app_kiron_capture;
@@ -58,6 +59,13 @@ pub struct TreeRow {
     pub has_encrypted_children: bool,
     pub is_kiron: bool,
     pub kiro_active: bool,
+    pub file_source: Option<FileSource>,
+}
+/// Where a file was loaded from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileSource {
+    Central,
+    Local,
 }
 
 /// Loaded file with its data and metadata.
@@ -66,6 +74,7 @@ pub struct LoadedFile {
     pub id: FileId,
     pub name: String,
     pub data: TodoFile,
+    pub source: FileSource,
     pub(crate) modified: bool,
     pub autosave: bool,
 }
@@ -199,6 +208,9 @@ impl App {
     }
 
     pub fn add_file(&mut self, name: String, data: TodoFile) {
+        self.add_file_with_source(name, data, FileSource::Central);
+    }
+    pub fn add_file_with_source(&mut self, name: String, data: TodoFile, source: FileSource) {
         let id = FileId(self.next_file_id);
         self.next_file_id += 1;
         let autosave = self.autosave_global;
@@ -206,6 +218,7 @@ impl App {
             id,
             name,
             data,
+            source,
             modified: false,
             autosave,
         });
@@ -215,7 +228,6 @@ impl App {
     pub fn add_empty_file(&mut self, name: &str) {
         self.add_file(name.to_owned(), TodoFile::new(name));
     }
-
     #[must_use]
     #[allow(dead_code)]
     pub fn file_by_id(&self, id: FileId) -> Option<&LoadedFile> {

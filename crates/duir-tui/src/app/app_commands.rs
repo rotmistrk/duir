@@ -1,8 +1,8 @@
 use super::{App, FocusState, StatusLevel, find_available_path, read_file, write_file};
-
 #[allow(clippy::indexing_slicing)] // fi from rebuild_rows, parts guarded by len checks
 impl App {
     /// Execute a `:` command. Returns an optional path for file operations.
+    #[allow(clippy::too_many_lines)]
     pub fn execute_command(&mut self, storage: &dyn duir_core::TodoStorage) {
         let cmd = if let FocusState::Command { ref buffer, .. } = self.state {
             buffer.trim().to_owned()
@@ -10,7 +10,6 @@ impl App {
             return;
         };
         self.state = FocusState::Tree;
-
         let parts: Vec<&str> = cmd.splitn(3, ' ').collect();
         match parts.first().copied().unwrap_or("") {
             "w" => self.save_current(storage),
@@ -82,6 +81,7 @@ impl App {
             }
             "encrypt" => self.cmd_encrypt(),
             "decrypt" => self.cmd_decrypt(),
+            "files" => self.cmd_files(),
             "kiron" => self.cmd_kiron(&parts),
             "kiro" => self.cmd_kiro(&parts),
             "kbd" => match parts.get(1).copied() {

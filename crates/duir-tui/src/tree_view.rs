@@ -100,7 +100,10 @@ impl StatefulWidget for TreeView<'_> {
             };
 
             let checkbox = if row.is_file_root {
-                "📄 ".to_owned()
+                match row.file_source {
+                    Some(crate::app::FileSource::Local) => "📁 ".to_owned(),
+                    _ => "🏠 ".to_owned(),
+                }
             } else {
                 match row.completed {
                     Completion::Open => "☐ ".to_owned(),

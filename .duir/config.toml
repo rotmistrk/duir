@@ -1,0 +1,31 @@
+[storage]
+central = "/home/rotmistr/.local/share/duir"
+local = ".duir"
+
+[editor]
+autosave = true
+autosave_interval_secs = 30
+tab_width = 4
+line_numbers = false
+
+[ui]
+note_panel_pct = 50
+
+[diagrams]
+mmdc = "mmdc"
+plantuml = "plantuml"
+dot = "dot"
+
+[kiro]
+command = "kiro-cli"
+args = [
+    "chat",
+    "--resume",
+]
+trust_all_tools = false
+sop = """
+You have access to the duir task tree via MCP tools.
+After completing each user request, use add_child to record what you did:
+- Title: brief summary of the action taken
+- Note: details, commands run, or files changed
+Use mark_done on completed items. Use get_context to understand the tree first."""

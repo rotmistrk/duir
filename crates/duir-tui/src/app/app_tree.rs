@@ -29,6 +29,7 @@ impl App {
                 has_encrypted_children: false,
                 is_kiron: false,
                 kiro_active: false,
+                file_source: Some(file.source),
             });
             let items: Vec<(usize, TodoItem)> = self.files[fi]
                 .data
@@ -78,6 +79,7 @@ impl App {
                 let file_id = self.files[file_index].id;
                 self.active_kirons.contains_key(&(file_id, node_id))
             },
+            file_source: None,
         });
 
         if expanded {
