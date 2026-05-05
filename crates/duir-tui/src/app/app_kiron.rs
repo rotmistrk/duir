@@ -110,28 +110,17 @@ impl App {
         let subcmd = parts.get(1).copied().unwrap_or("");
 
         match subcmd {
-            "start" => self.kiro_start(),
+            "start" => {
+                if let Some(&agent) = parts.get(2) {
+                    agent.to_owned().clone_into(&mut self.kiro_agent_override);
+                }
+                self.kiro_start();
+            }
             "stop" => self.kiro_stop(),
             "new" => self.kiro_new_session(),
             "capture" => self.capture_kiro_response(),
-            "agent" => {
-                if let Some(&name) = parts.get(2) {
-                    name.to_owned().clone_into(&mut self.kiro_agent_override);
-                    self.set_status(&format!("Kiro agent set to: {name}"), StatusLevel::Success);
-                } else {
-                    let current = if self.kiro_agent_override.is_empty() {
-                        "duir (default)"
-                    } else {
-                        &self.kiro_agent_override
-                    };
-                    self.set_status(
-                        &format!("Kiro agent: {current}. Usage: :kiro agent <name>"),
-                        StatusLevel::Info,
-                    );
-                }
-            }
             _ => {
-                "Usage: :kiro start|stop|new|capture|agent <name>".clone_into(&mut self.status_message);
+                "Usage: :kiro start [agent]|stop|new|capture".clone_into(&mut self.status_message);
             }
         }
     }

@@ -120,6 +120,7 @@ that hosts an AI session:
 ```
 :kiron              Mark node as AI session (shows 🤖)
 :kiro start         Launch kiro-cli in embedded terminal (shows 🤖▶)
+:kiro start agent   Launch with a specific kiro-cli agent
 Enter               Send node as prompt to kiro (in kiron subtree)
 Ctrl+\ / Opt+\      Send from any panel
 Ctrl+T              Cycle focus: Tree → Note → Kiro
@@ -140,7 +141,7 @@ agent = "my-agent"  # optional, default: "duir"
 sop = "After each request, use add_child to record what you did."
 ```
 
-Use `:kiro agent <name>` to override the agent for the current session.
+Use `:kiro start my-agent` to override the agent for a specific session.
 
 ## Multi-Instance & Conflict Detection
 

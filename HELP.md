@@ -94,11 +94,10 @@ Legacy Qt ToDo `.todo` XML files are auto-detected and imported by `:open`.
 |---------|--------|
 | `:kiron` | Mark current node as AI session (kiron) |
 | `:kiron disable` | Remove kiron marking (must stop first) |
-| `:kiro start` | Start kiro-cli on current kiron node (with MCP) |
+| `:kiro start [agent]` | Start kiro-cli on current kiron node (with MCP) |
 | `:kiro stop` | Stop kiro session |
 | `:kiro new` | New session (stop, new session ID, start fresh) |
 | `:kiro capture` | Capture kiro response as sibling node |
-| `:kiro agent <name>` | Set kiro agent for this session (default: duir) |
 | `Ctrl+\` / `Opt+\` | Send current node as prompt to kiro |
 | `Ctrl+T` | Cycle focus: Tree → Note → Kiro → Tree |
 | `Ctrl+R` | Capture kiro response (tree focus, in kiron subtree) |
