@@ -13,6 +13,7 @@ mod input_other;
 mod input_tree;
 mod kiro;
 mod mcp;
+mod multi_file;
 mod tree_ops;
 
 fn make_app_with_tree() -> App {
@@ -45,6 +46,20 @@ fn key(code: KeyCode) -> KeyEvent {
 }
 fn shift_key(code: KeyCode) -> KeyEvent {
     KeyEvent::new(code, KeyModifiers::SHIFT)
+}
+
+fn make_app_multi_file() -> App {
+    let mut app = App::new();
+    let mut file_a = TodoFile::new("file-a");
+    file_a.items.push(TodoItem::new("A-first"));
+    file_a.items.push(TodoItem::new("A-second"));
+    file_a.items.push(TodoItem::new("A-third"));
+    app.add_file("file-a".to_owned(), file_a);
+    let mut file_b = TodoFile::new("file-b");
+    file_b.items.push(TodoItem::new("B-first"));
+    file_b.items.push(TodoItem::new("B-second"));
+    app.add_file("file-b".to_owned(), file_b);
+    app
 }
 
 fn make_app_with_active_kiron() -> App {
