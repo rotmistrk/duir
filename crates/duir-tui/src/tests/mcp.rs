@@ -107,7 +107,7 @@ fn mcp_ensure_agent_file_creates_and_preserves() {
     // Run ensure in the temp dir
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(dir.path()).unwrap();
-    crate::app::app_kiron_mcp::ensure_agent_file("test sop");
+    crate::app::app_kiron_mcp::ensure_agent_file("duir", "test sop");
     std::env::set_current_dir(&original_dir).unwrap();
 
     assert!(path.exists());
@@ -118,7 +118,7 @@ fn mcp_ensure_agent_file_creates_and_preserves() {
     // Write custom content, ensure it's preserved
     std::fs::write(&path, "custom").unwrap();
     std::env::set_current_dir(dir.path()).unwrap();
-    crate::app::app_kiron_mcp::ensure_agent_file("test sop");
+    crate::app::app_kiron_mcp::ensure_agent_file("duir", "test sop");
     std::env::set_current_dir(&original_dir).unwrap();
     assert_eq!(std::fs::read_to_string(&path).unwrap(), "custom");
 }

@@ -68,7 +68,7 @@ impl App {
             &self.kiro_agent_override
         };
 
-        app_kiron_mcp::ensure_agent_file(&config.kiro.sop);
+        app_kiron_mcp::ensure_agent_file(agent_name, &config.kiro.sop);
         let (cmd, args) = config.kiro.build_command(std::path::Path::new("."), Some(agent_name));
 
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();

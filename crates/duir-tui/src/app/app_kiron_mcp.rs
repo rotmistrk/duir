@@ -80,8 +80,8 @@ pub fn start_mcp_listener(
 
 /// Ensure the `.kiro/agents/duir.json` agent file exists.
 /// Includes the SOP from config as `customInstructions`.
-pub fn ensure_agent_file(sop: &str) {
-    let path = std::path::PathBuf::from(".kiro/agents/duir.json");
+pub fn ensure_agent_file(agent_name: &str, sop: &str) {
+    let path = std::path::PathBuf::from(format!(".kiro/agents/{agent_name}.json"));
 
     if path.exists() {
         return;
@@ -95,13 +95,14 @@ pub fn ensure_agent_file(sop: &str) {
 
     let config = format!(
         concat!(
-            r#"{{"name":"duir","#,
+            r#"{{"name":"{name}","#,
             r#""description":"AI assistant with access to duir task tree via MCP","#,
             r#""customInstructions":"{sop}","#,
             r#""mcpServers":{{"duir":{{"command":"{bin}","args":["--mcp-connect"],"#,
             r#""env":{{"DUIR_MCP_SOCKET":"${{DUIR_MCP_SOCKET}}"}},"autoApprove":["*"]}}}},"#,
             r#""includeMcpJson":true,"tools":["*"],"allowedTools":["@duir"]}}"#,
         ),
+        name = agent_name,
         sop = sop_escaped,
         bin = bin,
     );
