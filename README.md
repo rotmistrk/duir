@@ -136,8 +136,20 @@ Configure in config.toml:
 [kiro]
 command = "kiro-cli"
 args = ["chat", "--resume"]
+agent = "my-agent"  # optional, default: "duir"
 sop = "After each request, use add_child to record what you did."
 ```
+
+Use `:kiro agent <name>` to override the agent for the current session.
+
+## Multi-Instance & Conflict Detection
+
+Multiple duir instances can share the same files safely:
+
+- Files auto-reload when changed on disk (if no local edits)
+- Conflicts detected on save — warns instead of overwriting
+- `:resolve` shows per-node diff with keep-mine/theirs/both options
+- `:w!` force-saves past conflicts
 
 ## Legacy Import
 
@@ -169,4 +181,3 @@ MIT
 Future ideas (not currently planned):
 - **Unicode diagram rendering**: Rust library to render mermaid/plantuml/graphviz as Unicode box-drawing art in the terminal (separate project)
 - **HTML preview**: `:preview` command to render note as HTML and open in system browser
-- **Collaborative editing**: CRDT-based real-time sync

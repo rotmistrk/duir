@@ -51,12 +51,14 @@ Tab completes commands. Tab also completes file paths for file commands.
 | Command | Action |
 |---------|--------|
 | `:w` | Save current file |
+| `:w!` | Force save (overwrite even if changed on disk) |
 | `:wa` | Save all files |
 | `:q` | Close current file |
 | `:qa` / `:q!` | Quit |
 | `:e <name>` | New empty file |
 | `:o <path>` | Open file (add as top-level tree) |
 | `:open <file>` | Open file (auto-detect .md/.json/.todo/.docx) |
+| `:resolve` | Resolve file conflicts (when disk changed) |
 | `:import <file.md>` | Import markdown under current item |
 | `:import <file.docx>` | Import Word document under current item |
 | `:export [file.md]` | Export subtree as markdown |
@@ -96,6 +98,7 @@ Legacy Qt ToDo `.todo` XML files are auto-detected and imported by `:open`.
 | `:kiro stop` | Stop kiro session |
 | `:kiro new` | New session (stop, new session ID, start fresh) |
 | `:kiro capture` | Capture kiro response as sibling node |
+| `:kiro agent <name>` | Set kiro agent for this session (default: duir) |
 | `Ctrl+\` / `Opt+\` | Send current node as prompt to kiro |
 | `Ctrl+T` | Cycle focus: Tree → Note → Kiro → Tree |
 | `Ctrl+R` | Capture kiro response (tree focus, in kiron subtree) |
@@ -130,6 +133,7 @@ Kiro configuration in `config.toml`:
 [kiro]
 command = "kiro-cli"
 args = ["chat", "--resume"]
+agent = "my-agent"  # optional, default uses built-in "duir" agent
 sop = """
 After each user request, use add_child to record what you did.
 Use the user's request as title and your summary as note.
@@ -212,6 +216,29 @@ Mark completed items with mark_done.
 Most normal-mode commands accept a count: `3dd`, `5j`, `2yy`, `4w`, `3>`.
 
 All yank/copy/cut operations sync to system clipboard (OSC 52).
+
+## File Conflict Detection
+
+When multiple duir instances share the same files (e.g. central storage),
+conflicts are detected automatically:
+
+- **Auto-reload**: If a file changes on disk and you have no local edits, it reloads silently.
+- **Conflict warning**: If a file changes on disk while you have unsaved edits, you'll see:
+  `⚠ File changed on disk. :w! to force, :e to reload, :resolve for conflicts`
+
+### Resolving Conflicts (`:resolve`)
+
+| Key | Action |
+|-----|--------|
+| `j`/`k` | Navigate conflicts |
+| `m` | Keep mine (local version) |
+| `t` | Keep theirs (disk version) |
+| `b` | Keep both (duplicates node with "(conflict)" suffix) |
+| `Enter` | Apply all resolutions |
+| `Esc` | Cancel |
+
+Conflicts are detected per-node by ID. Only nodes that actually differ
+(title, note, completion, importance) are shown.
 
 ## Config
 
