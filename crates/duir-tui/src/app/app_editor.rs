@@ -2,8 +2,6 @@ use duir_core::NodeId;
 
 use super::{App, FocusState};
 
-// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
-#[allow(clippy::indexing_slicing)]
 impl App {
     /// Write editor content back to the model.
     pub fn save_editor(&mut self) {
@@ -17,13 +15,14 @@ impl App {
             let Some(fi) = self.file_index_for_id(file_id) else {
                 return;
             };
+            let Some(file) = self.files.get_mut(fi) else { return };
             if node_id.0.is_empty() {
-                if self.files[fi].data.note != content {
-                    self.files[fi].data.note = content;
+                if file.data.note != content {
+                    file.data.note = content;
                     self.mark_modified(fi, &[]);
                 }
-            } else if let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, node_id)
-                && let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            } else if let Some(path) = duir_core::tree_ops::find_node_path(&file.data, node_id)
+                && let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path)
                 && item.note != content
             {
                 item.note = content;
@@ -63,10 +62,12 @@ impl App {
         self.editor_cache.clear();
         if let Some(row) = self.current_row().cloned() {
             let note = self.current_note();
-            let node_id = if row.is_file_root || row.path.is_empty() {
+            let node_id = if row.flags.is_file_root() || row.path.is_empty() {
                 NodeId(String::new())
             } else {
-                duir_core::tree_ops::get_item(&self.files[row.file_index].data, &row.path)
+                self.files
+                    .get(row.file_index)
+                    .and_then(|f| duir_core::tree_ops::get_item(&f.data, &row.path))
                     .map_or_else(|| NodeId(String::new()), |item| item.id.clone())
             };
             self.state = FocusState::Note {
@@ -87,10 +88,11 @@ impl App {
         if let FocusState::EditingTitle { ref buffer, .. } = self.state {
             let new_title = buffer.clone();
             if let Some(row) = self.rows.get(self.cursor).cloned()
-                && !row.is_file_root
+                && !row.flags.is_file_root()
             {
                 let fi = row.file_index;
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path)
+                if let Some(file) = self.files.get_mut(fi)
+                    && let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &row.path)
                     && item.title != new_title
                 {
                     item.title.clone_from(&new_title);
@@ -126,16 +128,16 @@ impl App {
             }
         }
 
-        if self.filter_committed_exclude {
+        if self.flags.filter_committed_exclude() {
             self.rows
-                .retain(|row| row.is_file_root || !match_set.contains(&(row.file_index, row.path.clone())));
+                .retain(|row| row.flags.is_file_root() || !match_set.contains(&(row.file_index, row.path.clone())));
         } else {
             self.rows
-                .retain(|row| row.is_file_root || match_set.contains(&(row.file_index, row.path.clone())));
+                .retain(|row| row.flags.is_file_root() || match_set.contains(&(row.file_index, row.path.clone())));
         }
 
-        let visible = self.rows.iter().filter(|r| !r.is_file_root).count();
-        let mode = if self.filter_committed_exclude {
+        let visible = self.rows.iter().filter(|r| !r.flags.is_file_root()).count();
+        let mode = if self.flags.filter_committed_exclude() {
             "exclude"
         } else {
             "include"
@@ -185,12 +187,12 @@ impl App {
         }
         if exclude {
             self.rows
-                .retain(|row| row.is_file_root || !match_set.contains(&(row.file_index, row.path.clone())));
+                .retain(|row| row.flags.is_file_root() || !match_set.contains(&(row.file_index, row.path.clone())));
         } else {
             self.rows
-                .retain(|row| row.is_file_root || match_set.contains(&(row.file_index, row.path.clone())));
+                .retain(|row| row.flags.is_file_root() || match_set.contains(&(row.file_index, row.path.clone())));
         }
-        let visible = self.rows.iter().filter(|r| !r.is_file_root).count();
+        let visible = self.rows.iter().filter(|r| !r.flags.is_file_root()).count();
         self.status_message = format!("/{filter_text}: {visible} matches");
         if self.cursor >= self.rows.len() && !self.rows.is_empty() {
             self.cursor = self.rows.len() - 1;
@@ -199,11 +201,12 @@ impl App {
 
     pub(crate) fn cmd_collapse(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 return;
             }
             let fi = row.file_index;
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+            let Some(file) = self.files.get_mut(fi) else { return };
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &row.path) {
                 if item.items.is_empty() {
                     "No children to collapse".clone_into(&mut self.status_message);
                     return;
@@ -228,11 +231,12 @@ impl App {
 
     pub(crate) fn cmd_expand(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 return;
             }
             let fi = row.file_index;
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+            let Some(file) = self.files.get_mut(fi) else { return };
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &row.path) {
                 if item.note.trim().is_empty() {
                     "No note to expand".clone_into(&mut self.status_message);
                     return;

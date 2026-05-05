@@ -14,14 +14,14 @@ fn close_current_file_saved_removes() {
     let mut app = make_app_with_tree();
     // modified defaults to false from add_file
     app.close_current_file();
-    assert!(app.should_quit); // last file → quit
+    assert!(app.flags.should_quit()); // last file → quit
 }
 
 #[test]
 fn apply_filter_exclude_mode() {
     let mut app = make_app_with_tree();
     app.filter_committed_text = "Branch 1".to_owned();
-    app.filter_committed_exclude = true;
+    app.flags.set_filter_committed_exclude(true);
     app.apply_filter();
     // Branch 1 should be hidden
     assert!(!app.rows.iter().any(|r| r.title == "Branch 1"));
@@ -86,8 +86,7 @@ fn mark_modified_invalidates_cipher() {
     let cipher_before = app.files[0].data.items[0].cipher.clone();
 
     // Modify a child — should invalidate parent cipher
-    #[allow(clippy::useless_vec)]
-    let child_path = vec![0, 0];
+    let child_path: duir_core::tree_ops::TreePath = [0, 0].into();
     if let Some(child) = duir_core::tree_ops::get_item_mut(&mut app.files[0].data, &child_path) {
         child.title = "Modified".to_owned();
     }
@@ -100,11 +99,11 @@ fn pending_delete_cleared_on_other_key() {
     let mut app = make_app_with_tree();
     app.cursor = 1;
     app.delete_current();
-    assert!(app.pending_delete);
+    assert!(app.flags.pending_delete());
     // Press any key other than 'y'
     input::handle_key(&mut app, key(KeyCode::Char('n')));
     // pending_delete cleared (though 'n' also creates sibling)
-    assert!(!app.pending_delete);
+    assert!(!app.flags.pending_delete());
 }
 
 #[test]
@@ -112,9 +111,9 @@ fn pending_delete_y_confirms() {
     let mut app = make_app_with_tree();
     app.cursor = 1;
     app.delete_current();
-    assert!(app.pending_delete);
+    assert!(app.flags.pending_delete());
     input::handle_key(&mut app, key(KeyCode::Char('y')));
-    assert!(!app.pending_delete);
+    assert!(!app.flags.pending_delete());
     assert_ne!(app.files[0].data.items[0].title, "Branch 1");
 }
 

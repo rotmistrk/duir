@@ -7,9 +7,6 @@ use super::{ActiveKiron, App, FocusState, StatusLevel};
 use duir_core::NodeId;
 use std::sync::{Arc, Mutex};
 
-// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
-// path slicing is guarded by length checks.
-#[allow(clippy::indexing_slicing)]
 impl App {
     /// Mark or disable a kiron on the current node.
     pub(crate) fn cmd_kiron(&mut self, parts: &[&str]) {
@@ -30,7 +27,8 @@ impl App {
             "Cannot mark file root as kiron".clone_into(&mut self.status_message);
             return;
         } else {
-            duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, path)
+            let Some(file) = self.files.get_mut(fi) else { return };
+            duir_core::tree_ops::get_item_mut(&mut file.data, path)
         };
 
         let Some(item) = item else {
@@ -70,12 +68,15 @@ impl App {
         let item = if path.is_empty() {
             None
         } else {
-            duir_core::tree_ops::get_item(&self.files[fi].data, &path)
+            self.files
+                .get(fi)
+                .and_then(|f| duir_core::tree_ops::get_item(&f.data, &path))
         };
 
         let node_id = item.map_or_else(|| NodeId(String::new()), |it| it.id.clone());
 
-        if self.active_kirons.contains_key(&(self.files[fi].id, node_id)) {
+        let file_id = self.files.get(fi).map_or(super::FileId(0), |f| f.id);
+        if self.active_kirons.contains_key(&(file_id, node_id)) {
             self.set_status("Stop kiro first (:kiro stop)", StatusLevel::Error);
             return;
         }
@@ -83,7 +84,9 @@ impl App {
         let item = if path.is_empty() {
             None
         } else {
-            duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            self.files
+                .get_mut(fi)
+                .and_then(|f| duir_core::tree_ops::get_item_mut(&mut f.data, &path))
         };
 
         let Some(item) = item else {
@@ -131,7 +134,9 @@ impl App {
         let item = if path.is_empty() {
             None
         } else {
-            duir_core::tree_ops::get_item(&self.files[fi].data, &path)
+            self.files
+                .get(fi)
+                .and_then(|f| duir_core::tree_ops::get_item(&f.data, &path))
         };
 
         let Some(item) = item else {
@@ -144,7 +149,8 @@ impl App {
             return;
         }
 
-        let file_id = self.files[fi].id;
+        let Some(file) = self.files.get(fi) else { return };
+        let file_id = file.id;
         let node_id = item.id.clone();
         let key = (file_id, node_id);
 
@@ -198,7 +204,7 @@ impl App {
                     },
                 );
 
-                self.kiro_tab_focused = false;
+                self.flags.set_kiro_tab_focused(false);
                 self.set_status("Kiro started (MCP available)", StatusLevel::Success);
             }
             Err(e) => {
@@ -219,11 +225,14 @@ impl App {
         let node_id = if row.path.is_empty() {
             NodeId(String::new())
         } else {
-            duir_core::tree_ops::get_item(&self.files[fi].data, &row.path)
+            self.files
+                .get(fi)
+                .and_then(|f| duir_core::tree_ops::get_item(&f.data, &row.path))
                 .map_or_else(|| NodeId(String::new()), |it| it.id.clone())
         };
 
-        let key = (self.files[fi].id, node_id);
+        let file_id = self.files.get(fi).map_or(super::FileId(0), |f| f.id);
+        let key = (file_id, node_id);
 
         if let Some(kiron) = self.active_kirons.remove(&key) {
             if let Some(ref p) = kiron.socket_path {
@@ -234,7 +243,7 @@ impl App {
                 self.state = FocusState::Tree;
             }
 
-            self.kiro_tab_focused = false;
+            self.flags.set_kiro_tab_focused(false);
             self.set_status("Kiro session stopped", StatusLevel::Success);
         } else {
             self.set_status("No active kiro session on this node", StatusLevel::Warning);
@@ -255,7 +264,9 @@ impl App {
             let item = if path.is_empty() {
                 None
             } else {
-                duir_core::tree_ops::get_item(&self.files[fi].data, &path)
+                self.files
+                    .get(fi)
+                    .and_then(|f| duir_core::tree_ops::get_item(&f.data, &path))
             };
 
             if let Some(it) = item {
@@ -272,7 +283,8 @@ impl App {
         }
 
         // Stop existing session if running
-        let key = (self.files[fi].id, node_id);
+        let file_id = self.files.get(fi).map_or(super::FileId(0), |f| f.id);
+        let key = (file_id, node_id);
 
         if let Some(kiron) = self.active_kirons.remove(&key) {
             if let Some(ref p) = kiron.socket_path {
@@ -283,13 +295,15 @@ impl App {
                 self.state = FocusState::Tree;
             }
 
-            self.kiro_tab_focused = false;
+            self.flags.set_kiro_tab_focused(false);
         }
 
         // Generate new session_id
         let new_session = uuid::Uuid::new_v4().to_string();
 
-        if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+        if let Some(file) = self.files.get_mut(fi)
+            && let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path)
+        {
             item.kiron = Some(duir_core::KironMeta {
                 session_id: new_session.clone(),
             });

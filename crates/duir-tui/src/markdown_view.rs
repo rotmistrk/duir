@@ -5,8 +5,7 @@ use crate::markdown_highlight::highlight_md;
 use crate::syntax::SyntaxHighlighter;
 
 /// Highlight markdown content with optional syntax highlighting for fenced code blocks.
-// All raw_lines[i] accesses are guarded by `while i < raw_lines.len()` loop bounds.
-#[allow(clippy::indexing_slicing)]
+// All raw_lines.get(i).unwrap_or(&"") accesses are guarded by `while i < raw_lines.len()` loop bounds.
 pub fn highlight_lines_with_syntax(
     content: &str,
     cursor_row: usize,
@@ -29,11 +28,17 @@ pub fn highlight_lines_with_syntax(
     let mut i = 0;
 
     while i < raw_lines.len() {
-        if raw_lines[i].starts_with("```") {
+        if raw_lines.get(i).unwrap_or(&"").starts_with("```") {
             i = process_code_block(&raw_lines, i, highlighter, cursor_row, cursor_col, &mut result);
         } else {
-            let styled = highlight_md(raw_lines[i]);
-            result.push(apply_cursor(i, raw_lines[i], cursor_row, cursor_col, &styled));
+            let styled = highlight_md(raw_lines.get(i).unwrap_or(&""));
+            result.push(apply_cursor(
+                i,
+                raw_lines.get(i).unwrap_or(&""),
+                cursor_row,
+                cursor_col,
+                &styled,
+            ));
             i += 1;
         }
     }
@@ -43,7 +48,6 @@ pub fn highlight_lines_with_syntax(
 
 /// Process a fenced code block starting at `start`, returning the next line index.
 // All raw_lines[] accesses are guarded by bounds checks or loop invariants.
-#[allow(clippy::indexing_slicing)]
 fn process_code_block(
     raw_lines: &[&str],
     start: usize,
@@ -52,7 +56,7 @@ fn process_code_block(
     cursor_col: usize,
     result: &mut Vec<Line<'static>>,
 ) -> usize {
-    let fence_line = raw_lines[start];
+    let fence_line = raw_lines.get(start).unwrap_or(&"");
     let lang = fence_line.trim_start_matches('`').trim();
     let fence_style = Style::default().fg(Color::DarkGray);
     result.push(apply_cursor(
@@ -66,11 +70,11 @@ fn process_code_block(
     let mut i = start + 1;
     let block_start = i;
     let mut code = String::new();
-    while i < raw_lines.len() && !raw_lines[i].starts_with("```") {
+    while i < raw_lines.len() && !raw_lines.get(i).unwrap_or(&"").starts_with("```") {
         if !code.is_empty() {
             code.push('\n');
         }
-        code.push_str(raw_lines[i]);
+        code.push_str(raw_lines.get(i).unwrap_or(&""));
         i += 1;
     }
 
@@ -80,10 +84,15 @@ fn process_code_block(
 
     let fallback = Style::default().fg(Color::Green);
     for (j, line_idx) in (block_start..i).enumerate() {
-        let styled = syntax_span_or_fallback(syntax_spans.as_deref(), j, raw_lines[line_idx], fallback);
+        let styled = syntax_span_or_fallback(
+            syntax_spans.as_deref(),
+            j,
+            raw_lines.get(line_idx).unwrap_or(&""),
+            fallback,
+        );
         result.push(apply_cursor(
             line_idx,
-            raw_lines[line_idx],
+            raw_lines.get(line_idx).unwrap_or(&""),
             cursor_row,
             cursor_col,
             &styled,
@@ -93,10 +102,10 @@ fn process_code_block(
     if i < raw_lines.len() {
         result.push(apply_cursor(
             i,
-            raw_lines[i],
+            raw_lines.get(i).unwrap_or(&""),
             cursor_row,
             cursor_col,
-            &owned_line(raw_lines[i], fence_style),
+            &owned_line(raw_lines.get(i).unwrap_or(&""), fence_style),
         ));
         i += 1;
     }
@@ -136,7 +145,6 @@ pub fn owned_line(text: &str, style: Style) -> Line<'static> {
 /// Preserves all existing styling — only modifies the character at `cursor_col`.
 // Char slicing is safe: col is clamped to chars.len() before use.
 // spans[0] is guarded by spans.len() == 1 check.
-#[allow(clippy::indexing_slicing)]
 fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Line<'static> {
     let rev = Style::default().add_modifier(Modifier::REVERSED);
 
@@ -146,7 +154,7 @@ fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Lin
 
     // For simple single-span lines, do direct insertion
     if styled.spans.len() == 1 {
-        let style = styled.spans[0].style;
+        let style = styled.spans.first().map_or_else(Style::default, |s| s.style);
         let chars: Vec<char> = raw.chars().collect();
         let col = col.min(chars.len());
         if col >= chars.len() {
@@ -155,9 +163,9 @@ fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Lin
                 Span::styled(" ".to_owned(), rev),
             ]);
         }
-        let before: String = chars[..col].iter().collect();
-        let cursor_ch: String = chars[col..=col].iter().collect();
-        let after: String = chars[col + 1..].iter().collect();
+        let before: String = chars.get(..col).unwrap_or(&[]).iter().collect();
+        let cursor_ch: String = chars.get(col..=col).unwrap_or(&[]).iter().collect();
+        let after: String = chars.get(col + 1..).unwrap_or(&[]).iter().collect();
         return Line::from(vec![
             Span::styled(before, style),
             Span::styled(cursor_ch, style.patch(rev)),
@@ -180,14 +188,14 @@ fn insert_cursor_into_line(styled: &Line<'static>, raw: &str, col: usize) -> Lin
         if !cursor_placed && col >= char_offset && col < span_end {
             let local_col = col - char_offset;
             if local_col > 0 {
-                let before: String = span_chars[..local_col].iter().collect();
+                let before: String = span_chars.get(..local_col).unwrap_or(&[]).iter().collect();
                 result.push(Span::styled(before, span.style));
             }
             if local_col < span_len {
-                let cursor_ch: String = span_chars[local_col..=local_col].iter().collect();
+                let cursor_ch: String = span_chars.get(local_col..=local_col).unwrap_or(&[]).iter().collect();
                 result.push(Span::styled(cursor_ch, span.style.patch(rev)));
                 if local_col + 1 < span_len {
-                    let after: String = span_chars[local_col + 1..].iter().collect();
+                    let after: String = span_chars.get(local_col + 1..).unwrap_or(&[]).iter().collect();
                     result.push(Span::styled(after, span.style));
                 }
             }

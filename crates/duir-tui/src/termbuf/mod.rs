@@ -76,13 +76,18 @@ impl TermBuf {
 
     /// Resize the buffer. Preserves content where possible.
     // Grid indexing is safe: r < copy_rows <= self.rows, copy_cols <= self.cols.
-    #[allow(clippy::indexing_slicing)]
     pub fn resize(&mut self, cols: usize, rows: usize) {
         let mut new_grid = vec![vec![Cell::default(); cols]; rows];
         let copy_rows = self.rows.min(rows);
         let copy_cols = self.cols.min(cols);
         for (r, new_row) in new_grid.iter_mut().enumerate().take(copy_rows) {
-            new_row[..copy_cols].clone_from_slice(&self.grid[r][..copy_cols]);
+            if let Some(old_row) = self.grid.get(r) {
+                let len = copy_cols.min(old_row.len()).min(new_row.len());
+                new_row
+                    .get_mut(..len)
+                    .unwrap_or(&mut [])
+                    .clone_from_slice(old_row.get(..len).unwrap_or(&[]));
+            }
         }
         self.grid = new_grid;
         self.cols = cols;
@@ -93,19 +98,23 @@ impl TermBuf {
 
     /// Get a row for rendering. Negative offsets read from scrollback.
     // Grid/scrollback indices are clamped to valid ranges via .min().
-    #[allow(clippy::indexing_slicing)]
     pub fn visible_row(&self, screen_row: usize) -> &[Cell] {
         if self.scroll_offset == 0 {
-            return &self.grid[screen_row.min(self.rows - 1)];
+            return self
+                .grid
+                .get(screen_row.min(self.rows.saturating_sub(1)))
+                .map_or(&[], |r| r.as_slice());
         }
         let total = self.scrollback.len() + self.rows;
         let start = total.saturating_sub(self.rows + self.scroll_offset);
         let idx = start + screen_row;
         if idx < self.scrollback.len() {
-            &self.scrollback[idx]
+            self.scrollback.get(idx).map_or(&[], |r| r.as_slice())
         } else {
             let grid_idx = idx - self.scrollback.len();
-            &self.grid[grid_idx.min(self.rows - 1)]
+            self.grid
+                .get(grid_idx.min(self.rows.saturating_sub(1)))
+                .map_or(&[], |r| r.as_slice())
         }
     }
 
@@ -149,10 +158,9 @@ impl TermBuf {
     }
 
     // row is checked against self.rows before indexing.
-    #[allow(clippy::indexing_slicing)]
     fn clear_row(&mut self, row: usize) {
-        if row < self.rows {
-            self.grid[row] = vec![Cell::default(); self.cols];
+        if let Some(r) = self.grid.get_mut(row) {
+            *r = vec![Cell::default(); self.cols];
         }
     }
 }

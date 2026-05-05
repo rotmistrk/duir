@@ -1,71 +1,97 @@
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use tui_textarea::CursorMove;
 
 use super::NoteEditor;
 
 impl NoteEditor<'_> {
-    #[allow(clippy::too_many_lines)]
     pub(crate) fn handle_normal_key(&mut self, key: KeyEvent) -> bool {
+        if let Some(handled) = self.handle_operators(key) {
+            return handled;
+        }
+        if let Some(handled) = self.handle_insert_entry(key) {
+            return handled;
+        }
+        if let Some(handled) = self.handle_substitute_keys(key) {
+            return handled;
+        }
+        if let Some(handled) = self.handle_visual_command(key) {
+            return handled;
+        }
+        if let Some(handled) = self.handle_motions(key) {
+            return handled;
+        }
+        if let Some(handled) = self.handle_editing_keys(key) {
+            return handled;
+        }
+        if let Some(handled) = self.handle_search_keys(key) {
+            return handled;
+        }
+        self.pending_count = None;
+        false
+    }
+
+    const fn handle_operators(&mut self, key: KeyEvent) -> Option<bool> {
         match key.code {
-            // Operators
             KeyCode::Char('d') => {
                 self.pending_op = Some('d');
-                true
+                Some(true)
             }
             KeyCode::Char('c') => {
                 self.pending_op = Some('c');
-                true
+                Some(true)
             }
             KeyCode::Char('y') => {
                 self.pending_op = Some('y');
-                true
+                Some(true)
             }
-
-            // Pending char commands
             KeyCode::Char('r') => {
                 self.pending_char = Some('r');
-                true
+                Some(true)
             }
             KeyCode::Char('f') => {
                 self.pending_char = Some('f');
-                true
+                Some(true)
             }
             KeyCode::Char('F') => {
                 self.pending_char = Some('F');
-                true
+                Some(true)
             }
             KeyCode::Char('t') => {
                 self.pending_char = Some('t');
-                true
+                Some(true)
             }
             KeyCode::Char('T') => {
                 self.pending_char = Some('T');
-                true
+                Some(true)
             }
             KeyCode::Char('g') => {
                 self.pending_char = Some('g');
-                true
+                Some(true)
             }
+            _ => None,
+        }
+    }
 
-            // Insert mode entry
+    fn handle_insert_entry(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
             KeyCode::Char('i') => {
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('a') => {
                 self.textarea.move_cursor(CursorMove::Forward);
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('A') => {
                 self.textarea.move_cursor(CursorMove::End);
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('I') => {
                 self.move_to_first_nonblank();
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('o') => {
                 self.textarea.move_cursor(CursorMove::End);
@@ -73,7 +99,7 @@ impl NoteEditor<'_> {
                 self.auto_indent();
                 self.enter_insert();
                 self.dirty = true;
-                true
+                Some(true)
             }
             KeyCode::Char('O') => {
                 self.textarea.move_cursor(CursorMove::Head);
@@ -81,10 +107,14 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Up);
                 self.enter_insert();
                 self.dirty = true;
-                true
+                Some(true)
             }
+            _ => None,
+        }
+    }
 
-            // Substitute / change / delete shortcuts
+    fn handle_substitute_keys(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
             KeyCode::Char('s') => {
                 let n = self.count();
                 for _ in 0..n {
@@ -92,7 +122,7 @@ impl NoteEditor<'_> {
                 }
                 self.dirty = true;
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('S') => {
                 self.textarea.move_cursor(CursorMove::Head);
@@ -101,7 +131,7 @@ impl NoteEditor<'_> {
                 self.textarea.cut();
                 self.dirty = true;
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('C') => {
                 self.textarea.start_selection();
@@ -109,30 +139,34 @@ impl NoteEditor<'_> {
                 self.textarea.cut();
                 self.dirty = true;
                 self.enter_insert();
-                true
+                Some(true)
             }
             KeyCode::Char('D') => {
                 self.textarea.start_selection();
                 self.textarea.move_cursor(CursorMove::End);
                 self.textarea.cut();
                 self.dirty = true;
-                true
+                Some(true)
             }
             KeyCode::Char('J') => {
                 self.join_lines();
-                true
+                Some(true)
             }
             KeyCode::Char('~') => {
                 self.toggle_case();
-                true
+                Some(true)
             }
+            _ => None,
+        }
+    }
 
-            // Visual mode
+    fn handle_visual_command(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
             KeyCode::Char('v') => {
                 self.mode = super::EditorMode::Visual;
                 self.pending_count = None;
                 self.textarea.start_selection();
-                true
+                Some(true)
             }
             KeyCode::Char('V') => {
                 self.mode = super::EditorMode::Visual;
@@ -140,82 +174,84 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Head);
                 self.textarea.start_selection();
                 self.textarea.move_cursor(CursorMove::End);
-                true
+                Some(true)
             }
-
-            // Command/search
             KeyCode::Char(':') => {
                 self.mode = super::EditorMode::Command;
                 self.command_buf.clear();
-                true
+                Some(true)
             }
             KeyCode::Char('/') => {
                 self.mode = super::EditorMode::Search;
                 self.command_buf.clear();
-                true
+                Some(true)
             }
+            _ => None,
+        }
+    }
 
-            // Motions
+    fn handle_motions(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
             KeyCode::Char('h') | KeyCode::Left => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::Back);
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('j') | KeyCode::Down => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::Down);
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('k') | KeyCode::Up => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::Up);
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('l') | KeyCode::Right => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::Forward);
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('0') => {
                 self.textarea.move_cursor(CursorMove::Head);
-                true
+                Some(true)
             }
             KeyCode::Char('^') => {
                 self.move_to_first_nonblank();
-                true
+                Some(true)
             }
             KeyCode::Char('$') => {
                 self.textarea.move_cursor(CursorMove::End);
-                true
+                Some(true)
             }
             KeyCode::Char('w') => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::WordForward);
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('e') => {
                 let n = self.count();
                 for _ in 0..n {
                     self.move_to_word_end();
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('b') => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::WordBack);
                 }
-                true
+                Some(true)
             }
             KeyCode::Char('G') => {
                 if let Some(n) = self.pending_count.take() {
@@ -223,31 +259,35 @@ impl NoteEditor<'_> {
                 } else {
                     self.textarea.move_cursor(CursorMove::Bottom);
                 }
-                true
+                Some(true)
             }
             KeyCode::PageUp => {
                 let n = self.page_half();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::Up);
                 }
-                true
+                Some(true)
             }
             KeyCode::PageDown => {
                 let n = self.page_half();
                 for _ in 0..n {
                     self.textarea.move_cursor(CursorMove::Down);
                 }
-                true
+                Some(true)
             }
+            _ => None,
+        }
+    }
 
-            // Editing
+    fn handle_editing_keys(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
             KeyCode::Char('x') => {
                 let n = self.count();
                 for _ in 0..n {
                     self.textarea.delete_next_char();
                 }
                 self.dirty = true;
-                true
+                Some(true)
             }
             KeyCode::Char('X') => {
                 let n = self.count();
@@ -255,27 +295,27 @@ impl NoteEditor<'_> {
                     self.textarea.delete_char();
                 }
                 self.dirty = true;
-                true
+                Some(true)
             }
             KeyCode::Char('u') => {
                 self.textarea.undo();
                 self.dirty = true;
-                true
+                Some(true)
             }
             KeyCode::Char('>') => {
                 let n = self.count();
                 self.indent_lines(n);
-                true
+                Some(true)
             }
             KeyCode::Char('<') => {
                 let n = self.count();
                 self.unindent_lines(n);
-                true
+                Some(true)
             }
             KeyCode::Char('p') => {
                 self.textarea.paste();
                 self.dirty = true;
-                true
+                Some(true)
             }
             KeyCode::Char('P') => {
                 self.textarea.move_cursor(CursorMove::Head);
@@ -283,56 +323,9 @@ impl NoteEditor<'_> {
                 self.textarea.move_cursor(CursorMove::Up);
                 self.textarea.paste();
                 self.dirty = true;
-                true
+                Some(true)
             }
-
-            // Search
-            KeyCode::Char('n') => {
-                self.textarea.search_forward(false);
-                true
-            }
-            KeyCode::Char('N') => {
-                self.textarea.search_back(false);
-                true
-            }
-            KeyCode::Char('*') => {
-                self.search_word_under_cursor(true);
-                true
-            }
-            KeyCode::Char('#') => {
-                self.search_word_under_cursor(false);
-                true
-            }
-
-            // Repeat find
-            KeyCode::Char(';') => {
-                if let Some((cmd, ch)) = self.last_find {
-                    self.execute_find(cmd, ch);
-                }
-                true
-            }
-            KeyCode::Char(',') => {
-                if let Some((cmd, ch)) = self.last_find {
-                    let rev = match cmd {
-                        'f' => 'F',
-                        'F' => 'f',
-                        't' => 'T',
-                        'T' => 't',
-                        _ => cmd,
-                    };
-                    self.execute_find(rev, ch);
-                }
-                true
-            }
-
-            KeyCode::Enter if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.open_url_at_cursor();
-                true
-            }
-            _ => {
-                self.pending_count = None;
-                false
-            }
+            _ => None,
         }
     }
 }

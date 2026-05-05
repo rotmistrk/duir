@@ -61,7 +61,7 @@ fn no_move_past_last_file() {
 fn reorder_file_down() {
     let mut app = make_app_multi_file();
     app.cursor = 0; // file-a header
-    assert!(app.rows[0].is_file_root);
+    assert!(app.rows[0].flags.is_file_root());
     app.swap_down(); // reorder file-a below file-b
     assert_eq!(app.files[0].name, "file-b");
     assert_eq!(app.files[1].name, "file-a");
@@ -71,7 +71,7 @@ fn reorder_file_down() {
 fn reorder_file_up() {
     let mut app = make_app_multi_file();
     app.cursor = 4; // file-b header
-    assert!(app.rows[4].is_file_root);
+    assert!(app.rows[4].flags.is_file_root());
     app.swap_up(); // reorder file-b above file-a
     assert_eq!(app.files[0].name, "file-b");
     assert_eq!(app.files[1].name, "file-a");

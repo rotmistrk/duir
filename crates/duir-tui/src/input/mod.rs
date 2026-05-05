@@ -16,121 +16,141 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
     }
 }
 
-#[allow(clippy::too_many_lines)]
 fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
     let shift = key.modifiers.contains(KeyModifiers::SHIFT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
 
     // Clear pending delete on any key except 'y' (confirm)
-    if app.pending_delete && key.code != KeyCode::Char('y') {
-        app.pending_delete = false;
+    if app.flags.pending_delete() && key.code != KeyCode::Char('y') {
+        app.flags.set_pending_delete(false);
         app.status_message.clear();
     }
 
     // Shift+Arrow: move items
-    if shift && !ctrl {
-        let handled = match key.code {
-            KeyCode::Up => {
-                app.swap_up();
-                true
-            }
-            KeyCode::Down => {
-                app.swap_down();
-                true
-            }
-            KeyCode::Left => {
-                app.promote();
-                true
-            }
-            KeyCode::Right => {
-                app.demote();
-                true
-            }
-            _ => false,
-        };
-
-        if handled {
-            return true;
-        }
+    if shift && !ctrl && handle_shift_arrow(app, key) {
+        return true;
     }
 
-    match (key.code, ctrl) {
-        (KeyCode::Char('q'), false) => {
-            app.should_quit = true;
-            true
-        }
-        (KeyCode::Up, false) => {
-            app.move_up();
-            true
-        }
-        (KeyCode::Down, false) => {
-            app.move_down();
-            true
-        }
-        (KeyCode::Left, false) => {
-            app.collapse_current();
-            true
-        }
-        (KeyCode::Right, false) => {
-            app.expand_current();
-            true
-        }
-        (KeyCode::Char(' '), false) => {
-            app.toggle_completed();
-            true
-        }
-        (KeyCode::Enter, false) => {
-            // Enter: send to kiro if inside kiron subtree, otherwise no-op
-            if app.active_kiron_for_cursor().is_some() {
-                app.send_to_kiro();
-            }
-            true
-        }
-        (KeyCode::Char('e'), false) => {
-            app.start_editing();
-            true
-        }
-        (KeyCode::Char('n'), false) => {
-            app.new_sibling();
-            true
-        }
-        (KeyCode::Char('b'), false) => {
-            app.new_child();
-            true
-        }
-        (KeyCode::Char('d'), false) => {
-            app.delete_current();
-            true
-        }
-        (KeyCode::Char('y'), false) if app.pending_delete => {
-            app.pending_delete = false;
-            app.force_delete_current();
-            true
-        }
-        (KeyCode::Char('!'), false) => {
-            app.toggle_important();
-            true
-        }
-        (KeyCode::Char('K'), false) => {
+    handle_tree_command(app, key, ctrl)
+}
+
+fn handle_shift_arrow(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Up => {
             app.swap_up();
             true
         }
-        (KeyCode::Char('J'), false) => {
+        KeyCode::Down => {
             app.swap_down();
             true
         }
-        (KeyCode::Char('H'), false) => {
+        KeyCode::Left => {
             app.promote();
             true
         }
-        (KeyCode::Char('L'), false) => {
+        KeyCode::Right => {
             app.demote();
             true
         }
-        (KeyCode::Char('s'), true) => {
-            // Save handled in main loop
-            true
+        _ => false,
+    }
+}
+
+fn handle_tree_command(app: &mut App, key: KeyEvent, ctrl: bool) -> bool {
+    if let Some(handled) = handle_tree_item_op(app, key, ctrl) {
+        return handled;
+    }
+    handle_tree_mode_switch(app, key, ctrl)
+}
+
+fn handle_tree_item_op(app: &mut App, key: KeyEvent, ctrl: bool) -> Option<bool> {
+    match (key.code, ctrl) {
+        (KeyCode::Char('q'), false) => {
+            app.flags.set_should_quit(true);
+            Some(true)
         }
+        (KeyCode::Up, false) => {
+            app.move_up();
+            Some(true)
+        }
+        (KeyCode::Down, false) => {
+            app.move_down();
+            Some(true)
+        }
+        (KeyCode::Left, false) => {
+            app.collapse_current();
+            Some(true)
+        }
+        (KeyCode::Right, false) => {
+            app.expand_current();
+            Some(true)
+        }
+        (KeyCode::Char(' '), false) => {
+            app.toggle_completed();
+            Some(true)
+        }
+        (KeyCode::Enter, false) => {
+            if app.active_kiron_for_cursor().is_some() {
+                app.send_to_kiro();
+            }
+            Some(true)
+        }
+        (KeyCode::Char('e'), false) => {
+            app.start_editing();
+            Some(true)
+        }
+        (KeyCode::Char('n'), false) => {
+            app.new_sibling();
+            Some(true)
+        }
+        (KeyCode::Char('b'), false) => {
+            app.new_child();
+            Some(true)
+        }
+        (KeyCode::Char('d'), false) => {
+            app.delete_current();
+            Some(true)
+        }
+        (KeyCode::Char('y'), false) if app.flags.pending_delete() => {
+            app.flags.set_pending_delete(false);
+            app.force_delete_current();
+            Some(true)
+        }
+        (KeyCode::Char('!'), false) => {
+            app.toggle_important();
+            Some(true)
+        }
+        (KeyCode::Char('K'), false) => {
+            app.swap_up();
+            Some(true)
+        }
+        (KeyCode::Char('J'), false) => {
+            app.swap_down();
+            Some(true)
+        }
+        (KeyCode::Char('H'), false) => {
+            app.promote();
+            Some(true)
+        }
+        (KeyCode::Char('L'), false) => {
+            app.demote();
+            Some(true)
+        }
+        (KeyCode::Char('S'), false) => {
+            app.sort_children();
+            Some(true)
+        }
+        (KeyCode::Char('c'), false) => {
+            app.clone_subtree();
+            Some(true)
+        }
+        _ => None,
+    }
+}
+
+fn handle_tree_mode_switch(app: &mut App, key: KeyEvent, ctrl: bool) -> bool {
+    match (key.code, ctrl) {
+        (KeyCode::Char('s'), true) => true,
         (KeyCode::Tab, false) => {
             app.focus_note();
             true
@@ -162,14 +182,6 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
         }
         (KeyCode::Char('['), false) => {
             app.note_panel_pct = app.note_panel_pct.saturating_sub(5).max(20);
-            true
-        }
-        (KeyCode::Char('S'), false) => {
-            app.sort_children();
-            true
-        }
-        (KeyCode::Char('c'), false) => {
-            app.clone_subtree();
             true
         }
         _ => false,

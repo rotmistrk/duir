@@ -18,7 +18,7 @@ fn delete_incomplete_requires_confirm() {
     let mut app = make_app_with_tree();
     app.cursor = 1;
     app.delete_current();
-    assert!(app.pending_delete);
+    assert!(app.flags.pending_delete());
     assert_eq!(app.files[0].data.items[0].title, "Branch 1");
 }
 
@@ -27,7 +27,7 @@ fn delete_completed_leaf_immediate() {
     let mut app = make_app_with_tree();
     app.cursor = 2; // Child 1.1 (Done)
     app.delete_current();
-    assert!(!app.pending_delete);
+    assert!(!app.flags.pending_delete());
     assert_eq!(app.files[0].data.items[0].items[0].title, "Child 1.2");
 }
 

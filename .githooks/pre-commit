@@ -7,6 +7,38 @@ cargo fmt --all -- --check
 echo "=== pre-commit: clippy ==="
 cargo clippy --workspace --all-targets -- -D warnings
 
+echo "=== pre-commit: no clippy suppressions in production code ==="
+# Find allows NOT in test-only files and NOT on #[cfg(test)] mod tests blocks
+PROD_ALLOWS=$(grep -rn 'allow(clippy::' crates/ --include='*.rs' \
+    | grep -v '/tests/' \
+    | grep -v 'tests\.rs:' \
+    | grep -v '_tests\.rs:' \
+    | grep -v 'test_' || true)
+# Filter out allows that are on cfg(test) mod tests (check context)
+REAL_VIOLATIONS=""
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    FILE=$(echo "$line" | cut -d: -f1)
+    LINENO=$(echo "$line" | cut -d: -f2)
+    # Check if within 3 lines of cfg(test)
+    START=$((LINENO-3))
+    [ "$START" -lt 1 ] && START=1
+    CONTEXT=$(sed -n "${START},$((LINENO+1))p" "$FILE" 2>/dev/null)
+    if echo "$CONTEXT" | grep -q 'cfg(test)'; then
+        continue
+    fi
+    REAL_VIOLATIONS="${REAL_VIOLATIONS}${line}
+"
+done <<EOF
+$PROD_ALLOWS
+EOF
+if [ -n "$REAL_VIOLATIONS" ]; then
+    echo "FAIL: Clippy suppressions in production code:"
+    echo "$REAL_VIOLATIONS"
+    echo "Fix the code instead of suppressing lints."
+    exit 1
+fi
+
 echo "=== pre-commit: file length ==="
 make lint-length
 

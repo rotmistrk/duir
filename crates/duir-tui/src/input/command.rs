@@ -59,7 +59,7 @@ pub(super) fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
             app.filter_committed_text = saved;
             app.state = FocusState::Tree;
             if app.filter_committed_text.is_empty() {
-                app.filter_committed_exclude = false;
+                app.flags.set_filter_committed_exclude(false);
                 app.status_message.clear();
                 app.rebuild_rows();
             } else {
@@ -74,10 +74,10 @@ pub(super) fn handle_filter_key(app: &mut App, key: KeyEvent) -> bool {
                 String::new()
             };
             if let Some(rest) = text.strip_prefix('!') {
-                app.filter_committed_exclude = true;
+                app.flags.set_filter_committed_exclude(true);
                 app.filter_committed_text = rest.to_owned();
             } else {
-                app.filter_committed_exclude = false;
+                app.flags.set_filter_committed_exclude(false);
                 app.filter_committed_text = text;
             }
             app.state = FocusState::Tree;

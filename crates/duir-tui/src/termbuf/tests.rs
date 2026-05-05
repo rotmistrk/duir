@@ -124,10 +124,8 @@ fn render_termbuf_to_buffer() {
             if col >= cells.len() {
                 break;
             }
-            #[allow(clippy::cast_possible_truncation)]
-            let x = area.x + col as u16;
-            #[allow(clippy::cast_possible_truncation)]
-            let y = area.y + row as u16;
+            let x = area.x + u16::try_from(col).unwrap_or(u16::MAX);
+            let y = area.y + u16::try_from(row).unwrap_or(u16::MAX);
             let cell = &cells[col];
             let buf_cell = &mut buf[(x, y)];
             buf_cell.set_char(cell.ch);
@@ -137,8 +135,7 @@ fn render_termbuf_to_buffer() {
 
     // Verify first row matches
     for (i, expected) in "ABCDE".chars().enumerate() {
-        #[allow(clippy::cast_possible_truncation)]
-        let symbol = buf[(i as u16, 0)].symbol();
+        let symbol = buf[(u16::try_from(i).unwrap_or(u16::MAX), 0)].symbol();
         assert_eq!(symbol, &expected.to_string(), "Mismatch at col {i}");
     }
 }

@@ -20,7 +20,6 @@ fn panel_block(title: Line<'static>, focused: bool) -> Block<'static> {
 }
 
 // Layout chunk indices match the number of constraints provided to Layout::split.
-#[allow(clippy::indexing_slicing)]
 pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
     let size = frame.area();
 
@@ -29,9 +28,9 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
         .constraints([Constraint::Min(3), Constraint::Length(1)])
         .split(size);
 
-    if app.zoomed {
+    if app.flags.zoomed() {
         // Fullscreen: show only the focused panel, no border
-        let area = main_chunks[0];
+        let area = main_chunks.first().copied().unwrap_or_default();
 
         if app.is_note_focused() || app.is_kiro_focused() {
             render_note_panel(frame, app, area, true);
@@ -45,20 +44,20 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
                 Constraint::Percentage(100 - app.note_panel_pct),
                 Constraint::Percentage(app.note_panel_pct),
             ])
-            .split(main_chunks[0]);
+            .split(main_chunks.first().copied().unwrap_or_default());
 
-        render_tree_panel(frame, app, content_chunks[0], false);
-        render_note_panel(frame, app, content_chunks[1], false);
+        render_tree_panel(frame, app, content_chunks.first().copied().unwrap_or_default(), false);
+        render_note_panel(frame, app, content_chunks.get(1).copied().unwrap_or_default(), false);
     }
 
     // Status bar
     let status = build_status_line(app);
 
-    frame.render_widget(Paragraph::new(status), main_chunks[1]);
+    frame.render_widget(Paragraph::new(status), main_chunks.get(1).copied().unwrap_or_default());
 
     // Command palette popup (above status bar)
     if app.is_command_active() && !app.completer.matches.is_empty() {
-        render_palette(frame, &app.completer, main_chunks[1]);
+        render_palette(frame, &app.completer, main_chunks.get(1).copied().unwrap_or_default());
     }
 
     // Overlays
@@ -99,9 +98,7 @@ fn render_tree_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoom
     frame.render_stateful_widget(TreeView::new().block(tree_block), area, app);
 }
 
-#[allow(clippy::too_many_lines)]
 // Layout chunk indices match the number of constraints provided to Layout::split.
-#[allow(clippy::indexing_slicing)]
 fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoomed: bool) {
     let active_kiron_key = app.active_kiron_for_cursor();
     let has_kiron = active_kiron_key.is_some();
@@ -109,7 +106,7 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoom
     if has_kiron && !matches!(app.state, FocusState::Note { .. }) {
         let kiro_focused = app.is_kiro_focused();
 
-        if app.kiro_tab_focused {
+        if app.flags.kiro_tab_focused() {
             if let Some(ref key) = active_kiron_key
                 && let Some(kiron) = app.active_kirons.get_mut(key)
             {
@@ -133,8 +130,10 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoom
                 if kiro_focused && kiron.pty.termbuf.cursor_visible {
                     let (crow, ccol) = kiron.pty.termbuf.cursor();
 
-                    #[allow(clippy::cast_possible_truncation)]
-                    frame.set_cursor_position((inner.x + ccol as u16, inner.y + crow as u16));
+                    frame.set_cursor_position((
+                        inner.x + u16::try_from(ccol).unwrap_or(u16::MAX),
+                        inner.y + u16::try_from(crow).unwrap_or(u16::MAX),
+                    ));
                 }
             }
         } else {
@@ -174,10 +173,17 @@ fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoom
                 .split(area);
 
             editor.set_block(title_line.clone(), true, zoomed);
-            editor.render(frame, note_chunks[0], &app.highlighter);
+            editor.render(
+                frame,
+                note_chunks.first().copied().unwrap_or_default(),
+                &app.highlighter,
+            );
 
             let cmd_line = editor.status_line();
-            frame.render_widget(Paragraph::new(cmd_line), note_chunks[1]);
+            frame.render_widget(
+                Paragraph::new(cmd_line),
+                note_chunks.get(1).copied().unwrap_or_default(),
+            );
         } else {
             editor.set_block(title_line, true, zoomed);
             editor.render(frame, area, &app.highlighter);
@@ -206,8 +212,7 @@ pub fn render_palette(frame: &mut ratatui::Frame, completer: &Completer, status_
 
     let max_visible = 10.min(matches.len());
 
-    #[allow(clippy::cast_possible_truncation)]
-    let height = max_visible as u16;
+    let height = u16::try_from(max_visible).unwrap_or(u16::MAX);
 
     let popup = Rect::new(
         status_area.x + 1,
@@ -240,7 +245,6 @@ pub fn render_palette(frame: &mut ratatui::Frame, completer: &Completer, status_
 
 /// Render a `TermBuf` into a ratatui frame area (direct buffer write).
 // col is bounded by `col >= cells.len()` break above; buf[(x,y)] is ratatui's own indexing.
-#[allow(clippy::indexing_slicing)]
 pub fn render_termbuf(frame: &mut ratatui::Frame<'_>, termbuf: &crate::termbuf::TermBuf, area: Rect) {
     let buf = frame.buffer_mut();
 
@@ -256,14 +260,12 @@ pub fn render_termbuf(frame: &mut ratatui::Frame<'_>, termbuf: &crate::termbuf::
                 break;
             }
 
-            #[allow(clippy::cast_possible_truncation)]
-            let x = area.x + col as u16;
+            let x = area.x + u16::try_from(col).unwrap_or(u16::MAX);
 
-            #[allow(clippy::cast_possible_truncation)]
-            let y = area.y + row as u16;
+            let y = area.y + u16::try_from(row).unwrap_or(u16::MAX);
 
             if x < area.right() && y < area.bottom() {
-                let cell = &cells[col];
+                let Some(cell) = cells.get(col) else { break };
                 let buf_cell = &mut buf[(x, y)];
 
                 buf_cell.set_char(cell.ch);

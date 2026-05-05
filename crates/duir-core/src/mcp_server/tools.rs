@@ -6,8 +6,17 @@ use crate::tree_ops::{self, TreePath};
 
 use super::{McpMutation, McpServer, NodeInfo, ReorderDirection, collect_subtree, parse_path};
 
-#[allow(clippy::too_many_lines)]
 pub(super) fn tool_definitions() -> Value {
+    let mut tools = read_tools();
+    if let Value::Array(ref mut arr) = tools
+        && let Value::Array(write) = write_tools()
+    {
+        arr.extend(write);
+    }
+    tools
+}
+
+fn read_tools() -> Value {
     json!([
         {
             "name": "read_node",
@@ -54,6 +63,19 @@ pub(super) fn tool_definitions() -> Value {
                 "required": ["query"]
             }
         },
+        {
+            "name": "get_context",
+            "description": "Get kiron root info and completion statistics",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    ])
+}
+
+fn write_tools() -> Value {
+    json!([
         {
             "name": "add_child",
             "description": "Add a child node to the specified parent",
@@ -104,14 +126,6 @@ pub(super) fn tool_definitions() -> Value {
                     "direction": {"type": "string", "enum": ["up", "down"]}
                 },
                 "required": ["path", "direction"]
-            }
-        },
-        {
-            "name": "get_context",
-            "description": "Get kiron root info and completion statistics",
-            "inputSchema": {
-                "type": "object",
-                "properties": {}
             }
         }
     ])

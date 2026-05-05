@@ -170,41 +170,48 @@ fn render_via_files(cmd: &str, args_template: &[&str], source: &str, input_ext: 
 }
 
 #[cfg(test)]
-#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
     #[test]
-    fn detect_mermaid() {
+    fn detect_mermaid() -> Result<(), String> {
         let content = "# Title\n```mermaid\ngraph TD\nA-->B\n```\nsome text";
         let blocks = extract_diagrams(content);
         assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0].lang, DiagramLang::Mermaid);
-        assert_eq!(blocks[0].source, "graph TD\nA-->B");
+        let b = blocks.first().ok_or("no block")?;
+        assert_eq!(b.lang, DiagramLang::Mermaid);
+        assert_eq!(b.source, "graph TD\nA-->B");
+        Ok(())
     }
 
     #[test]
-    fn detect_plantuml() {
+    fn detect_plantuml() -> Result<(), String> {
         let content = "```plantuml\n@startuml\nAlice -> Bob\n@enduml\n```";
         let blocks = extract_diagrams(content);
         assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0].lang, DiagramLang::PlantUml);
+        let b = blocks.first().ok_or("no block")?;
+        assert_eq!(b.lang, DiagramLang::PlantUml);
+        Ok(())
     }
 
     #[test]
-    fn detect_dot() {
+    fn detect_dot() -> Result<(), String> {
         let content = "```dot\ndigraph { A -> B }\n```";
         let blocks = extract_diagrams(content);
         assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0].lang, DiagramLang::Graphviz);
+        let b = blocks.first().ok_or("no block")?;
+        assert_eq!(b.lang, DiagramLang::Graphviz);
+        Ok(())
     }
 
     #[test]
-    fn detect_graphviz_alias() {
+    fn detect_graphviz_alias() -> Result<(), String> {
         let content = "```graphviz\ndigraph { A -> B }\n```";
         let blocks = extract_diagrams(content);
         assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0].lang, DiagramLang::Graphviz);
+        let b = blocks.first().ok_or("no block")?;
+        assert_eq!(b.lang, DiagramLang::Graphviz);
+        Ok(())
     }
 
     #[test]

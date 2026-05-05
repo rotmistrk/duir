@@ -1,7 +1,9 @@
 mod app;
 mod clipboard;
 mod completer;
+mod event_helpers;
 mod event_loop;
+mod file_watcher;
 mod help;
 mod input;
 mod markdown_highlight;
@@ -157,7 +159,7 @@ fn main() -> io::Result<()> {
 
     // Initialize application state
     let mut app = App::new();
-    app.autosave_global = config.editor.autosave;
+    app.flags.set_autosave_global(config.editor.autosave);
     app.note_panel_pct = config.ui.note_panel_pct;
 
     // Load files from storage or CLI arguments
@@ -174,7 +176,13 @@ fn main() -> io::Result<()> {
             {
                 for name in &names {
                     match storage.load(name) {
-                        Ok(data) => app.add_file_with_source(name.clone(), data, source),
+                        Ok(data) => {
+                            let mtime = storage.mtime(name);
+                            app.add_file_with_source(name.clone(), data, source);
+                            if let Some(f) = app.files.last_mut() {
+                                f.disk_mtime = mtime;
+                            }
+                        }
                         Err(e) => eprintln!("Error loading {name}: {e}"),
                     }
                 }
@@ -238,8 +246,11 @@ fn main() -> io::Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Start file watcher
+    let watcher_rx = file_watcher::spawn(&config.storage_dirs());
+
     // Run the main event loop
-    let result = event_loop::run_loop(&mut terminal, &mut app, &storage_dir, &config);
+    let result = event_loop::run_loop(&mut terminal, &mut app, &storage_dir, &config, watcher_rx.as_ref());
 
     // Restore terminal state
     disable_raw_mode()?;

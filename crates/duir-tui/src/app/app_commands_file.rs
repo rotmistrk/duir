@@ -1,11 +1,13 @@
 use super::{App, StatusLevel, read_file};
 
-// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
-#[allow(clippy::indexing_slicing)]
 impl App {
     pub(super) fn cmd_open(&mut self, parts: &[&str], storage: &dyn duir_core::TodoStorage) {
-        let path_str = if parts.len() >= 3 && parts[1] == "md" {
-            parts[2]
+        let path_str = if parts.len() >= 3 && parts.get(1).copied() == Some("md") {
+            if let Some(&p) = parts.get(2) {
+                p
+            } else {
+                return;
+            }
         } else if let Some(&p) = parts.get(1) {
             p
         } else {
@@ -56,7 +58,8 @@ impl App {
         if let Some(&name) = parts.get(1) {
             if let Some(row) = self.current_row().cloned() {
                 let fi = row.file_index;
-                match storage.save(name, &self.files[fi].data) {
+                let Some(file) = self.files.get(fi) else { return };
+                match storage.save(name, &file.data) {
                     Ok(()) => self.set_status(&format!("Written to {name}"), StatusLevel::Success),
                     Err(e) => self.set_status(&format!("Write error: {e}"), StatusLevel::Error),
                 }
@@ -70,9 +73,10 @@ impl App {
         if let Some(&name) = parts.get(1) {
             if let Some(row) = self.current_row().cloned() {
                 let fi = row.file_index;
-                match storage.save(name, &self.files[fi].data) {
+                let Some(file) = self.files.get_mut(fi) else { return };
+                match storage.save(name, &file.data) {
                     Ok(()) => {
-                        name.clone_into(&mut self.files[fi].name);
+                        name.clone_into(&mut file.name);
                         self.mark_saved(fi);
                         self.rebuild_rows();
                         self.set_status(&format!("Saved as {name}"), StatusLevel::Success);

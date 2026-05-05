@@ -133,24 +133,28 @@ impl TodoItem {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn round_trip_json() {
+    fn round_trip_json() -> TestResult {
         let mut file = TodoFile::new("test");
         let mut task = TodoItem::new("Task 1");
         task.items.push(TodoItem::new("Subtask 1.1"));
         file.items.push(task);
 
-        let json = serde_json::to_string_pretty(&file).expect("serialize");
-        let parsed: TodoFile = serde_json::from_str(&json).expect("deserialize");
+        let json = serde_json::to_string_pretty(&file)?;
+        let parsed: TodoFile = serde_json::from_str(&json)?;
 
         assert_eq!(parsed.title, "test");
         assert_eq!(parsed.items.len(), 1);
-        assert_eq!(parsed.items[0].items.len(), 1);
-        assert_eq!(parsed.items[0].items[0].title, "Subtask 1.1");
+        let first = parsed.items.first().ok_or("no first item")?;
+        assert_eq!(first.items.len(), 1);
+        let sub = first.items.first().ok_or("no subtask")?;
+        assert_eq!(sub.title, "Subtask 1.1");
+        Ok(())
     }
 
     #[test]
@@ -161,17 +165,19 @@ mod tests {
     }
 
     #[test]
-    fn node_id_serialization_roundtrip() {
+    fn node_id_serialization_roundtrip() -> TestResult {
         let item = TodoItem::new("persist me");
-        let json = serde_json::to_string(&item).expect("serialize");
-        let parsed: TodoItem = serde_json::from_str(&json).expect("deserialize");
+        let json = serde_json::to_string(&item)?;
+        let parsed: TodoItem = serde_json::from_str(&json)?;
         assert_eq!(parsed.id, item.id);
+        Ok(())
     }
 
     #[test]
-    fn node_id_legacy_compat() {
+    fn node_id_legacy_compat() -> TestResult {
         let json = r#"{"title":"old item"}"#;
-        let parsed: TodoItem = serde_json::from_str(json).expect("deserialize");
+        let parsed: TodoItem = serde_json::from_str(json)?;
         assert!(!parsed.id.0.is_empty());
+        Ok(())
     }
 }

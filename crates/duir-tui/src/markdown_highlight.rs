@@ -79,7 +79,6 @@ pub fn highlight_md(line: &str) -> Line<'static> {
     render_inline(line, base)
 }
 
-#[allow(clippy::too_many_lines)]
 fn render_inline(line: &str, base: Style) -> Line<'static> {
     let mut spans: Vec<Span<'static>> = Vec::new();
     let mut chars = line.char_indices().peekable();
@@ -149,44 +148,7 @@ fn render_inline(line: &str, base: Style) -> Line<'static> {
             '[' => {
                 push_plain(&mut spans, line, plain_start, i, base);
                 chars.next();
-                let text_start = peek_pos(&mut chars, line.len());
-                let mut text_end = text_start;
-                let mut found_link = false;
-                while let Some(&(idx, c)) = chars.peek() {
-                    if c == ']' {
-                        text_end = idx;
-                        chars.next();
-                        if chars.peek().is_some_and(|&(_, c2)| c2 == '(') {
-                            chars.next();
-                            let url_start = peek_pos(&mut chars, line.len());
-                            let mut url_end = url_start;
-                            while let Some(&(idx2, c2)) = chars.peek() {
-                                if c2 == ')' {
-                                    url_end = idx2;
-                                    chars.next();
-                                    break;
-                                }
-                                url_end = idx2 + c2.len_utf8();
-                                chars.next();
-                            }
-                            spans.push(Span::styled(
-                                line[text_start..text_end].to_owned(),
-                                base.fg(Color::LightBlue).add_modifier(Modifier::UNDERLINED),
-                            ));
-                            spans.push(Span::styled(
-                                line[url_start..url_end].to_owned(),
-                                base.fg(Color::DarkGray),
-                            ));
-                            found_link = true;
-                        }
-                        break;
-                    }
-                    text_end = idx + c.len_utf8();
-                    chars.next();
-                }
-                if !found_link {
-                    spans.push(Span::styled(line[i..text_end].to_owned(), base));
-                }
+                parse_link(&mut spans, &mut chars, line, i, base);
                 plain_start = peek_pos(&mut chars, line.len());
             }
             _ => {
@@ -203,6 +165,53 @@ fn render_inline(line: &str, base: Style) -> Line<'static> {
         owned_line(line, base)
     } else {
         Line::from(spans)
+    }
+}
+
+fn parse_link(
+    spans: &mut Vec<Span<'static>>,
+    chars: &mut std::iter::Peekable<std::str::CharIndices<'_>>,
+    line: &str,
+    bracket_pos: usize,
+    base: Style,
+) {
+    let text_start = peek_pos(chars, line.len());
+    let mut text_end = text_start;
+    let mut found_link = false;
+    while let Some(&(idx, c)) = chars.peek() {
+        if c == ']' {
+            text_end = idx;
+            chars.next();
+            if chars.peek().is_some_and(|&(_, c2)| c2 == '(') {
+                chars.next();
+                let url_start = peek_pos(chars, line.len());
+                let mut url_end = url_start;
+                while let Some(&(idx2, c2)) = chars.peek() {
+                    if c2 == ')' {
+                        url_end = idx2;
+                        chars.next();
+                        break;
+                    }
+                    url_end = idx2 + c2.len_utf8();
+                    chars.next();
+                }
+                spans.push(Span::styled(
+                    line[text_start..text_end].to_owned(),
+                    base.fg(Color::LightBlue).add_modifier(Modifier::UNDERLINED),
+                ));
+                spans.push(Span::styled(
+                    line[url_start..url_end].to_owned(),
+                    base.fg(Color::DarkGray),
+                ));
+                found_link = true;
+            }
+            break;
+        }
+        text_end = idx + c.len_utf8();
+        chars.next();
+    }
+    if !found_link {
+        spans.push(Span::styled(line[bracket_pos..text_end].to_owned(), base));
     }
 }
 

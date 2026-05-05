@@ -4,6 +4,7 @@ mod insert;
 mod motions;
 mod normal;
 mod normal_keys;
+mod normal_keys_search;
 mod util;
 mod visual;
 
@@ -172,8 +173,8 @@ impl NoteEditor<'_> {
             let block = self.textarea.block().cloned();
             let lines =
                 crate::markdown_view::highlight_lines_with_syntax(&content, cursor_row, cursor_col, Some(highlighter));
-            #[allow(clippy::cast_possible_truncation)]
-            let scroll_offset = cursor_row.saturating_sub(self.viewport_height as usize / 2) as u16;
+            let scroll_offset =
+                u16::try_from(cursor_row.saturating_sub(self.viewport_height as usize / 2)).unwrap_or(u16::MAX);
             let mut paragraph = ratatui::widgets::Paragraph::new(lines).scroll((scroll_offset, 0));
             if let Some(b) = block {
                 paragraph = paragraph.block(b);

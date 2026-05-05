@@ -27,7 +27,7 @@ fn input_filter_enter_applies() {
     input::handle_key(&mut app, key(KeyCode::Enter));
     assert!(!app.is_filter_active());
     // Filter applied — fewer rows
-    assert!(app.rows.iter().filter(|r| !r.is_file_root).count() < 6);
+    assert!(app.rows.iter().filter(|r| !r.flags.is_file_root()).count() < 6);
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn input_filter_exclude_prefix() {
         saved: String::new(),
     };
     input::handle_key(&mut app, key(KeyCode::Enter));
-    assert!(app.filter_committed_exclude);
+    assert!(app.flags.filter_committed_exclude());
     assert_eq!(app.filter_committed_text, "Branch 1");
 }
 

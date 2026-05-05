@@ -63,7 +63,7 @@ fn input_tree_d_delete() {
     let mut app = make_app_with_tree();
     app.cursor = 1;
     input::handle_key(&mut app, key(KeyCode::Char('d')));
-    assert!(app.pending_delete);
+    assert!(app.flags.pending_delete());
 }
 
 #[test]
@@ -95,7 +95,7 @@ fn input_tree_s_sort() {
 fn input_tree_q_quits() {
     let mut app = make_app_with_tree();
     input::handle_key(&mut app, key(KeyCode::Char('q')));
-    assert!(app.should_quit);
+    assert!(app.flags.should_quit());
 }
 
 // ── tree-mode move (Shift+Arrow, HJKL) ─────────────────────────

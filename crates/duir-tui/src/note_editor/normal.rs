@@ -4,7 +4,6 @@ use tui_textarea::CursorMove;
 use super::NoteEditor;
 
 impl NoteEditor<'_> {
-    #[allow(clippy::too_many_lines)]
     pub(crate) fn handle_normal(&mut self, key: KeyEvent) -> bool {
         if key.modifiers.contains(KeyModifiers::CONTROL) {
             return self.handle_normal_ctrl(key);

@@ -4,7 +4,6 @@ use super::{Cell, TermBuf};
 
 // Grid indexing is bounded by cursor_row < self.rows and cursor_col < self.cols checks.
 // params[0] is from vte parser which always provides at least one element per param group.
-#[allow(clippy::indexing_slicing)]
 impl vte::Perform for TermBuf {
     fn print(&mut self, c: char) {
         if self.cursor_col >= self.cols {
@@ -16,10 +15,14 @@ impl vte::Perform for TermBuf {
             }
         }
         if self.cursor_row < self.rows && self.cursor_col < self.cols {
-            self.grid[self.cursor_row][self.cursor_col] = Cell {
-                ch: c,
-                style: self.current_style,
-            };
+            if let Some(row) = self.grid.get_mut(self.cursor_row)
+                && let Some(cell) = row.get_mut(self.cursor_col)
+            {
+                *cell = Cell {
+                    ch: c,
+                    style: self.current_style,
+                };
+            }
             self.cursor_col += 1;
         }
     }
@@ -47,7 +50,7 @@ impl vte::Perform for TermBuf {
     }
 
     fn csi_dispatch(&mut self, params: &vte::Params, intermediates: &[u8], _ignore: bool, action: char) {
-        let p: Vec<u16> = params.iter().map(|s| s[0]).collect();
+        let p: Vec<u16> = params.iter().map(|s| s.first().copied().unwrap_or(0)).collect();
         if intermediates == [b'?'] {
             self.handle_dec_mode(&p, action);
         } else {
@@ -72,7 +75,6 @@ impl vte::Perform for TermBuf {
 }
 
 // Grid/params indexing is bounded by cursor bounds checks and loop invariants.
-#[allow(clippy::indexing_slicing)]
 impl TermBuf {
     const fn cursor_up(&mut self, n: usize) {
         self.cursor_row = self.cursor_row.saturating_sub(n);
@@ -121,7 +123,9 @@ impl TermBuf {
         if self.cursor_row >= self.rows {
             return;
         }
-        let row = &mut self.grid[self.cursor_row];
+        let Some(row) = self.grid.get_mut(self.cursor_row) else {
+            return;
+        };
         match mode {
             0 => {
                 for c in row.iter_mut().skip(self.cursor_col) {
@@ -151,7 +155,6 @@ impl TermBuf {
         }
     }
 
-    #[allow(clippy::cast_possible_truncation)]
     fn handle_csi(&mut self, p: &[u16], action: char) {
         match action {
             'm' => self.handle_sgr(p),
@@ -203,7 +206,8 @@ impl TermBuf {
 
     /// Apply one SGR code at `params[i]`, return how many params consumed.
     fn apply_sgr_code(&mut self, params: &[u16], i: usize) -> usize {
-        match params[i] {
+        let Some(&code) = params.get(i) else { return 1 };
+        match code {
             0 => self.current_style = Style::default(),
             1 => self.current_style = self.current_style.add_modifier(Modifier::BOLD),
             3 => {
@@ -228,7 +232,7 @@ impl TermBuf {
                 self.current_style = self.current_style.remove_modifier(Modifier::REVERSED);
             }
             30..=37 => {
-                self.current_style = self.current_style.fg(ansi_color(params[i] - 30));
+                self.current_style = self.current_style.fg(ansi_color(code - 30));
             }
             38 => {
                 let mut j = i + 1;
@@ -239,7 +243,7 @@ impl TermBuf {
             }
             39 => self.current_style = self.current_style.fg(Color::Reset),
             40..=47 => {
-                self.current_style = self.current_style.bg(ansi_color(params[i] - 40));
+                self.current_style = self.current_style.bg(ansi_color(code - 40));
             }
             48 => {
                 let mut j = i + 1;
@@ -250,10 +254,10 @@ impl TermBuf {
             }
             49 => self.current_style = self.current_style.bg(Color::Reset),
             90..=97 => {
-                self.current_style = self.current_style.fg(ansi_bright_color(params[i] - 90));
+                self.current_style = self.current_style.fg(ansi_bright_color(code - 90));
             }
             100..=107 => {
-                self.current_style = self.current_style.bg(ansi_bright_color(params[i] - 100));
+                self.current_style = self.current_style.bg(ansi_bright_color(code - 100));
             }
             _ => {}
         }
@@ -287,32 +291,22 @@ const fn ansi_bright_color(n: u16) -> Color {
     }
 }
 
-#[allow(clippy::cast_possible_truncation)]
 // params[*i] accesses are guarded by `*i >= params.len()` / `*i + 2 < params.len()` checks.
-#[allow(clippy::indexing_slicing)]
 fn parse_extended_color(params: &[u16], i: &mut usize) -> Option<Color> {
-    if *i >= params.len() {
-        return None;
-    }
-    match params[*i] {
+    let &code = params.get(*i)?;
+    match code {
         5 => {
-            // 256-color: 38;5;N
             *i += 1;
-            if *i < params.len() {
-                let n = params[*i];
-                *i += 1;
-                Some(Color::Indexed(n as u8))
-            } else {
-                None
-            }
+            let &n = params.get(*i)?;
+            *i += 1;
+            Some(Color::Indexed(u8::try_from(n).unwrap_or(u8::MAX)))
         }
         2 => {
-            // RGB: 38;2;R;G;B
             *i += 1;
             if *i + 2 < params.len() {
-                let r = params[*i] as u8;
-                let g = params[*i + 1] as u8;
-                let b = params[*i + 2] as u8;
+                let r = u8::try_from(params.get(*i).copied().unwrap_or(0)).unwrap_or(0);
+                let g = u8::try_from(params.get(*i + 1).copied().unwrap_or(0)).unwrap_or(0);
+                let b = u8::try_from(params.get(*i + 2).copied().unwrap_or(0)).unwrap_or(0);
                 *i += 3;
                 Some(Color::Rgb(r, g, b))
             } else {

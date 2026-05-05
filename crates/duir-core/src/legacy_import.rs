@@ -176,12 +176,13 @@ fn html_to_markdown(html: &str) -> String {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
     #[test]
-    fn parse_simple_todo() {
+    fn parse_simple_todo() -> TestResult {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE todo-tree SYSTEM 'todo-tree.dtd'>
 <todo-tree version="1.1">
@@ -191,18 +192,21 @@ mod tests {
   </item>
 </todo-tree>"#;
 
-        let file = import_legacy_todo(xml).unwrap();
+        let file = import_legacy_todo(xml)?;
         assert_eq!(file.items.len(), 2);
-        assert_eq!(file.items[0].title, "Task 1");
-        assert!(file.items[0].important);
-        assert!(!file.items[0].folded);
-        assert_eq!(file.items[1].title, "Task 2");
-        assert!(file.items[1].folded);
-        assert_eq!(file.items[1].completed, Completion::Done);
+        let first = file.items.first().ok_or("no first")?;
+        assert_eq!(first.title, "Task 1");
+        assert!(first.important);
+        assert!(!first.folded);
+        let second = file.items.get(1).ok_or("no second")?;
+        assert_eq!(second.title, "Task 2");
+        assert!(second.folded);
+        assert_eq!(second.completed, Completion::Done);
+        Ok(())
     }
 
     #[test]
-    fn parse_nested() {
+    fn parse_nested() -> TestResult {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <todo-tree version="1.1">
   <item title="Parent" folded="no" important="no" completed="no">
@@ -211,16 +215,19 @@ mod tests {
   </item>
 </todo-tree>"#;
 
-        let file = import_legacy_todo(xml).unwrap();
+        let file = import_legacy_todo(xml)?;
         assert_eq!(file.items.len(), 1);
-        assert_eq!(file.items[0].title, "Parent");
-        assert_eq!(file.items[0].items.len(), 2);
-        assert_eq!(file.items[0].items[0].title, "Child 1");
-        assert_eq!(file.items[0].items[0].completed, Completion::Done);
+        let parent = file.items.first().ok_or("no parent")?;
+        assert_eq!(parent.title, "Parent");
+        assert_eq!(parent.items.len(), 2);
+        let child1 = parent.items.first().ok_or("no child1")?;
+        assert_eq!(child1.title, "Child 1");
+        assert_eq!(child1.completed, Completion::Done);
+        Ok(())
     }
 
     #[test]
-    fn parse_note_with_html() {
+    fn parse_note_with_html() -> TestResult {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <todo-tree version="1.1">
   <item title="With Note" folded="no" important="no" completed="no">
@@ -230,11 +237,12 @@ mod tests {
   </item>
 </todo-tree>"#;
 
-        let file = import_legacy_todo(xml).unwrap();
-        assert_eq!(file.items[0].title, "With Note");
-        let note = &file.items[0].note;
-        assert!(note.contains("Hello world"));
-        assert!(note.contains("Second line"));
+        let file = import_legacy_todo(xml)?;
+        let first = file.items.first().ok_or("no first")?;
+        assert_eq!(first.title, "With Note");
+        assert!(first.note.contains("Hello world"));
+        assert!(first.note.contains("Second line"));
+        Ok(())
     }
 
     #[test]
@@ -253,13 +261,15 @@ mod tests {
     }
 
     #[test]
-    fn partial_completion() {
+    fn partial_completion() -> TestResult {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <todo-tree version="1.1">
   <item title="Partial" folded="no" important="no" completed="part"/>
 </todo-tree>"#;
 
-        let file = import_legacy_todo(xml).unwrap();
-        assert_eq!(file.items[0].completed, Completion::Partial);
+        let file = import_legacy_todo(xml)?;
+        let first = file.items.first().ok_or("no first")?;
+        assert_eq!(first.completed, Completion::Partial);
+        Ok(())
     }
 }

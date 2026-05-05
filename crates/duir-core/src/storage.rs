@@ -31,4 +31,10 @@ pub trait TodoStorage {
     /// # Errors
     /// Returns an error if the storage backend cannot be queried.
     fn exists(&self, name: &str) -> Result<bool>;
+
+    /// Get the modification time of a file (if supported).
+    fn mtime(&self, name: &str) -> Option<std::time::SystemTime> {
+        let _ = name;
+        None
+    }
 }

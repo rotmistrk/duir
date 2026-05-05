@@ -67,6 +67,10 @@ impl TodoStorage for FileStorage {
     fn exists(&self, name: &str) -> Result<bool> {
         Ok(self.file_path(name).exists())
     }
+
+    fn mtime(&self, name: &str) -> Option<std::time::SystemTime> {
+        fs::metadata(self.file_path(name)).and_then(|m| m.modified()).ok()
+    }
 }
 
 /// Export a `TodoFile` as YAML string.
@@ -111,10 +115,11 @@ pub fn load_path(path: &Path) -> Result<TodoFile> {
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use crate::model::TodoItem;
+
+    type TestResult = std::result::Result<(), Box<dyn std::error::Error>>;
 
     fn make_test_file() -> TodoFile {
         let mut file = TodoFile::new("test-project");
@@ -127,60 +132,67 @@ mod tests {
     }
 
     #[test]
-    fn file_storage_round_trip() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let storage = FileStorage::new(dir.path()).expect("new");
+    fn file_storage_round_trip() -> TestResult {
+        let dir = tempfile::tempdir()?;
+        let storage = FileStorage::new(dir.path())?;
 
         let file = make_test_file();
-        storage.save("myproject", &file).expect("save");
+        storage.save("myproject", &file)?;
 
-        assert!(storage.exists("myproject").expect("exists"));
+        assert!(storage.exists("myproject")?);
 
-        let loaded = storage.load("myproject").expect("load");
+        let loaded = storage.load("myproject")?;
         assert_eq!(loaded.title, "test-project");
         assert_eq!(loaded.items.len(), 1);
-        assert!(loaded.items[0].important);
-        assert_eq!(loaded.items[0].items[0].title, "Subtask 1.1");
+        let first = loaded.items.first().ok_or("no first item")?;
+        assert!(first.important);
+        let sub = first.items.first().ok_or("no subtask")?;
+        assert_eq!(sub.title, "Subtask 1.1");
 
-        let names = storage.list().expect("list");
+        let names = storage.list()?;
         assert_eq!(names, vec!["myproject"]);
 
-        storage.delete("myproject").expect("delete");
-        assert!(!storage.exists("myproject").expect("exists after delete"));
+        storage.delete("myproject")?;
+        assert!(!storage.exists("myproject")?);
+        Ok(())
     }
 
     #[test]
-    fn yaml_round_trip() {
+    fn yaml_round_trip() -> TestResult {
         let file = make_test_file();
-        let yaml = to_yaml(&file).expect("to_yaml");
-        let parsed = from_yaml(&yaml).expect("from_yaml");
+        let yaml = to_yaml(&file)?;
+        let parsed = from_yaml(&yaml)?;
         assert_eq!(parsed.title, file.title);
         assert_eq!(parsed.items.len(), file.items.len());
+        Ok(())
     }
 
     #[test]
-    fn auto_detect_json() {
+    fn auto_detect_json() -> TestResult {
         let file = make_test_file();
-        let json = serde_json::to_string_pretty(&file).expect("json");
-        let parsed = from_auto(&json).expect("auto json");
+        let json = serde_json::to_string_pretty(&file)?;
+        let parsed = from_auto(&json)?;
         assert_eq!(parsed.title, "test-project");
+        Ok(())
     }
 
     #[test]
-    fn auto_detect_yaml() {
+    fn auto_detect_yaml() -> TestResult {
         let file = make_test_file();
-        let yaml = to_yaml(&file).expect("yaml");
-        let parsed = from_auto(&yaml).expect("auto yaml");
+        let yaml = to_yaml(&file)?;
+        let parsed = from_auto(&yaml)?;
         assert_eq!(parsed.title, "test-project");
+        Ok(())
     }
 
     #[test]
-    fn load_path_json() {
-        let dir = tempfile::tempdir().expect("tempdir");
+    fn load_path_json() -> TestResult {
+        let dir = tempfile::tempdir()?;
         let path = dir.path().join("test.json");
         let file = make_test_file();
-        fs::write(&path, serde_json::to_string_pretty(&file).expect("json")).expect("write");
-        let loaded = load_path(&path).expect("load_path");
+        fs::write(&path, serde_json::to_string_pretty(&file)?)?;
+        let loaded = load_path(&path)?;
         assert_eq!(loaded.title, "test-project");
+        Ok(())
     }
 }

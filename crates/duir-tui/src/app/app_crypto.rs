@@ -2,23 +2,20 @@ use duir_core::NodeId;
 
 use super::{App, StatusLevel};
 
-// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
-// path slicing is guarded by path.len() > 0 checks.
-#[allow(clippy::indexing_slicing)]
 impl App {
     pub fn collapse_current(&mut self) {
         if let Some(row) = self.rows.get(self.cursor) {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 return;
             }
             let fi = row.file_index;
             let path = row.path.clone();
-            let file_id = self.files[fi].id;
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            let Some(file) = self.files.get_mut(fi) else { return };
+            let file_id = file.id;
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path)
                 && !item.folded
                 && !item.items.is_empty()
             {
-                // If unlocked encrypted node, re-encrypt and forget password
                 if item.unlocked {
                     let node_id = item.id.clone();
                     let key = (file_id, node_id);
@@ -35,18 +32,22 @@ impl App {
                 self.rebuild_rows();
                 return;
             }
-            // If already collapsed or leaf, move to parent
             if path.len() > 1 {
-                let parent_path: duir_core::tree_ops::TreePath = path[..path.len() - 1].to_vec();
+                let parent_path: duir_core::tree_ops::TreePath =
+                    path.get(..path.len() - 1).unwrap_or_default().to_vec();
                 if let Some(pos) = self
                     .rows
                     .iter()
-                    .position(|r| r.file_index == fi && !r.is_file_root && r.path == parent_path)
+                    .position(|r| r.file_index == fi && !r.flags.is_file_root() && r.path == parent_path)
                 {
                     self.cursor = pos;
                     self.note_scroll = 0;
                 }
-            } else if let Some(pos) = self.rows.iter().position(|r| r.file_index == fi && r.is_file_root) {
+            } else if let Some(pos) = self
+                .rows
+                .iter()
+                .position(|r| r.file_index == fi && r.flags.is_file_root())
+            {
                 self.cursor = pos;
                 self.note_scroll = 0;
             }
@@ -55,18 +56,17 @@ impl App {
 
     pub fn expand_current(&mut self) {
         if let Some(row) = self.rows.get(self.cursor) {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 return;
             }
             let fi = row.file_index;
             let path = row.path.clone();
-            if duir_core::tree_ops::get_item(&self.files[fi].data, &path)
-                .is_some_and(duir_core::model::TodoItem::is_locked)
-            {
+            let Some(file) = self.files.get_mut(fi) else { return };
+            if duir_core::tree_ops::get_item(&file.data, &path).is_some_and(duir_core::model::TodoItem::is_locked) {
                 self.try_expand_encrypted();
                 return;
             }
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path)
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path)
                 && item.folded
                 && !item.items.is_empty()
             {
@@ -79,15 +79,16 @@ impl App {
     pub(crate) fn cmd_encrypt(&mut self) {
         self.save_editor();
         if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 "Cannot encrypt file root".clone_into(&mut self.status_message);
                 return;
             }
             let fi = row.file_index;
-            let item = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path);
+            let Some(file) = self.files.get(fi) else { return };
+            let item = duir_core::tree_ops::get_item(&file.data, &row.path);
             let already_encrypted = item.is_some_and(duir_core::TodoItem::is_encrypted);
             let node_id = item.map_or_else(|| NodeId(String::new()), |it| it.id.clone());
-            let file_id = self.files[fi].id;
+            let file_id = file.id;
             let title = if already_encrypted {
                 "Change encryption password"
             } else {
@@ -105,11 +106,12 @@ impl App {
     pub(crate) fn cmd_decrypt(&mut self) {
         self.save_editor();
         if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 return;
             }
             let fi = row.file_index;
-            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &row.path) {
+            let Some(file) = self.files.get_mut(fi) else { return };
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &row.path) {
                 if !item.is_encrypted() {
                     self.set_status("Node is not encrypted", StatusLevel::Warning);
                     return;
@@ -120,7 +122,7 @@ impl App {
                 }
                 let node_id = item.id.clone();
                 duir_core::crypto::strip_encryption(item);
-                self.passwords.remove(&(self.files[fi].id, node_id));
+                self.passwords.remove(&(file.id, node_id));
                 self.mark_modified(fi, &row.path);
                 self.rebuild_rows();
                 self.set_status("Encryption removed", StatusLevel::Success);
@@ -135,10 +137,11 @@ impl App {
                 let Some(fi) = self.file_index_for_id(file_id) else {
                     return;
                 };
-                let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &node_id) else {
+                let Some(file) = self.files.get_mut(fi) else { return };
+                let Some(path) = duir_core::tree_ops::find_node_path(&file.data, &node_id) else {
                     return;
                 };
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path) {
                     match duir_core::crypto::encrypt_item(item, password) {
                         Ok(()) => {
                             self.passwords.insert((file_id, node_id), password.to_owned());
@@ -154,10 +157,11 @@ impl App {
                 let Some(fi) = self.file_index_for_id(file_id) else {
                     return;
                 };
-                let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &node_id) else {
+                let Some(file) = self.files.get_mut(fi) else { return };
+                let Some(path) = duir_core::tree_ops::find_node_path(&file.data, &node_id) else {
                     return;
                 };
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path) {
                     match duir_core::crypto::decrypt_item(item, password) {
                         Ok(()) => {
                             self.passwords.insert((file_id, node_id), password.to_owned());
@@ -174,10 +178,11 @@ impl App {
                 let Some(fi) = self.file_index_for_id(file_id) else {
                     return;
                 };
-                let Some(path) = duir_core::tree_ops::find_node_path(&self.files[fi].data, &node_id) else {
+                let Some(file) = self.files.get_mut(fi) else { return };
+                let Some(path) = duir_core::tree_ops::find_node_path(&file.data, &node_id) else {
                     return;
                 };
-                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut self.files[fi].data, &path) {
+                if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &path) {
                     match duir_core::crypto::encrypt_item(item, password) {
                         Ok(()) => {
                             self.passwords.insert((file_id, node_id), password.to_owned());
@@ -195,17 +200,18 @@ impl App {
     /// Try to expand an encrypted node — prompts for password.
     pub fn try_expand_encrypted(&mut self) {
         if let Some(row) = self.rows.get(self.cursor).cloned() {
-            if row.is_file_root {
+            if row.flags.is_file_root() {
                 return;
             }
             let fi = row.file_index;
-            let item = duir_core::tree_ops::get_item(&self.files[fi].data, &row.path);
+            let Some(file) = self.files.get(fi) else { return };
+            let item = duir_core::tree_ops::get_item(&file.data, &row.path);
             if item.is_some_and(duir_core::model::TodoItem::is_locked) {
                 let node_id = item.map_or_else(|| NodeId(String::new()), |it| it.id.clone());
                 self.password_prompt = Some(crate::password::PasswordPrompt::new(
                     "Unlock encrypted node",
                     crate::password::PasswordAction::Decrypt {
-                        file_id: self.files[fi].id,
+                        file_id: file.id,
                         node_id,
                     },
                 ));

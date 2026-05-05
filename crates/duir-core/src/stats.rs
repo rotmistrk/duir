@@ -77,13 +77,15 @@ fn count_leaves(item: &TodoItem) -> (usize, usize) {
         .fold((0, 0), |(t, c), (lt, lc)| (t + lt, c + lc))
 }
 
-#[allow(clippy::cast_possible_truncation)]
-const fn pct(checked: usize, total: usize) -> u8 {
-    if total == 0 { 0 } else { (checked * 100 / total) as u8 }
+fn pct(checked: usize, total: usize) -> u8 {
+    if total == 0 {
+        0
+    } else {
+        u8::try_from(checked * 100 / total).unwrap_or(u8::MAX)
+    }
 }
 
 #[cfg(test)]
-#[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
     use super::*;
 
@@ -217,12 +219,14 @@ mod tests {
     }
 
     #[test]
-    fn update_nested() {
+    fn update_nested() -> Result<(), String> {
         let inner = parent(vec![leaf(true), leaf(true)]);
         let mut root = parent(vec![inner, leaf(false)]);
         update_completion(&mut root);
         assert_eq!(root.completed, Completion::Partial);
-        assert_eq!(root.items[0].completed, Completion::Done);
+        let first = root.items.first().ok_or("missing first child")?;
+        assert_eq!(first.completed, Completion::Done);
+        Ok(())
     }
 
     // --- compute_file_stats ---

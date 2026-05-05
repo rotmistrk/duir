@@ -3,10 +3,10 @@ use super::*;
 #[test]
 fn kiro_tab_focus_state() {
     let mut app = App::new();
-    assert!(!app.kiro_tab_focused);
+    assert!(!app.flags.kiro_tab_focused());
     assert!(app.active_kiron_for_cursor().is_none());
     // Setting flag without active kiron is harmless
-    app.kiro_tab_focused = true;
+    app.flags.set_kiro_tab_focused(true);
     assert!(app.active_kiron_for_cursor().is_none());
 }
 
@@ -16,7 +16,7 @@ fn kiro_start_keeps_tree_focus() {
     app.cursor = 1; // Branch 1
     app.cmd_kiron(&["kiron"]);
     assert!(app.files[0].data.items[0].is_kiron());
-    assert!(!app.kiro_tab_focused);
+    assert!(!app.flags.kiro_tab_focused());
 }
 
 #[test]
@@ -41,25 +41,25 @@ fn active_kiron_for_cursor_none_outside() {
 fn kiro_tab_toggle_cycle() {
     let mut app = make_app_with_active_kiron();
     app.cursor = 1; // on the kiron node
-    assert!(!app.kiro_tab_focused);
+    assert!(!app.flags.kiro_tab_focused());
     // Simulate F4: focus kiro
     app.state = crate::app::FocusState::Kiro;
-    app.kiro_tab_focused = true;
+    app.flags.set_kiro_tab_focused(true);
     assert!(app.is_kiro_focused());
     // Simulate F2: back to tree, kiro stays visible
     app.state = crate::app::FocusState::Tree;
     assert!(app.is_tree_focused());
-    assert!(app.kiro_tab_focused); // display unchanged
+    assert!(app.flags.kiro_tab_focused()); // display unchanged
 }
 
 #[test]
 fn kiro_stop_clears_focus() {
     let mut app = make_app_with_active_kiron();
     app.state = crate::app::FocusState::Kiro;
-    app.kiro_tab_focused = true;
+    app.flags.set_kiro_tab_focused(true);
     app.cursor = 1;
     app.cmd_kiro(&["kiro", "stop"]);
-    assert!(!app.kiro_tab_focused);
+    assert!(!app.flags.kiro_tab_focused());
     assert!(app.is_tree_focused());
     assert!(app.active_kirons.is_empty());
 }
@@ -172,10 +172,10 @@ fn alt2_focuses_tree_from_kiro() {
     let mut app = make_app_with_active_kiron();
     app.cursor = 1;
     app.state = crate::app::FocusState::Kiro;
-    app.kiro_tab_focused = true;
+    app.flags.set_kiro_tab_focused(true);
     let storage_dir = std::path::PathBuf::from("/tmp");
     crate::event_loop::handle_global_keys_for_test(&mut app, key(KeyCode::Char('™')), &storage_dir);
-    assert!(app.kiro_tab_focused); // kiro stays visible
+    assert!(app.flags.kiro_tab_focused()); // kiro stays visible
     assert!(app.is_tree_focused()); // keyboard goes to tree
 }
 

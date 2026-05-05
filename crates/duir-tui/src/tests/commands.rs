@@ -98,10 +98,10 @@ fn cmd_autosave_toggle() {
 #[test]
 fn cmd_autosave_all_toggle() {
     let mut app = make_app_with_tree();
-    let before = app.autosave_global;
+    let before = app.flags.autosave_global();
     app.cmd_autosave(&["autosave", "all"]);
-    assert_ne!(app.autosave_global, before);
+    assert_ne!(app.flags.autosave_global(), before);
     for f in &app.files {
-        assert_eq!(f.autosave, app.autosave_global);
+        assert_eq!(f.autosave, app.flags.autosave_global());
     }
 }
