@@ -101,6 +101,7 @@ pub enum FocusState {
     },
     Help {
         scroll: u16,
+        search: String,
     },
     About,
 }

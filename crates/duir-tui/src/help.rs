@@ -70,23 +70,34 @@ pub fn render_about(frame: &mut ratatui::Frame, area: Rect) {
 }
 
 /// Render the `:help` overlay.
-pub fn render_help(frame: &mut ratatui::Frame, area: Rect, scroll: u16) {
+pub fn render_help(frame: &mut ratatui::Frame, area: Rect, scroll: u16, search: &str) {
     let popup = centered_rect(80, 90, area);
     frame.render_widget(Clear, popup);
+
+    let query = search.trim_matches('\0');
+    let filtering = !search.is_empty();
 
     let lines: Vec<Line<'_>> = HELP_TEXT
         .lines()
         .filter_map(|line| {
-            // Skip separator rows
             if line.starts_with('|') && line.contains("---") {
+                return None;
+            }
+            if filtering && !query.is_empty() && !line.to_lowercase().contains(&query.to_lowercase()) {
                 return None;
             }
             Some(render_help_line(line))
         })
         .collect();
 
+    let title = if filtering {
+        format!(" Help — /{query}▏ (Esc clear, ↑↓ scroll) ")
+    } else {
+        " Help — :help (/ search, ↑↓ scroll, q/Esc close) ".to_owned()
+    };
+
     let block = Block::default()
-        .title(" Help — :help (↑↓ scroll, q/Esc close) ")
+        .title(title)
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::LightCyan));
 
@@ -167,4 +178,59 @@ fn render_inline_markup(line: &str) -> Line<'_> {
         spans.push(Span::raw(rest));
     }
     Line::from(spans)
+}
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+use crate::app::{App, FocusState};
+
+/// Handle keyboard input in the help overlay. Returns true if consumed.
+pub fn handle_help_input(app: &mut App, key: KeyEvent) -> bool {
+    let FocusState::Help {
+        ref mut scroll,
+        ref mut search,
+    } = app.state
+    else {
+        return false;
+    };
+
+    if !search.is_empty() {
+        match key.code {
+            KeyCode::Esc => {
+                search.clear();
+                *scroll = 0;
+            }
+            KeyCode::Backspace => {
+                search.pop();
+                if search.is_empty() {
+                    *scroll = 0;
+                }
+            }
+            KeyCode::Char(c) if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if search == "\0" {
+                    search.clear();
+                }
+                search.push(c);
+                *scroll = 0;
+            }
+            KeyCode::Down => *scroll += 1,
+            KeyCode::Up => *scroll = scroll.saturating_sub(1),
+            _ => {}
+        }
+        return true;
+    }
+
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => app.state = FocusState::Tree,
+        KeyCode::Char('/') => {
+            "\0".clone_into(search);
+        }
+        KeyCode::Down | KeyCode::Char('j') => *scroll += 1,
+        KeyCode::Up | KeyCode::Char('k') => *scroll = scroll.saturating_sub(1),
+        KeyCode::PageDown => *scroll += 20,
+        KeyCode::PageUp => *scroll = scroll.saturating_sub(20),
+        _ => {}
+    }
+
+    true
 }

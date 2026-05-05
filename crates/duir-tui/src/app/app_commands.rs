@@ -1,8 +1,6 @@
 use super::{App, FocusState, StatusLevel, find_available_path, read_file, write_file};
 
-// fi (file_index) is always set by rebuild_rows from 0..self.files.len(), so self.files[fi] is safe.
-// parts[] indexing is guarded by parts.len() checks.
-#[allow(clippy::indexing_slicing)]
+#[allow(clippy::indexing_slicing)] // fi from rebuild_rows, parts guarded by len checks
 impl App {
     /// Execute a `:` command. Returns an optional path for file operations.
     pub fn execute_command(&mut self, storage: &dyn duir_core::TodoStorage) {
@@ -77,7 +75,10 @@ impl App {
                 }
             }
             "help" => {
-                self.state = FocusState::Help { scroll: 0 };
+                self.state = FocusState::Help {
+                    scroll: 0,
+                    search: String::new(),
+                };
             }
             "encrypt" => self.cmd_encrypt(),
             "decrypt" => self.cmd_decrypt(),

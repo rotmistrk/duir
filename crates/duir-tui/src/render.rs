@@ -66,8 +66,8 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
         crate::help::render_about(frame, size);
     }
 
-    if let FocusState::Help { scroll } = app.state {
-        crate::help::render_help(frame, size, scroll);
+    if let FocusState::Help { scroll, ref search } = app.state {
+        crate::help::render_help(frame, size, scroll, search);
     }
 
     if let Some(prompt) = &app.password_prompt {

@@ -150,7 +150,10 @@ fn handle_tree_key(app: &mut App, key: KeyEvent) -> bool {
             true
         }
         (KeyCode::F(1), false) => {
-            app.state = FocusState::Help { scroll: 0 };
+            app.state = FocusState::Help {
+                scroll: 0,
+                search: String::new(),
+            };
             true
         }
         (KeyCode::Char(']'), false) => {

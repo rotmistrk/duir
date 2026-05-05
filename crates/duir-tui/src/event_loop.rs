@@ -119,23 +119,7 @@ fn handle_overlay_input(app: &mut App, key: crossterm::event::KeyEvent) -> bool 
     }
 
     // Help screen overlay
-    if let FocusState::Help { ref mut scroll } = app.state {
-        match key.code {
-            KeyCode::Esc | KeyCode::Char('q') => app.state = FocusState::Tree,
-
-            KeyCode::Down | KeyCode::Char('j') => *scroll += 1,
-
-            KeyCode::Up | KeyCode::Char('k') => {
-                *scroll = scroll.saturating_sub(1);
-            }
-
-            KeyCode::PageDown => *scroll += 20,
-
-            KeyCode::PageUp => *scroll = scroll.saturating_sub(20),
-
-            _ => {}
-        }
-
+    if crate::help::handle_help_input(app, key) {
         return true;
     }
 
