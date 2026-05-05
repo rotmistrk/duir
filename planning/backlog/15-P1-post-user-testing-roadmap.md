@@ -9,6 +9,7 @@
 ### Architecture
 - [ ] **duir-app crate extraction** (P1) — move AppState, Action enum, command parser, completer, vim editor state, TermBuf, TreeRow flattening from duir-tui to shared crate. Both TUI and GUI reuse it.
 - [ ] **Editor keymap trait** (P3) — extract note editor into keymap trait with vim/emacs/standard implementations. Config: `keymap = "vim"`. Depends on duir-app extraction. Ctrl-E ($EDITOR) covers non-vim users meanwhile.
+- [ ] **Tree gutter** (P2) — left gutter with configurable columns: icons, done%, timestamps. `:set gutter [done icons timestamps]` / `:set nogutter` / `:set gutter auto` (default). Auto mode: compute p95 title width, fill gutter with available space in priority order (icons > done > timestamps). 2 chars for separators.
 
 ### GUI
 - [ ] **egui desktop app** (P2) — native window via eframe, reuses duir-core + duir-app. Tree view, note editor, kiro terminal. ~12-16 sessions.
