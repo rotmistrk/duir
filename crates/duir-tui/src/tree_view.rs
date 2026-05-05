@@ -100,7 +100,7 @@ impl StatefulWidget for TreeView<'_> {
             };
 
             let checkbox = if row.is_file_root {
-                String::new()
+                "📄 ".to_owned()
             } else {
                 match row.completed {
                     Completion::Open => "☐ ".to_owned(),
