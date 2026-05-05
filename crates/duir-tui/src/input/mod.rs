@@ -14,6 +14,7 @@ pub fn handle_key(app: &mut App, key: KeyEvent) -> bool {
         FocusState::Tree => handle_tree_key(app, key),
         FocusState::Note { .. } => handle_note_key(app, key),
         FocusState::Kiro | FocusState::Help { .. } | FocusState::About => false,
+        FocusState::Resolve(_) => handle_resolve_key(app, key),
     }
 }
 
@@ -215,4 +216,43 @@ pub fn poll_event(timeout: std::time::Duration) -> std::io::Result<Option<Event>
     } else {
         Ok(None)
     }
+}
+
+fn handle_resolve_key(app: &mut App, key: KeyEvent) -> bool {
+    use duir_core::conflict::Resolution;
+
+    let FocusState::Resolve(state) = &mut app.state else {
+        return false;
+    };
+
+    match key.code {
+        KeyCode::Char('j') | KeyCode::Down => {
+            if state.cursor + 1 < state.conflicts.len() {
+                state.cursor += 1;
+            }
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            state.cursor = state.cursor.saturating_sub(1);
+        }
+        KeyCode::Char('m') => {
+            if let Some(r) = state.resolutions.get_mut(state.cursor) {
+                *r = Some(Resolution::KeepMine);
+            }
+        }
+        KeyCode::Char('t') => {
+            if let Some(r) = state.resolutions.get_mut(state.cursor) {
+                *r = Some(Resolution::KeepTheirs);
+            }
+        }
+        KeyCode::Char('b') => {
+            if let Some(r) = state.resolutions.get_mut(state.cursor) {
+                *r = Some(Resolution::KeepBoth);
+            }
+        }
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.state = FocusState::Tree;
+        }
+        _ => return false,
+    }
+    true
 }

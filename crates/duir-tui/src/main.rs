@@ -17,6 +17,7 @@ mod password;
 mod pty_tab;
 mod render;
 mod render_note;
+mod render_resolve;
 mod syntax;
 mod tab_style;
 #[allow(dead_code)]

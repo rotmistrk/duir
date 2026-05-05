@@ -13,6 +13,8 @@ pub mod app_kiron_capture;
 pub mod app_kiron_mcp;
 pub mod app_kiron_mutation;
 mod app_kiron_start;
+mod app_resolve;
+pub use app_resolve::ConflictState;
 mod app_state;
 mod app_tree;
 mod app_tree_edit;
@@ -76,6 +78,7 @@ pub enum FocusState {
         search: String,
     },
     About,
+    Resolve(app_resolve::ConflictState),
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

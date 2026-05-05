@@ -59,6 +59,10 @@ pub fn run_loop(
                 if let Ok(storage) = FileStorage::new(storage_dir) {
                     app.execute_command(&storage);
                 }
+            } else if matches!(app.state, crate::app::FocusState::Resolve(_)) && key.code == KeyCode::Enter {
+                if let Ok(storage) = FileStorage::new(storage_dir) {
+                    app.resolve_apply(&storage);
+                }
             } else {
                 crate::input::handle_key(app, key);
             }

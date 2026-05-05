@@ -1,4 +1,5 @@
 pub mod config;
+pub mod conflict;
 pub mod crypto;
 pub mod diagram;
 pub mod docx_export;

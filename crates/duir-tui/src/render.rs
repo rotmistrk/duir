@@ -69,6 +69,10 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
         crate::help::render_help(frame, size, scroll, search);
     }
 
+    if let FocusState::Resolve(ref state) = app.state {
+        crate::render_resolve::render_resolve_overlay(frame, size, state);
+    }
+
     if let Some(prompt) = &app.password_prompt {
         prompt.render(frame, size);
     }

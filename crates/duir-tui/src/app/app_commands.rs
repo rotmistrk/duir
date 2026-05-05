@@ -33,6 +33,7 @@ impl App {
             "encrypt" => self.cmd_encrypt(),
             "decrypt" => self.cmd_decrypt(),
             "files" => self.cmd_files(),
+            "resolve" => self.cmd_resolve(storage),
             "kiron" => self.cmd_kiron(&parts),
             "kiro" => self.cmd_kiro(&parts),
             "kbd" => self.execute_kbd_cmd(&parts),
