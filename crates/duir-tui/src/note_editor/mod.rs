@@ -1,7 +1,9 @@
 mod command;
 mod editing;
 mod insert;
+mod motions;
 mod normal;
+mod normal_keys;
 mod util;
 mod visual;
 
@@ -32,6 +34,8 @@ pub struct NoteEditor<'a> {
     pub status: String,
     pub(crate) pending_count: Option<usize>,
     pub(crate) pending_op: Option<char>,
+    pub(crate) pending_char: Option<char>,
+    pub(crate) last_find: Option<(char, char)>,
     pub(crate) command_history: Vec<String>,
     pub(crate) history_index: Option<usize>,
     pub(crate) completer: crate::completer::Completer,
@@ -62,6 +66,8 @@ impl NoteEditor<'_> {
             status: String::new(),
             pending_count: None,
             pending_op: None,
+            pending_char: None,
+            last_find: None,
             command_history: Vec::new(),
             history_index: None,
             completer: crate::completer::Completer::new(crate::completer::EDITOR_COMMANDS),
