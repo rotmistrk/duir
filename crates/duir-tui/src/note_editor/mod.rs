@@ -1,9 +1,11 @@
 mod command;
+mod command_ex;
 mod editing;
 mod insert;
 mod motions;
 mod normal;
 mod normal_keys;
+mod normal_keys_motion;
 mod normal_keys_search;
 mod util;
 mod visual;

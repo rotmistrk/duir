@@ -5,6 +5,7 @@
 *.swo
 *~
 .DS_Store
+tarpaulin-report.json
 
 
 # Added by cargo

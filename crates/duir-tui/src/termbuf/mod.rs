@@ -1,6 +1,7 @@
 // Virtual terminal buffer: grid of styled cells driven by vte parser.
 
 mod parser;
+mod parser_sgr;
 
 use ratatui::style::Style;
 

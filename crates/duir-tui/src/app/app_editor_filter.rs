@@ -1,0 +1,165 @@
+use super::{App, FocusState};
+
+impl App {
+    /// Apply the current committed filter text.
+    pub fn apply_filter(&mut self) {
+        self.rebuild_rows_raw();
+        self.reapply_filter();
+    }
+
+    pub(crate) fn reapply_filter(&mut self) {
+        if self.filter_committed_text.is_empty() {
+            return;
+        }
+
+        let opts = duir_core::filter::FilterOptions {
+            search_notes: true,
+            case_sensitive: false,
+        };
+
+        let mut match_set: std::collections::HashSet<(usize, Vec<usize>)> = std::collections::HashSet::new();
+        for (fi, file) in self.files.iter().enumerate() {
+            let matches = duir_core::filter::filter_items(&file.data.items, &self.filter_committed_text, &opts);
+            for path in matches {
+                match_set.insert((fi, path));
+            }
+        }
+
+        if self.flags.filter_committed_exclude() {
+            self.rows
+                .retain(|row| row.flags.is_file_root() || !match_set.contains(&(row.file_index, row.path.clone())));
+        } else {
+            self.rows
+                .retain(|row| row.flags.is_file_root() || match_set.contains(&(row.file_index, row.path.clone())));
+        }
+
+        let visible = self.rows.iter().filter(|r| !r.flags.is_file_root()).count();
+        let mode = if self.flags.filter_committed_exclude() {
+            "exclude"
+        } else {
+            "include"
+        };
+        self.status_message = format!(
+            "Filter '{}' ({}): {} visible",
+            self.filter_committed_text, mode, visible
+        );
+
+        if self.cursor >= self.rows.len() && !self.rows.is_empty() {
+            self.cursor = self.rows.len() - 1;
+        }
+    }
+
+    /// Live filter — called on each keystroke while typing the filter.
+    pub fn apply_filter_live(&mut self) {
+        let filter_text = if let FocusState::Filter { ref text, .. } = self.state {
+            text.clone()
+        } else {
+            return;
+        };
+
+        if filter_text.is_empty() {
+            self.rebuild_rows_raw();
+            self.status_message.clear();
+            return;
+        }
+        let (text, exclude) = filter_text
+            .strip_prefix('!')
+            .map_or_else(|| (filter_text.clone(), false), |rest| (rest.to_owned(), true));
+        if text.is_empty() {
+            self.rebuild_rows_raw();
+            return;
+        }
+
+        self.rebuild_rows_raw();
+        let opts = duir_core::filter::FilterOptions {
+            search_notes: true,
+            case_sensitive: false,
+        };
+        let mut match_set: std::collections::HashSet<(usize, Vec<usize>)> = std::collections::HashSet::new();
+        for (fi, file) in self.files.iter().enumerate() {
+            let matches = duir_core::filter::filter_items(&file.data.items, &text, &opts);
+            for path in matches {
+                match_set.insert((fi, path));
+            }
+        }
+        if exclude {
+            self.rows
+                .retain(|row| row.flags.is_file_root() || !match_set.contains(&(row.file_index, row.path.clone())));
+        } else {
+            self.rows
+                .retain(|row| row.flags.is_file_root() || match_set.contains(&(row.file_index, row.path.clone())));
+        }
+        let visible = self.rows.iter().filter(|r| !r.flags.is_file_root()).count();
+        self.status_message = format!("/{filter_text}: {visible} matches");
+        if self.cursor >= self.rows.len() && !self.rows.is_empty() {
+            self.cursor = self.rows.len() - 1;
+        }
+    }
+
+    pub(crate) fn cmd_collapse(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.flags.is_file_root() {
+                return;
+            }
+            let fi = row.file_index;
+            let Some(file) = self.files.get_mut(fi) else { return };
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &row.path) {
+                if item.items.is_empty() {
+                    "No children to collapse".clone_into(&mut self.status_message);
+                    return;
+                }
+                let mut md = String::new();
+                for child in &item.items {
+                    md.push_str(&duir_core::markdown_export::export_subtree(child, 3));
+                }
+                if !item.note.is_empty() {
+                    item.note.push_str("\n\n");
+                }
+                item.note.push_str("<!-- duir:collapsed -->\n");
+                item.note.push_str(&md);
+                item.items.clear();
+                self.mark_modified(fi, &row.path);
+                self.rebuild_rows();
+                self.reload_editor();
+                "Children collapsed to note".clone_into(&mut self.status_message);
+            }
+        }
+    }
+
+    pub(crate) fn cmd_expand(&mut self) {
+        if let Some(row) = self.rows.get(self.cursor).cloned() {
+            if row.flags.is_file_root() {
+                return;
+            }
+            let fi = row.file_index;
+            let Some(file) = self.files.get_mut(fi) else { return };
+            if let Some(item) = duir_core::tree_ops::get_item_mut(&mut file.data, &row.path) {
+                if item.note.trim().is_empty() {
+                    "No note to expand".clone_into(&mut self.status_message);
+                    return;
+                }
+                let marker = "<!-- duir:collapsed -->";
+                let (keep_note, md_part) = if let Some(pos) = item.note.find(marker) {
+                    (
+                        item.note[..pos].trim_end().to_owned(),
+                        item.note[pos + marker.len()..].to_owned(),
+                    )
+                } else {
+                    (String::new(), item.note.clone())
+                };
+                let parsed = duir_core::markdown_import::import_markdown(&md_part);
+                if parsed.items.is_empty() {
+                    "No tree structure found in note".clone_into(&mut self.status_message);
+                    return;
+                }
+                item.items.extend(parsed.items);
+                item.note = keep_note;
+                item.folded = false;
+                self.mark_modified(fi, &row.path);
+                self.rebuild_rows();
+                self.reload_editor();
+                "Note expanded to children".clone_into(&mut self.status_message);
+            }
+        }
+    }
+}

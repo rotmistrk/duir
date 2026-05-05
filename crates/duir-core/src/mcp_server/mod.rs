@@ -4,6 +4,8 @@
 //! communicating with the main application via channels.
 
 mod tools;
+mod tools_read;
+mod tools_write;
 
 #[cfg(test)]
 mod tests;

@@ -9,6 +9,8 @@ mod commands;
 mod completer_tests;
 mod crypto;
 mod editor;
+mod input_edit;
+mod input_filter;
 mod input_other;
 mod input_tree;
 mod kiro;
