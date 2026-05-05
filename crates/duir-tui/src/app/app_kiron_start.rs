@@ -59,13 +59,17 @@ impl App {
             }
         };
 
-        // Spawn kiro-cli with --agent duir and DUIR_MCP_SOCKET env var
+        // Spawn kiro-cli with --agent and DUIR_MCP_SOCKET env var
         let config = duir_core::config::Config::load();
 
+        let agent_name = if self.kiro_agent_override.is_empty() {
+            "duir"
+        } else {
+            &self.kiro_agent_override
+        };
+
         app_kiron_mcp::ensure_agent_file(&config.kiro.sop);
-        let (cmd, mut args) = config.kiro.build_command(std::path::Path::new("."));
-        args.push("--agent".to_owned());
-        args.push("duir".to_owned());
+        let (cmd, args) = config.kiro.build_command(std::path::Path::new("."), Some(agent_name));
 
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
         let socket_str = socket_path.to_string_lossy().into_owned();

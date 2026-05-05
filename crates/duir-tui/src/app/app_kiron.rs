@@ -114,8 +114,24 @@ impl App {
             "stop" => self.kiro_stop(),
             "new" => self.kiro_new_session(),
             "capture" => self.capture_kiro_response(),
+            "agent" => {
+                if let Some(&name) = parts.get(2) {
+                    name.to_owned().clone_into(&mut self.kiro_agent_override);
+                    self.set_status(&format!("Kiro agent set to: {name}"), StatusLevel::Success);
+                } else {
+                    let current = if self.kiro_agent_override.is_empty() {
+                        "duir (default)"
+                    } else {
+                        &self.kiro_agent_override
+                    };
+                    self.set_status(
+                        &format!("Kiro agent: {current}. Usage: :kiro agent <name>"),
+                        StatusLevel::Info,
+                    );
+                }
+            }
             _ => {
-                "Usage: :kiro start | stop | new | capture".clone_into(&mut self.status_message);
+                "Usage: :kiro start|stop|new|capture|agent <name>".clone_into(&mut self.status_message);
             }
         }
     }

@@ -28,6 +28,10 @@ pub struct KiroConfig {
 
     #[serde(default = "default_kiro_sop")]
     pub sop: String,
+
+    /// Default agent name (passed as --agent to kiro-cli).
+    #[serde(default)]
+    pub agent: Option<String>,
 }
 
 fn default_kiro_command() -> String {
@@ -55,15 +59,23 @@ impl Default for KiroConfig {
             args: default_kiro_args(),
             trust_all_tools: false,
             sop: default_kiro_sop(),
+            agent: None,
         }
     }
 }
 
 impl KiroConfig {
     /// Build the command and arguments for launching kiro-cli.
+    /// `agent_override` takes precedence over config default.
     #[must_use]
-    pub fn build_command(&self, _session_dir: &Path) -> (String, Vec<String>) {
-        (self.command.clone(), self.args.clone())
+    pub fn build_command(&self, _session_dir: &Path, agent_override: Option<&str>) -> (String, Vec<String>) {
+        let mut args = self.args.clone();
+        let agent = agent_override.or(self.agent.as_deref());
+        if let Some(name) = agent {
+            args.push("--agent".to_owned());
+            args.push(name.to_owned());
+        }
+        (self.command.clone(), args)
     }
 }
 

@@ -26,6 +26,8 @@ pub struct App {
     pub active_kirons: std::collections::HashMap<(FileId, NodeId), ActiveKiron>,
     /// Pending response captures awaiting idle timeout.
     pub pending_responses: Vec<PendingResponse>,
+    /// Per-session kiro agent override (empty = use config default).
+    pub kiro_agent_override: String,
 }
 
 impl App {
@@ -56,6 +58,7 @@ impl App {
             highlighter: crate::syntax::SyntaxHighlighter::new(),
             active_kirons: std::collections::HashMap::new(),
             pending_responses: Vec::new(),
+            kiro_agent_override: String::new(),
         }
     }
 
