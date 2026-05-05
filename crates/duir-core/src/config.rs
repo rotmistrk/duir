@@ -90,7 +90,6 @@ pub struct EditorConfig {
 #[serde(default)]
 pub struct UiConfig {
     pub note_panel_pct: u16,
-    pub file_order: Vec<String>,
 }
 
 impl Default for StorageConfig {
@@ -116,10 +115,7 @@ impl Default for EditorConfig {
 
 impl Default for UiConfig {
     fn default() -> Self {
-        Self {
-            note_panel_pct: 50,
-            file_order: Vec::new(),
-        }
+        Self { note_panel_pct: 50 }
     }
 }
 
@@ -200,5 +196,50 @@ impl Config {
             dirs.push(self.storage.local.clone());
         }
         dirs
+    }
+}
+
+/// Runtime state persisted between sessions (separate from user config).
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AppState {
+    pub file_order: Vec<String>,
+}
+
+impl AppState {
+    /// Load state from local `.duir/state.toml` or global state file.
+    #[must_use]
+    pub fn load() -> Self {
+        if let Some(s) = Self::try_load(Path::new(".duir/state.toml")) {
+            return s;
+        }
+        if let Some(data_dir) = dirs::data_dir()
+            && let Some(s) = Self::try_load(&data_dir.join("duir").join("state.toml"))
+        {
+            return s;
+        }
+        Self::default()
+    }
+
+    fn try_load(path: &Path) -> Option<Self> {
+        let content = fs::read_to_string(path).ok()?;
+        toml::from_str(&content).ok()
+    }
+
+    /// Save state to local `.duir/state.toml` or global state file.
+    pub fn save(&self) {
+        let path = if Config::has_local() {
+            PathBuf::from(".duir/state.toml")
+        } else if let Some(data_dir) = dirs::data_dir() {
+            data_dir.join("duir").join("state.toml")
+        } else {
+            return;
+        };
+        if let Ok(content) = toml::to_string_pretty(self) {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            let _ = fs::write(&path, content);
+        }
     }
 }

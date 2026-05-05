@@ -328,16 +328,8 @@ pub fn key_to_bytes(key: crossterm::event::KeyEvent) -> Vec<u8> {
     }
 }
 
-fn save_file_order(app: &App, config: &duir_core::config::Config) {
+fn save_file_order(app: &App, _config: &duir_core::config::Config) {
     let order: Vec<String> = app.files.iter().map(|f| f.name.clone()).collect();
-    let mut cfg = config.clone();
-    cfg.ui.file_order = order;
-    let path = if duir_core::config::Config::has_local() {
-        std::path::PathBuf::from(".duir/config.toml")
-    } else if let Some(d) = dirs::config_dir() {
-        d.join("duir").join("config.toml")
-    } else {
-        return;
-    };
-    let _ = cfg.write_to(&path);
+    let state = duir_core::config::AppState { file_order: order };
+    state.save();
 }
