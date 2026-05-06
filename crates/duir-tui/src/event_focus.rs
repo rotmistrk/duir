@@ -49,7 +49,7 @@ pub fn handle_focus_keys(app: &mut App, key: crossterm::event::KeyEvent) -> bool
         && !app.is_editing_title()
         && !app.is_kiro_focused()
     {
-        app.cmd_layout();
+        app.cmd_layout(None);
         return true;
     }
 

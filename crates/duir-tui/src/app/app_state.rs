@@ -197,8 +197,21 @@ impl App {
         matches!(self.state, FocusState::About)
     }
 
-    pub fn cmd_layout(&mut self) {
-        self.layout_mode = self.layout_mode.cycle();
+    pub fn cmd_layout(&mut self, arg: Option<&str>) {
+        self.layout_mode = match arg {
+            Some("wide" | "right") => LayoutMode::Right,
+            Some("tall" | "bottom") => LayoutMode::Bottom,
+            Some("compact" | "tab") => LayoutMode::Tab,
+            Some("auto") => LayoutMode::Auto,
+            None => self.layout_mode.cycle(),
+            Some(other) => {
+                self.set_status(
+                    &format!("Unknown layout: {other}. Use: wide|tall|compact|auto"),
+                    StatusLevel::Warning,
+                );
+                return;
+            }
+        };
         self.set_status(&format!("Layout: {}", self.layout_mode.label()), StatusLevel::Info);
     }
 }
