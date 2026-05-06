@@ -33,18 +33,19 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
         let area = main_chunks.first().copied().unwrap_or_default();
 
         if app.is_note_focused() || app.is_kiro_focused() {
-            super::render_note::render_note_panel(frame, app, area, true);
+            super::render_note::render_note_panel(frame, app, area, true, false);
         } else {
             render_tree_panel(frame, app, area, true);
         }
     } else {
         let content_area = main_chunks.first().copied().unwrap_or_default();
+        let has_active_kiro = app.active_kiron_for_cursor().is_some();
         let layout = app.layout_mode.resolve(size.width, size.height);
 
         match layout {
-            EffectiveLayout::Right => render_three_columns(frame, app, content_area),
-            EffectiveLayout::Bottom => render_top_bottom(frame, app, content_area),
-            EffectiveLayout::Tab => render_two_columns(frame, app, content_area),
+            EffectiveLayout::Right if has_active_kiro => render_three_columns(frame, app, content_area),
+            EffectiveLayout::Bottom if has_active_kiro => render_top_bottom(frame, app, content_area),
+            _ => render_two_columns(frame, app, content_area),
         }
     }
 
@@ -87,7 +88,7 @@ fn render_three_columns(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
         .split(area);
 
     render_tree_panel(frame, app, chunks.first().copied().unwrap_or_default(), false);
-    super::render_note::render_note_panel(frame, app, chunks.get(1).copied().unwrap_or_default(), false);
+    super::render_note::render_note_panel(frame, app, chunks.get(1).copied().unwrap_or_default(), false, true);
     super::render_kiro::render_kiro_panel(frame, app, chunks.get(2).copied().unwrap_or_default());
 }
 
@@ -106,7 +107,7 @@ fn render_top_bottom(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
         .split(vert.first().copied().unwrap_or_default());
 
     render_tree_panel(frame, app, top_chunks.first().copied().unwrap_or_default(), false);
-    super::render_note::render_note_panel(frame, app, top_chunks.get(1).copied().unwrap_or_default(), false);
+    super::render_note::render_note_panel(frame, app, top_chunks.get(1).copied().unwrap_or_default(), false, true);
     super::render_kiro::render_kiro_panel(frame, app, vert.get(1).copied().unwrap_or_default());
 }
 
@@ -120,7 +121,7 @@ fn render_two_columns(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
         .split(area);
 
     render_tree_panel(frame, app, chunks.first().copied().unwrap_or_default(), false);
-    super::render_note::render_note_panel(frame, app, chunks.get(1).copied().unwrap_or_default(), false);
+    super::render_note::render_note_panel(frame, app, chunks.get(1).copied().unwrap_or_default(), false, false);
 }
 
 fn render_tree_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoomed: bool) {

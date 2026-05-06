@@ -6,9 +6,9 @@ use crate::app::{App, FocusState};
 use super::render::panel_block;
 
 // Layout chunk indices match the number of constraints provided to Layout::split.
-pub fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoomed: bool) {
+pub fn render_note_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoomed: bool, kiro_separate: bool) {
     let active_kiron_key = app.active_kiron_for_cursor();
-    let has_kiron = active_kiron_key.is_some();
+    let has_kiron = active_kiron_key.is_some() && !kiro_separate;
 
     if has_kiron && !matches!(app.state, FocusState::Note { .. }) {
         let kiro_focused = app.is_kiro_focused();
