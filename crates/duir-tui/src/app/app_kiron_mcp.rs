@@ -110,21 +110,26 @@ pub fn ensure_agent_file(agent_name: &str, sop: &str) {
         obj.insert("duir".to_owned(), duir_mcp);
     }
 
-    // Append duir SOP to existing instructions
-    let existing = config
-        .get("customInstructions")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_owned();
+    // Append duir SOP to prompt
+    let existing = config.get("prompt").and_then(|v| v.as_str()).unwrap_or("").to_owned();
     let merged = if existing.is_empty() {
         sop.to_owned()
     } else {
         format!("{existing}\n\n{sop}")
     };
-    config.insert("customInstructions".to_owned(), serde_json::json!(merged));
+    config.insert("prompt".to_owned(), serde_json::json!(merged));
 
     config.entry("includeMcpJson").or_insert(serde_json::json!(true));
-    config.entry("tools").or_insert(serde_json::json!(["*"]));
+
+    // Ensure @duir in tools list
+    let tools = config.entry("tools").or_insert_with(|| serde_json::json!(["*"]));
+    if let Some(arr) = tools.as_array_mut() {
+        let duir_tool = serde_json::json!("@duir");
+        let wildcard = serde_json::json!("*");
+        if !arr.contains(&wildcard) && !arr.contains(&duir_tool) {
+            arr.push(duir_tool);
+        }
+    }
 
     // Ensure @duir in allowedTools
     let tools = config.entry("allowedTools").or_insert_with(|| serde_json::json!([]));

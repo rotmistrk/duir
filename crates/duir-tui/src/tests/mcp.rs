@@ -121,13 +121,14 @@ fn mcp_ensure_agent_file_merges_base_agent() {
     let agents_dir = dir.path().join(".kiro/agents");
     std::fs::create_dir_all(&agents_dir).unwrap();
 
-    // Create a base agent with its own MCP server
+    // Create a base agent with its own MCP server and tools
     let base = serde_json::json!({
         "name": "my-agent",
-        "customInstructions": "base instructions",
+        "prompt": "base instructions",
         "mcpServers": {
             "other": {"command": "other-tool", "args": []}
         },
+        "tools": ["read", "write", "@other"],
         "allowedTools": ["@other"]
     });
     std::fs::write(agents_dir.join("my-agent.json"), serde_json::to_string(&base).unwrap()).unwrap();
@@ -143,18 +144,17 @@ fn mcp_ensure_agent_file_merges_base_agent() {
     // Has both MCP servers
     assert!(parsed["mcpServers"]["duir"]["command"].is_string());
     assert!(parsed["mcpServers"]["other"]["command"].is_string());
-    // Merged instructions
-    assert!(
-        parsed["customInstructions"]
-            .as_str()
-            .unwrap()
-            .contains("base instructions")
-    );
-    assert!(parsed["customInstructions"].as_str().unwrap().contains("duir sop"));
-    // Merged allowedTools
-    let tools = parsed["allowedTools"].as_array().unwrap();
-    assert!(tools.contains(&serde_json::json!("@other")));
+    // Merged prompt
+    assert!(parsed["prompt"].as_str().unwrap().contains("base instructions"));
+    assert!(parsed["prompt"].as_str().unwrap().contains("duir sop"));
+    // Merged tools includes @duir
+    let tools = parsed["tools"].as_array().unwrap();
     assert!(tools.contains(&serde_json::json!("@duir")));
+    assert!(tools.contains(&serde_json::json!("@other")));
+    // Merged allowedTools
+    let allowed = parsed["allowedTools"].as_array().unwrap();
+    assert!(allowed.contains(&serde_json::json!("@other")));
+    assert!(allowed.contains(&serde_json::json!("@duir")));
 }
 
 #[test]
