@@ -100,6 +100,7 @@ Legacy Qt ToDo `.todo` XML files are auto-detected and imported by `:open`.
 | `:kiro capture` | Capture kiro response as sibling node |
 | `Ctrl+\` / `Opt+\` | Send current node as prompt to kiro |
 | `Ctrl+T` | Cycle focus: Tree → Note → Kiro → Tree |
+| `Ctrl+L` | Cycle layout: auto → right → bottom → tab |
 | `Ctrl+R` | Capture kiro response (tree focus, in kiron subtree) |
 | `F2` / `Alt+2` | Focus tree (keep right panel as-is) |
 | `F3` / `Alt+3` | Focus note panel |
@@ -116,6 +117,12 @@ tabs: 📝 Note │ 🤖 Kiro. Active panel has cyan border.
 Ctrl+T switches between tree and kiro panel. All typing goes
 to kiro when its panel is focused (including Ctrl keys like
 Ctrl+C, Ctrl+J). Ctrl+S still saves globally.
+
+Kiro panel layout adapts to terminal size (auto mode):
+- Wide (≥160 cols): kiro as separate right column
+- Tall (≥50 rows): kiro below tree+note
+- Small: kiro as tab in note panel (original behavior)
+Use Ctrl+L or `:layout` to override.
 
 Ctrl+\ (or Opt+\ on macOS) sends the current node and its
 descendants as markdown to kiro. Use Ctrl+R or `:kiro capture`
@@ -146,6 +153,7 @@ Mark completed items with mark_done.
 |---------|--------|
 | `:autosave` | Toggle autosave (current file) |
 | `:autosave all` | Toggle global autosave |
+| `:layout` | Cycle layout: auto → right → bottom → tab |
 | `:init` | Create `.duir/` in current directory |
 | `:config` | Show effective config |
 | `:config write` | Write config to file |

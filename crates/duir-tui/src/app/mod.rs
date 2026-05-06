@@ -23,7 +23,7 @@ mod tree_row;
 
 pub use app_flags::AppFlags;
 pub use app_io::{find_available_path, read_file, write_file};
-pub use app_state::App;
+pub use app_state::{App, EffectiveLayout};
 pub use tree_row::{FileSource, LoadedFile, TreeRow, TreeRowFlags};
 
 use std::path::PathBuf;

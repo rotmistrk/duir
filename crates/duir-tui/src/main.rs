@@ -1,6 +1,7 @@
 mod app;
 mod clipboard;
 mod completer;
+mod event_focus;
 mod event_helpers;
 mod event_loop;
 mod file_watcher;
@@ -16,6 +17,7 @@ mod password;
 #[allow(dead_code)]
 mod pty_tab;
 mod render;
+mod render_kiro;
 mod render_note;
 mod render_resolve;
 mod syntax;

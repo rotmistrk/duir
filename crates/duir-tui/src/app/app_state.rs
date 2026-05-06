@@ -28,6 +28,21 @@ pub struct App {
     pub pending_responses: Vec<PendingResponse>,
     /// Per-session kiro agent override (empty = use config default).
     pub kiro_agent_override: String,
+    /// Kiro panel layout mode (auto-detected or user-overridden).
+    pub layout_mode: LayoutMode,
+}
+
+/// How the kiro panel is positioned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutMode {
+    /// Auto-detect from terminal size.
+    Auto,
+    /// Kiro panel on the right (3 vertical columns).
+    Right,
+    /// Kiro panel on the bottom.
+    Bottom,
+    /// Kiro as tab in note panel (current behavior).
+    Tab,
 }
 
 impl App {
@@ -59,6 +74,7 @@ impl App {
             active_kirons: std::collections::HashMap::new(),
             pending_responses: Vec::new(),
             kiro_agent_override: String::new(),
+            layout_mode: LayoutMode::Auto,
         }
     }
 
@@ -180,4 +196,60 @@ impl App {
     pub const fn is_about_shown(&self) -> bool {
         matches!(self.state, FocusState::About)
     }
+
+    pub fn cmd_layout(&mut self) {
+        self.layout_mode = self.layout_mode.cycle();
+        self.set_status(&format!("Layout: {}", self.layout_mode.label()), StatusLevel::Info);
+    }
+}
+
+impl LayoutMode {
+    /// Resolve effective layout for given terminal dimensions.
+    #[must_use]
+    pub const fn resolve(self, cols: u16, rows: u16) -> EffectiveLayout {
+        match self {
+            Self::Right => EffectiveLayout::Right,
+            Self::Bottom => EffectiveLayout::Bottom,
+            Self::Tab => EffectiveLayout::Tab,
+            Self::Auto => {
+                if cols >= 160 {
+                    EffectiveLayout::Right
+                } else if rows >= 50 {
+                    EffectiveLayout::Bottom
+                } else {
+                    EffectiveLayout::Tab
+                }
+            }
+        }
+    }
+
+    /// Cycle to next mode: Auto → Right → Bottom → Tab → Auto.
+    #[must_use]
+    pub const fn cycle(self) -> Self {
+        match self {
+            Self::Auto => Self::Right,
+            Self::Right => Self::Bottom,
+            Self::Bottom => Self::Tab,
+            Self::Tab => Self::Auto,
+        }
+    }
+
+    /// Display name for status bar.
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Right => "right",
+            Self::Bottom => "bottom",
+            Self::Tab => "tab",
+        }
+    }
+}
+
+/// Resolved layout (no Auto variant).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectiveLayout {
+    Right,
+    Bottom,
+    Tab,
 }

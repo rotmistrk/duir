@@ -3,7 +3,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 
-use crate::app::{App, FocusState, StatusLevel};
+use crate::app::{App, EffectiveLayout, FocusState, StatusLevel};
 use crate::completer::Completer;
 use crate::tree_view::TreeView;
 
@@ -38,16 +38,14 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
             render_tree_panel(frame, app, area, true);
         }
     } else {
-        let content_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(100 - app.note_panel_pct),
-                Constraint::Percentage(app.note_panel_pct),
-            ])
-            .split(main_chunks.first().copied().unwrap_or_default());
+        let content_area = main_chunks.first().copied().unwrap_or_default();
+        let layout = app.layout_mode.resolve(size.width, size.height);
 
-        render_tree_panel(frame, app, content_chunks.first().copied().unwrap_or_default(), false);
-        super::render_note::render_note_panel(frame, app, content_chunks.get(1).copied().unwrap_or_default(), false);
+        match layout {
+            EffectiveLayout::Right => render_three_columns(frame, app, content_area),
+            EffectiveLayout::Bottom => render_top_bottom(frame, app, content_area),
+            EffectiveLayout::Tab => render_two_columns(frame, app, content_area),
+        }
     }
 
     // Status bar
@@ -76,6 +74,53 @@ pub fn render_frame(frame: &mut ratatui::Frame, app: &mut App) {
     if let Some(prompt) = &app.password_prompt {
         prompt.render(frame, size);
     }
+}
+
+fn render_three_columns(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(30),
+            Constraint::Percentage(35),
+            Constraint::Percentage(35),
+        ])
+        .split(area);
+
+    render_tree_panel(frame, app, chunks.first().copied().unwrap_or_default(), false);
+    super::render_note::render_note_panel(frame, app, chunks.get(1).copied().unwrap_or_default(), false);
+    super::render_kiro::render_kiro_panel(frame, app, chunks.get(2).copied().unwrap_or_default());
+}
+
+fn render_top_bottom(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
+    let vert = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .split(area);
+
+    let top_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(100 - app.note_panel_pct),
+            Constraint::Percentage(app.note_panel_pct),
+        ])
+        .split(vert.first().copied().unwrap_or_default());
+
+    render_tree_panel(frame, app, top_chunks.first().copied().unwrap_or_default(), false);
+    super::render_note::render_note_panel(frame, app, top_chunks.get(1).copied().unwrap_or_default(), false);
+    super::render_kiro::render_kiro_panel(frame, app, vert.get(1).copied().unwrap_or_default());
+}
+
+fn render_two_columns(frame: &mut ratatui::Frame, app: &mut App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(100 - app.note_panel_pct),
+            Constraint::Percentage(app.note_panel_pct),
+        ])
+        .split(area);
+
+    render_tree_panel(frame, app, chunks.first().copied().unwrap_or_default(), false);
+    super::render_note::render_note_panel(frame, app, chunks.get(1).copied().unwrap_or_default(), false);
 }
 
 fn render_tree_panel(frame: &mut ratatui::Frame, app: &mut App, area: Rect, zoomed: bool) {
