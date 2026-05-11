@@ -77,6 +77,7 @@ impl TodoStorage for FileStorage {
 ///
 /// # Errors
 /// Returns an error if serialization fails.
+#[cfg(feature = "yaml")]
 pub fn to_yaml(file: &TodoFile) -> Result<String> {
     Ok(serde_yaml::to_string(file)?)
 }
@@ -85,6 +86,7 @@ pub fn to_yaml(file: &TodoFile) -> Result<String> {
 ///
 /// # Errors
 /// Returns an error if the YAML is invalid.
+#[cfg(feature = "yaml")]
 pub fn from_yaml(content: &str) -> Result<TodoFile> {
     Ok(serde_yaml::from_str(content)?)
 }
@@ -102,7 +104,14 @@ pub fn from_json(content: &str) -> Result<TodoFile> {
 /// # Errors
 /// Returns an error if neither JSON nor YAML parsing succeeds.
 pub fn from_auto(content: &str) -> Result<TodoFile> {
-    from_json(content).or_else(|_| from_yaml(content))
+    #[cfg(feature = "yaml")]
+    {
+        from_json(content).or_else(|_| from_yaml(content))
+    }
+    #[cfg(not(feature = "yaml"))]
+    {
+        from_json(content)
+    }
 }
 
 /// Load a `TodoFile` from an arbitrary path (auto-detecting format).
@@ -158,6 +167,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "yaml")]
     fn yaml_round_trip() -> TestResult {
         let file = make_test_file();
         let yaml = to_yaml(&file)?;
@@ -177,6 +187,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "yaml")]
     fn auto_detect_yaml() -> TestResult {
         let file = make_test_file();
         let yaml = to_yaml(&file)?;
