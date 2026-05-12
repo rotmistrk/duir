@@ -186,3 +186,138 @@ Extraction order:
 4. EditorView (8h) — needs feature-flag work for LSP/diff
 
 Start extraction as a separate branch in the txv repo. Once stable, both kairn and duir depend on it.
+
+---
+
+## MCP Server Framework: `mcp-serve` (or `txv-mcp`)
+
+### The Pattern (identical in both projects)
+
+Both duir and kairn implement the same MCP server stack:
+
+```
+┌─────────────────────────────────────────────────┐
+│  Bridge (stdin↔socket, two io::copy threads)    │  ← identical
+├─────────────────────────────────────────────────┤
+│  Listener (UnixSocket, accept, spawn per-client)│  ← identical
+├─────────────────────────────────────────────────┤
+│  Server loop (read line, parse JSON-RPC, route) │  ← identical
+├─────────────────────────────────────────────────┤
+│  Protocol (initialize, tools/list, tools/call)  │  ← identical
+├─────────────────────────────────────────────────┤
+│  Tool dispatch + response formatting            │  ← identical framing
+├─────────────────────────────────────────────────┤
+│  Tool definitions + handlers                    │  ← APP-SPECIFIC
+├─────────────────────────────────────────────────┤
+│  Snapshot type                                  │  ← APP-SPECIFIC
+└─────────────────────────────────────────────────┘
+```
+
+### What to extract: ~250 lines → shared crate
+
+```rust
+// mcp-serve/src/lib.rs
+
+/// Trait that apps implement to provide their tools.
+pub trait McpToolHandler: Send + Sync {
+    /// Server name for initialize response.
+    fn server_name(&self) -> &str;
+    /// Tool definitions for tools/list.
+    fn tool_definitions(&self) -> Value;
+    /// Handle a tool call. Return Ok(result_json) or Err(error_message).
+    fn handle_tool_call(
+        &self,
+        name: &str,
+        args: &Map<String, Value>,
+    ) -> Result<Value, String>;
+}
+
+/// JSON-RPC server that delegates to a McpToolHandler.
+pub struct McpServer<H: McpToolHandler> { handler: H }
+
+/// Run the server loop (generic over reader/writer).
+impl<H: McpToolHandler> McpServer<H> {
+    pub fn run<R: BufRead, W: Write>(&self, reader: R, writer: W) -> io::Result<()>;
+    pub fn run_stdio(&self) -> io::Result<()>;
+    pub fn handle_request(&self, request: &Value) -> Option<Value>;
+}
+
+/// Start a Unix socket listener, spawning per-client server threads.
+pub fn start_listener<H: McpToolHandler + Clone + 'static>(
+    handler: H,
+    socket_path: &Path,
+) -> Result<PathBuf, String>;
+
+/// Run stdin↔socket bridge (for --mcp-connect mode).
+pub fn run_bridge(env_var: &str, log_fn: fn(&str, &str)) -> io::Result<()>;
+
+/// Compute socket path from XDG_RUNTIME_DIR + app name + identifier.
+pub fn socket_path(app_name: &str, id: &str) -> PathBuf;
+
+/// Append-only diagnostic log.
+pub fn log(app_name: &str, component: &str, msg: &str);
+```
+
+### App usage (duir)
+
+```rust
+use mcp_serve::{McpToolHandler, McpServer, start_listener};
+
+struct DuirHandler {
+    snapshot: Arc<Mutex<TodoFile>>,
+    mutation_tx: Sender<McpMutation>,
+}
+
+impl McpToolHandler for DuirHandler {
+    fn server_name(&self) -> &str { "duir" }
+    fn tool_definitions(&self) -> Value { /* duir tools */ }
+    fn handle_tool_call(&self, name: &str, args: &Map<String, Value>) -> Result<Value, String> {
+        match name {
+            "read_node" => self.tool_read_node(args),
+            // ...
+        }
+    }
+}
+```
+
+### App usage (kairn)
+
+```rust
+struct KairnHandler {
+    snapshot: Arc<Mutex<McpSnapshot>>,
+}
+
+impl McpToolHandler for KairnHandler {
+    fn server_name(&self) -> &str { "kairn" }
+    fn tool_definitions(&self) -> Value { /* kairn tools */ }
+    fn handle_tool_call(&self, name: &str, args: &Map<String, Value>) -> Result<Value, String> {
+        match name {
+            "list_tabs" => self.tool_list_tabs(args),
+            // ...
+        }
+    }
+}
+```
+
+### Extraction effort: ~3h
+
+1. Create `mcp-serve` crate (or add to txv workspace as `txv-mcp`)
+2. Extract: server loop, protocol handling, listener, bridge, socket path, log
+3. Define `McpToolHandler` trait
+4. Refactor duir to use it
+5. Refactor kairn to use it
+
+### Dependencies
+
+```toml
+[dependencies]
+serde_json = "1"
+# No other deps needed — pure std::io + std::os::unix
+```
+
+### Value
+
+- **Eliminates ~200 lines of duplicated code** per project
+- **Protocol correctness in one place** — fix once, both benefit
+- **New apps get MCP for free** — implement one trait, get server + listener + bridge
+- **Testable** — mock the trait, test protocol handling in isolation
