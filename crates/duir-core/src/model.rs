@@ -44,6 +44,22 @@ pub struct KironMeta {
     pub session_id: String,
 }
 
+/// Work status for a todo item (leaf-only semantics).
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WorkStatus {
+    /// Not started or no active work state.
+    #[default]
+    Idle,
+    /// Actively being worked on.
+    InProgress,
+    /// Work suspended (see notes for reason).
+    Paused,
+}
+
+fn is_idle(v: &WorkStatus) -> bool {
+    *v == WorkStatus::Idle
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
     #[serde(default = "NodeId::new")]
@@ -59,6 +75,15 @@ pub struct TodoItem {
     pub note: String,
     #[serde(default)]
     pub items: Vec<Self>,
+    /// Priority level (1-9; absent = unset).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub priority: Option<u8>,
+    /// Effort estimate (fibonacci: 1,2,3,5,8,13,21; absent = unset).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<u8>,
+    /// Leaf-only work status.
+    #[serde(default, skip_serializing_if = "is_idle")]
+    pub work_status: WorkStatus,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub node_type: Option<NodeType>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -106,6 +131,9 @@ impl TodoItem {
             folded: false,
             note: String::new(),
             items: Vec::new(),
+            priority: None,
+            effort: None,
+            work_status: WorkStatus::default(),
             node_type: None,
             kiron: None,
             cipher: None,
