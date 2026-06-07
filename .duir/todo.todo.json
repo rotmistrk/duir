@@ -13,11 +13,11 @@
       "items": [
         {
           "id": "41d8a038-9438-4f68-b21e-7e4cdab1a95e",
-          "title": "another",
+          "title": "another thing",
           "completed": "Open",
           "important": false,
           "folded": false,
-          "note": "This is a test\n",
+          "note": "This is a test",
           "items": [],
           "created_at": 1780793780,
           "updated_at": 1780794013,
