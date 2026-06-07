@@ -99,6 +99,7 @@ fn restore_session(ws: &mut txv_widgets::tiled_workspace::TiledWorkspace, saved:
         if saved.show_timestamps {
             tree.toggle_timestamps_on();
         }
+        tree.set_show_connectors(saved.show_connectors);
     }
 }
 
@@ -119,6 +120,7 @@ fn save_session_on_exit(program: &mut Program, root_dir: &std::path::Path) {
         focused_panel: 0,
         tree_cursor: 0,
         show_timestamps: false,
+        show_connectors: true,
     };
 
     if let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
@@ -127,6 +129,7 @@ fn save_session_on_exit(program: &mut Program, root_dir: &std::path::Path) {
     {
         state.tree_cursor = tree.cursor();
         state.show_timestamps = tree.show_timestamps();
+        state.show_connectors = tree.show_connectors();
     }
 
     session::save_session(root_dir, &state);

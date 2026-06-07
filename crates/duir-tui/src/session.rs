@@ -16,6 +16,8 @@ pub struct SessionState {
     pub tree_cursor: usize,
     /// Whether timestamps are visible.
     pub show_timestamps: bool,
+    /// Whether tree connectors are visible.
+    pub show_connectors: bool,
 }
 
 const SESSION_FILE: &str = ".duir/session.json";

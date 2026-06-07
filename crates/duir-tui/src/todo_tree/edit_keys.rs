@@ -66,6 +66,12 @@ impl TodoTreeView {
             return HandleResult::Consumed;
         }
 
+        if key.code == KeyCode::Char('T') {
+            self.inner.show_connectors = !self.inner.show_connectors;
+            self.group.mark_dirty();
+            return HandleResult::Consumed;
+        }
+
         let cursor = self.inner.cursor;
         if self.inner.data.visible_count() > 0
             && let Some(action) = super::handle::handle_todo_key(key, &mut self.inner.data, cursor)

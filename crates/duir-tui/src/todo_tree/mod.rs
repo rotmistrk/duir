@@ -81,6 +81,14 @@ impl TodoTreeView {
         }
     }
 
+    pub const fn show_connectors(&self) -> bool {
+        self.inner.show_connectors
+    }
+
+    pub fn set_show_connectors(&mut self, val: bool) {
+        self.inner.show_connectors = val;
+    }
+
     fn toggle_timestamps(&mut self) {
         self.inner.data.show_timestamps = !self.inner.data.show_timestamps;
         let widths: &[u16] = if self.inner.data.show_timestamps {
