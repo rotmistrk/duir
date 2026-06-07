@@ -1,5 +1,6 @@
 //! `NoteView` — simple text editor for item notes, placed in center slot.
 
+use txv_core::clipboard_ring::ClipboardHandle;
 use txv_core::prelude::*;
 
 use crate::todo_tree::model::TreePath;
@@ -18,6 +19,7 @@ pub struct NoteView {
     scroll_offset: usize,
     path: Option<TreePath>,
     dirty: bool,
+    pub clipboard: Option<ClipboardHandle>,
 }
 
 impl NoteView {
@@ -30,6 +32,7 @@ impl NoteView {
             scroll_offset: 0,
             path: None,
             dirty: false,
+            clipboard: None,
         }
     }
 

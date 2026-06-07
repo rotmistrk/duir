@@ -108,7 +108,9 @@ impl TodoTreeView {
         }
         let id = self.inner.data.visible_id(row);
         let label = self.inner.data.label(id).to_owned();
-        let mut input = InputLine::new().with_command(CM_OK);
+        let mut input = InputLine::new()
+            .with_command(CM_OK)
+            .with_clipboard(self.clipboard.clone());
         input.set_text(&label);
         input.select_all();
         let sink = self.child_sink.clone();
@@ -123,7 +125,9 @@ impl TodoTreeView {
     }
 
     fn start_filter(&mut self) {
-        let mut input = InputLine::new().with_command(CM_OK);
+        let mut input = InputLine::new()
+            .with_command(CM_OK)
+            .with_clipboard(self.clipboard.clone());
         input.set_text(&self.inner.data.filter_text.clone());
         let sink = self.child_sink.clone();
         self.group.insert(Box::new(input));
