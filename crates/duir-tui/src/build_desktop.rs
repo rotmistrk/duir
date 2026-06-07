@@ -1,6 +1,6 @@
-//! Workspace builder — constructs the initial duir 4-slot layout.
+//! Workspace builder — constructs the initial duir 3-slot layout.
 //!
-//! Layout: Left=tree, Center=notes, Right=shell/kiro, Bottom=messages.
+//! Layout: Left=tree, Center=notes, Right=shell/kiro.
 //! Tree zoomed on start.
 
 use std::path::Path;
@@ -13,34 +13,26 @@ use crate::shell::new_shell_terminal;
 use crate::slots::{PANEL_COUNT, SlotId};
 use crate::todo_tree::TodoTreeView;
 
-/// Build duir's 4-slot workspace with tree zoomed on start.
+/// Build duir's 3-slot workspace with tree zoomed on start.
 pub fn build_workspace(root_dir: &Path) -> TiledWorkspace {
     let configs = vec![
         PanelConfig::fixed("Tree", PanelPosition::Left),
         PanelConfig::new("Notes", PanelPosition::Center),
         PanelConfig::new("Tools", PanelPosition::Right),
-        PanelConfig::new("Messages", PanelPosition::Bottom),
     ];
 
-    let wide_layout = SplitNode::v(vec![
-        (
-            0.8,
-            SplitNode::h(vec![
-                (0.25, SplitNode::leaf(0)),
-                (0.40, SplitNode::leaf(1)),
-                (0.35, SplitNode::leaf(2)),
-            ]),
-        ),
-        (0.2, SplitNode::leaf(3)),
+    let wide_layout = SplitNode::h(vec![
+        (0.25, SplitNode::leaf(0)),
+        (0.40, SplitNode::leaf(1)),
+        (0.35, SplitNode::leaf(2)),
     ]);
 
     let narrow_layout = SplitNode::v(vec![
         (
-            0.6,
+            0.7,
             SplitNode::h(vec![(0.3, SplitNode::leaf(0)), (0.7, SplitNode::leaf(1))]),
         ),
-        (0.25, SplitNode::leaf(2)),
-        (0.15, SplitNode::leaf(3)),
+        (0.3, SplitNode::leaf(2)),
     ]);
 
     let mut ws = TiledWorkspace::new(configs, wide_layout, narrow_layout, 300);

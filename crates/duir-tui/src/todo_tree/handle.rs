@@ -42,8 +42,12 @@ pub fn handle_todo_key(key: &KeyEvent, data: &mut TodoTreeData, cursor: usize) -
         KeyCode::Char('S') => sort(data, id),
         KeyCode::Char('/') => Some(HandleAction::EnterFilter),
         KeyCode::Char('!') => toggle_priority_5(data, id),
+        KeyCode::Char('+') => priority_up(data, id),
+        KeyCode::Char('-') => priority_down(data, id),
+        KeyCode::Char('>') => loe_up(data, id),
+        KeyCode::Char('<') => loe_down(data, id),
+        KeyCode::Char('i' | '=') => toggle_progress(data, id),
         KeyCode::Char('\\') => toggle_pause(data, id),
-        KeyCode::Char('=') => toggle_progress(data, id),
         KeyCode::Char('l') if key.modifiers.ctrl => crypto_prompt(data, id),
         _ => None,
     }
@@ -79,6 +83,56 @@ fn toggle_priority_5(data: &mut TodoTreeData, id: usize) -> Option<HandleAction>
     let item = model::get_item_mut(&mut data.file, &path)?;
     let current = item.priority.unwrap_or(0);
     item.priority = Some(if current == 5 { 0 } else { 5 });
+    data.save();
+    data.rebuild_flat();
+    Some(HandleAction::Stay)
+}
+
+fn priority_up(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
+    let path = data.path_at(id)?.clone();
+    let item = model::get_item_mut(&mut data.file, &path)?;
+    let current = item.priority.unwrap_or(0);
+    let new_val = current.saturating_add(1).min(9);
+    item.priority = if new_val == 0 { None } else { Some(new_val) };
+    data.save();
+    data.rebuild_flat();
+    Some(HandleAction::Stay)
+}
+
+fn priority_down(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
+    let path = data.path_at(id)?.clone();
+    let item = model::get_item_mut(&mut data.file, &path)?;
+    let current = item.priority.unwrap_or(0);
+    let new_val = current.saturating_sub(1);
+    item.priority = if new_val == 0 { None } else { Some(new_val) };
+    data.save();
+    data.rebuild_flat();
+    Some(HandleAction::Stay)
+}
+
+fn loe_up(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
+    const FIB: &[u8] = &[0, 1, 2, 3, 5, 8, 13, 21];
+    let path = data.path_at(id)?.clone();
+    let item = model::get_item_mut(&mut data.file, &path)?;
+    let current = item.effort.unwrap_or(0);
+    let idx = FIB.iter().position(|&v| v >= current).unwrap_or(0);
+    let new_idx = (idx + 1).min(FIB.len() - 1);
+    let new_val = FIB.get(new_idx).copied().unwrap_or(0);
+    item.effort = if new_val == 0 { None } else { Some(new_val) };
+    data.save();
+    data.rebuild_flat();
+    Some(HandleAction::Stay)
+}
+
+fn loe_down(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
+    const FIB: &[u8] = &[0, 1, 2, 3, 5, 8, 13, 21];
+    let path = data.path_at(id)?.clone();
+    let item = model::get_item_mut(&mut data.file, &path)?;
+    let current = item.effort.unwrap_or(0);
+    let idx = FIB.iter().position(|&v| v >= current).unwrap_or(0);
+    let new_idx = idx.saturating_sub(1);
+    let new_val = FIB.get(new_idx).copied().unwrap_or(0);
+    item.effort = if new_val == 0 { None } else { Some(new_val) };
     data.save();
     data.rebuild_flat();
     Some(HandleAction::Stay)

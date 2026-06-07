@@ -137,6 +137,10 @@ fn build_status_bar() -> StatusBar {
     bar.add_item(key(KeyCode::F(3)), CM_FOCUS_NOTES, "F3:Notes");
     bar.add_item(key(KeyCode::F(4)), CM_FOCUS_TOOLS, "F4:Tools");
     bar.add_item(key(KeyCode::F(5)), CM_TW_ZOOM, "F5:Zoom");
+    // Ctrl-Shift-Arrows for panel navigation
+    bar.add_item(ctrl_shift(KeyCode::Left), CM_FOCUS_TREE, "");
+    bar.add_item(ctrl_shift(KeyCode::Right), CM_FOCUS_TOOLS, "");
+    bar.add_item(key(KeyCode::F(1)), handler::CM_HELP, "F1:Help");
     bar.add_item(
         KeyEvent {
             code: KeyCode::Char('q'),
@@ -159,6 +163,17 @@ const fn key(code: KeyCode) -> KeyEvent {
         modifiers: KeyMod {
             ctrl: false,
             shift: false,
+            alt: false,
+        },
+    }
+}
+
+const fn ctrl_shift(code: KeyCode) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyMod {
+            ctrl: true,
+            shift: true,
             alt: false,
         },
     }
