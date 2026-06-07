@@ -66,6 +66,7 @@ impl TodoTreeData {
     }
 
     fn flatten(items: &[TodoItem], parent_path: &[usize], out: &mut Vec<FlatNode>) {
+        let count = items.len();
         for (i, item) in items.iter().enumerate() {
             let mut path = parent_path.to_vec();
             path.push(i);
@@ -75,6 +76,7 @@ impl TodoTreeData {
                 path: path.clone(),
                 expandable: !item.items.is_empty(),
                 expanded: !item.folded,
+                is_last_child: i == count - 1,
             });
             if !item.items.is_empty() && !item.folded {
                 Self::flatten(&item.items, &path, out);

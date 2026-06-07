@@ -12,6 +12,7 @@ use txv_widgets::tiled_workspace::commands::CM_TW_ZOOM;
 
 mod build_desktop;
 mod clipboard_view;
+mod command_line;
 mod handler;
 mod mcp;
 #[allow(dead_code)]
@@ -144,6 +145,30 @@ fn build_status_bar() -> StatusBar {
     bar.add_item(ctrl_shift(KeyCode::Left), CM_FOCUS_TREE, "");
     bar.add_item(ctrl_shift(KeyCode::Right), CM_FOCUS_TOOLS, "");
     bar.add_item(key(KeyCode::F(1)), handler::CM_HELP, "F1:Help");
+    bar.add_item(
+        KeyEvent {
+            code: KeyCode::Char(':'),
+            modifiers: KeyMod {
+                ctrl: false,
+                shift: false,
+                alt: false,
+            },
+        },
+        command_line::CM_COMMAND_MODE,
+        "",
+    );
+    bar.add_item(
+        KeyEvent {
+            code: KeyCode::Char('x'),
+            modifiers: KeyMod {
+                ctrl: false,
+                shift: false,
+                alt: true,
+            },
+        },
+        command_line::CM_COMMAND_MODE,
+        "",
+    );
     bar.add_item(
         KeyEvent {
             code: KeyCode::Char('q'),

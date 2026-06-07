@@ -8,4 +8,6 @@ pub(super) struct FlatNode {
     pub(super) path: TreePath,
     pub(super) expandable: bool,
     pub(super) expanded: bool,
+    /// Whether this node is the last child of its parent.
+    pub(super) is_last_child: bool,
 }
