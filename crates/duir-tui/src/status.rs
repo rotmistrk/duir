@@ -54,38 +54,6 @@ pub fn build_status_bar(desktop: &TiledWorkspace, clipboard: ClipboardHandle) ->
         .priority(9),
     );
 
-    // Ctrl-Shift-Left/Right for panel navigation
-    bar.add(StatusSlot::new(Box::new(
-        KeyLabelView::new(
-            KeyEvent {
-                code: KeyCode::Left,
-                modifiers: KeyMod {
-                    ctrl: true,
-                    shift: true,
-                    alt: false,
-                },
-            },
-            CM_TW_FOCUS_PANEL,
-            "",
-        )
-        .with_data(0),
-    )));
-    bar.add(StatusSlot::new(Box::new(
-        KeyLabelView::new(
-            KeyEvent {
-                code: KeyCode::Right,
-                modifiers: KeyMod {
-                    ctrl: true,
-                    shift: true,
-                    alt: false,
-                },
-            },
-            CM_TW_FOCUS_PANEL,
-            "",
-        )
-        .with_data(2),
-    )));
-
     // Command line (M-x / :)
     add_command_line(&mut bar, clipboard);
 

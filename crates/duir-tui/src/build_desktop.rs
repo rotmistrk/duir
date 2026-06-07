@@ -42,7 +42,6 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
     let mut ws = TiledWorkspace::new(configs, wide_layout, narrow_layout, 300);
     ws.set_handle_keys(false);
     ws.set_v_divider_gaps(false);
-    configure_keymap(&mut ws);
 
     for i in 0..PANEL_COUNT {
         if let Some(panel) = ws.panel_mut(i) {
@@ -70,29 +69,4 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
     ws.focus_panel(SlotId::Left as usize);
     ws.set_zoomed(Some(SlotId::Left as usize));
     ws
-}
-
-fn configure_keymap(ws: &mut TiledWorkspace) {
-    let ctrl_shift = |code| KeyEvent {
-        code,
-        modifiers: KeyMod {
-            ctrl: true,
-            shift: true,
-            alt: false,
-        },
-    };
-    let dead_key = KeyEvent {
-        code: KeyCode::F(127),
-        modifiers: KeyMod {
-            ctrl: false,
-            shift: false,
-            alt: false,
-        },
-    };
-    let mut km = ws.keymap().clone();
-    km.tab_dropdown_up = ctrl_shift(KeyCode::Up);
-    km.tab_dropdown_down = ctrl_shift(KeyCode::Down);
-    km.focus_up = dead_key;
-    km.focus_down = dead_key;
-    ws.set_keymap(km);
 }
