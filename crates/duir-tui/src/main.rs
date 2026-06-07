@@ -11,10 +11,12 @@ use txv_widgets::status_bar::StatusBar;
 use txv_widgets::tiled_workspace::commands::CM_TW_ZOOM;
 
 mod build_desktop;
+mod clipboard_view;
 mod handler;
 mod mcp;
 #[allow(dead_code)]
 mod mcp_permissions;
+mod messages;
 mod note_view;
 #[allow(dead_code)]
 mod scripting;
@@ -50,8 +52,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mcp_socket = mcp::start_mcp(&root_dir);
     let saved = session::load_session(&root_dir);
+    let clipboard = txv_core::clipboard_ring::new_clipboard(20);
 
-    let mut desktop = build_workspace(&root_dir);
+    let mut desktop = build_workspace(&root_dir, clipboard);
     restore_session(&mut desktop, &saved);
 
     // Init scripting engine and load init.tcl

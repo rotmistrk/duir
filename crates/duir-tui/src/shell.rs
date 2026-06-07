@@ -1,5 +1,7 @@
 //! Shell terminal — PTY-backed shell in the right slot.
 
+use std::path::Path;
+
 use txv_core::prelude::*;
 use txv_widgets::PtyTerminal;
 
@@ -10,6 +12,18 @@ pub fn new_shell_terminal() -> Box<dyn View> {
         Err(e) => {
             log::error!("Failed to spawn shell: {e}");
             Box::new(FallbackView::new(&format!("Shell (failed: {e})")))
+        }
+    }
+}
+
+/// Spawn a kiro session. Command is configurable via Tcl; defaults shown.
+/// `kiro_cmd` is the full command string (e.g. "kiro-cli chat --restore").
+pub fn new_kiro_terminal(kiro_cmd: &str, cwd: &Path) -> Box<dyn View> {
+    match PtyTerminal::spawn_command("sh", &["-c", kiro_cmd], cwd, 80, 24) {
+        Ok(term) => Box::new(term),
+        Err(e) => {
+            log::error!("Failed to spawn kiro: {e}");
+            Box::new(FallbackView::new(&format!("Kiro (failed: {e})")))
         }
     }
 }

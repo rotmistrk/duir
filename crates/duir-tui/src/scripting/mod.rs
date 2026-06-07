@@ -39,6 +39,8 @@ pub enum ScriptCommand {
     Quit,
     Reload,
     Save,
+    // Kiro
+    Kiro { cmd: String },
 }
 
 /// The scripting engine.

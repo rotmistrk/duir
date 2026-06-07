@@ -1,24 +1,30 @@
 //! Workspace builder — constructs the initial duir 3-slot layout.
 //!
-//! Layout: Left=tree, Center=notes, Right=shell/kiro.
-//! Tree zoomed on start.
+//! Layout: Left=tree, Center=notes, Right=shell/kiro/messages/clipboard.
+//! Tree zoomed on start. Right panel uses LRU tab bar.
 
 use std::path::Path;
 
+use txv_core::clipboard_ring::ClipboardHandle;
 use txv_widgets::tiled_workspace::TiledWorkspace;
 use txv_widgets::tiled_workspace::types::{PanelConfig, PanelPosition, SplitNode};
 
+use crate::clipboard_view::ClipboardView;
+use crate::messages::MessagesView;
 use crate::note_view::NoteView;
 use crate::shell::new_shell_terminal;
 use crate::slots::{PANEL_COUNT, SlotId};
 use crate::todo_tree::TodoTreeView;
 
 /// Build duir's 3-slot workspace with tree zoomed on start.
-pub fn build_workspace(root_dir: &Path) -> TiledWorkspace {
+pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWorkspace {
     let configs = vec![
         PanelConfig::fixed("Tree", PanelPosition::Left),
-        PanelConfig::new("Notes", PanelPosition::Center),
-        PanelConfig::new("Tools", PanelPosition::Right),
+        PanelConfig::new("Editor", PanelPosition::Center),
+        PanelConfig {
+            splittable: true,
+            ..PanelConfig::new("Tools", PanelPosition::Right)
+        },
     ];
 
     let wide_layout = SplitNode::h(vec![
@@ -45,19 +51,26 @@ pub fn build_workspace(root_dir: &Path) -> TiledWorkspace {
         }
     }
 
-    // Insert tree view in left slot
-    let tree = TodoTreeView::new(root_dir);
+    // Left: todo tree
+    let mut tree = TodoTreeView::new(root_dir);
+    tree.clipboard = clipboard.clone();
     ws.insert_tab(SlotId::Left as usize, "Todo", Box::new(tree));
 
-    // Insert note editor in center slot
+    // Center: note editor
     let note = NoteView::new();
     ws.insert_tab(SlotId::Center as usize, "Note", Box::new(note));
 
-    // Insert shell in right slot
+    // Right: shell, messages, clipboard viewer (LRU)
     let shell = new_shell_terminal();
     ws.insert_tab(SlotId::Right as usize, "Shell:0", shell);
 
-    // Focus left panel and zoom it on start
+    let messages = MessagesView::new();
+    ws.insert_tab(SlotId::Right as usize, "Messages", Box::new(messages));
+
+    let clip_view = ClipboardView::new(clipboard);
+    ws.insert_tab(SlotId::Right as usize, "Clipboard", Box::new(clip_view));
+
+    // Focus tree, zoom it
     ws.focus_panel(SlotId::Left as usize);
     ws.set_zoomed(Some(SlotId::Left as usize));
 
