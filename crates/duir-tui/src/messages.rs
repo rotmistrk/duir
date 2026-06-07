@@ -6,19 +6,23 @@ use txv_widgets::TextArea;
 /// Messages view showing application log entries.
 pub struct MessagesView {
     inner: TextArea,
+    lines: Vec<String>,
 }
 
 impl MessagesView {
     pub fn new() -> Self {
         let mut ta = TextArea::new();
         ta.line_numbers = false;
-        Self { inner: ta }
+        Self {
+            inner: ta,
+            lines: Vec::new(),
+        }
     }
 
     #[allow(dead_code)]
     pub fn push(&mut self, msg: &str) {
-        self.inner.lines.push(msg.to_owned());
-        self.inner.scroll.set_total(self.inner.lines.len());
+        self.lines.push(msg.to_owned());
+        self.inner.set_content(&self.lines.join("\n"));
     }
 }
 
