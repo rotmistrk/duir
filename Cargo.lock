@@ -3323,7 +3323,7 @@ dependencies = [
 [[package]]
 name = "rusticle"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/rusticle.git#2743605454ddca4809cf331777a41e11f62a82fd"
+source = "git+https://github.com/rotmistrk/rusticle.git#c5b0a2dd1f19e24bf1dbd669329262209d597c0f"
 dependencies = [
  "serde_json",
 ]
@@ -4316,7 +4316,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "txv-core"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#574e1d10623a0382d0646ab58c4ab0df54ce8173"
+source = "git+https://github.com/rotmistrk/txv.git#e0028342edebb8f28cea657645466d8582460186"
 dependencies = [
  "libc",
  "log",
@@ -4326,7 +4326,7 @@ dependencies = [
 [[package]]
 name = "txv-edit"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#574e1d10623a0382d0646ab58c4ab0df54ce8173"
+source = "git+https://github.com/rotmistrk/txv.git#e0028342edebb8f28cea657645466d8582460186"
 dependencies = [
  "regex",
  "syntect",
@@ -4336,7 +4336,7 @@ dependencies = [
 [[package]]
 name = "txv-render"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#574e1d10623a0382d0646ab58c4ab0df54ce8173"
+source = "git+https://github.com/rotmistrk/txv.git#e0028342edebb8f28cea657645466d8582460186"
 dependencies = [
  "crossterm",
  "libc",
@@ -4349,7 +4349,7 @@ dependencies = [
 [[package]]
 name = "txv-widgets"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#574e1d10623a0382d0646ab58c4ab0df54ce8173"
+source = "git+https://github.com/rotmistrk/txv.git#e0028342edebb8f28cea657645466d8582460186"
 dependencies = [
  "ignore",
  "libc",
