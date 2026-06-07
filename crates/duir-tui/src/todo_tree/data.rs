@@ -183,20 +183,8 @@ impl TreeData for TodoTreeData {
             return Style::default();
         };
         match item.completed {
-            Completion::Done => Style {
-                attrs: Attrs {
-                    dim: true,
-                    ..Attrs::default()
-                },
-                ..Style::default()
-            },
-            _ if item.important => Style {
-                attrs: Attrs {
-                    bold: true,
-                    ..Attrs::default()
-                },
-                ..Style::default()
-            },
+            Completion::Done => Style::default().with_attrs(Attrs::default().dim()),
+            _ if item.important => Style::default().with_attrs(Attrs::default().bold()),
             _ => Style::default(),
         }
     }

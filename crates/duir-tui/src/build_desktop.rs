@@ -19,10 +19,7 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
     let configs = vec![
         PanelConfig::fixed("Tree", PanelPosition::Left),
         PanelConfig::new("Editor", PanelPosition::Center),
-        PanelConfig {
-            splittable: true,
-            ..PanelConfig::new("Tools", PanelPosition::Right)
-        },
+        PanelConfig::new("Tools", PanelPosition::Right).with_splittable(),
     ];
 
     let wide_layout = SplitNode::h(vec![

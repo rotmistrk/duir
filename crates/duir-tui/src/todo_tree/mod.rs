@@ -38,6 +38,7 @@ pub struct TodoTreeView {
     pub(crate) filter_active: bool,
     pub(crate) crypto_pending: Option<CryptoPending>,
     prev_cursor: usize,
+    connectors_visible: bool,
     pub clipboard: ClipboardHandle,
 }
 
@@ -53,61 +54,59 @@ impl TodoTreeView {
             filter_active: false,
             crypto_pending: None,
             prev_cursor: usize::MAX,
+            connectors_visible: true,
             clipboard: new_clipboard(20),
         }
     }
 
     /// Access the underlying data mutably.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn data_mut(&mut self) -> &mut TodoTreeData {
-        &mut self.inner.data
+        self.inner.data_mut()
     }
 
-    pub const fn cursor(&self) -> usize {
-        self.inner.cursor
+    pub fn cursor(&self) -> usize {
+        self.inner.cursor()
     }
 
     pub fn set_cursor(&mut self, pos: usize) {
         self.inner.set_cursor(pos);
     }
 
-    pub const fn show_timestamps(&self) -> bool {
-        self.inner.data.show_timestamps
+    pub fn show_timestamps(&self) -> bool {
+        self.inner.data().show_timestamps
     }
 
     pub fn toggle_timestamps_on(&mut self) {
-        if !self.inner.data.show_timestamps {
+        if !self.inner.data().show_timestamps {
             self.toggle_timestamps();
         }
     }
 
     pub const fn show_connectors(&self) -> bool {
-        self.inner.show_connectors
+        self.connectors_visible
     }
 
     pub fn set_show_connectors(&mut self, val: bool) {
-        self.inner.show_connectors = val;
+        self.connectors_visible = val;
+        self.inner.set_show_connectors(val);
     }
 
     fn toggle_timestamps(&mut self) {
-        self.inner.data.show_timestamps = !self.inner.data.show_timestamps;
-        let widths: &[u16] = if self.inner.data.show_timestamps {
-            &[5, 5, 5, 5]
-        } else {
-            &[5]
-        };
+        let new_val = !self.inner.data().show_timestamps;
+        self.inner.data_mut().show_timestamps = new_val;
+        let widths: &[u16] = if new_val { &[5, 5, 5, 5] } else { &[5] };
         self.inner.set_col_widths(widths);
         self.group.mark_dirty();
     }
 
     /// Start editing current item title via `InputLine`.
     fn start_edit(&mut self) {
-        let row = self.inner.cursor;
-        if row >= self.inner.data.visible_count() {
+        let row = self.inner.cursor();
+        if row >= self.inner.data().visible_count() {
             return;
         }
-        let id = self.inner.data.visible_id(row);
-        let label = self.inner.data.label(id).to_owned();
+        let id = self.inner.data().visible_id(row);
+        let label = self.inner.data().label(id).to_owned();
         let mut input = InputLine::new()
             .with_command(CM_OK)
             .with_clipboard(self.clipboard.clone());
@@ -128,7 +127,7 @@ impl TodoTreeView {
         let mut input = InputLine::new()
             .with_command(CM_OK)
             .with_clipboard(self.clipboard.clone());
-        input.set_text(&self.inner.data.filter_text.clone());
+        input.set_text(&self.inner.data_mut().filter_text.clone());
         let sink = self.child_sink.clone();
         self.group.insert(Box::new(input));
         self.group.set_focused_index(0);

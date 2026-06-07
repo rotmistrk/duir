@@ -26,15 +26,15 @@ pub enum CryptoMode {
 /// Process todo-specific keys. Returns `Some(action)` if consumed.
 pub fn handle_todo_key(key: &KeyEvent, data: &mut TodoTreeData, cursor: usize) -> Option<HandleAction> {
     let id = data.visible_id(cursor);
-    match key.code {
+    match key.code() {
         KeyCode::Char('K') => shift_move(data, id, model::swap_up),
         KeyCode::Char('J') => shift_move(data, id, model::swap_down),
         KeyCode::Char('H') => shift_move(data, id, model::promote),
         KeyCode::Char('L') => shift_move(data, id, model::demote),
-        KeyCode::Up if key.modifiers.shift => shift_move(data, id, model::swap_up),
-        KeyCode::Down if key.modifiers.shift => shift_move(data, id, model::swap_down),
-        KeyCode::Left if key.modifiers.shift => shift_move(data, id, model::promote),
-        KeyCode::Right if key.modifiers.shift => shift_move(data, id, model::demote),
+        KeyCode::Up if key.modifiers().shift() => shift_move(data, id, model::swap_up),
+        KeyCode::Down if key.modifiers().shift() => shift_move(data, id, model::swap_down),
+        KeyCode::Left if key.modifiers().shift() => shift_move(data, id, model::promote),
+        KeyCode::Right if key.modifiers().shift() => shift_move(data, id, model::demote),
         KeyCode::Char(' ') => toggle_complete(data, id),
         KeyCode::Char('n') => new_sibling(data, id, cursor),
         KeyCode::Char('b') => new_child(data, id, cursor),
@@ -48,7 +48,7 @@ pub fn handle_todo_key(key: &KeyEvent, data: &mut TodoTreeData, cursor: usize) -
         KeyCode::Char('<') => loe_down(data, id),
         KeyCode::Char('i' | '=') => toggle_progress(data, id),
         KeyCode::Char('\\') => toggle_pause(data, id),
-        KeyCode::Char('l') if key.modifiers.ctrl => crypto_prompt(data, id),
+        KeyCode::Char('l') if key.modifiers().ctrl() => crypto_prompt(data, id),
         _ => None,
     }
 }

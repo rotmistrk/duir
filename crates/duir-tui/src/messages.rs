@@ -12,7 +12,7 @@ pub struct MessagesView {
 impl MessagesView {
     pub fn new() -> Self {
         let mut ta = TextArea::new();
-        ta.line_numbers = false;
+        ta.show_line_numbers(false);
         Self {
             inner: ta,
             lines: Vec::new(),

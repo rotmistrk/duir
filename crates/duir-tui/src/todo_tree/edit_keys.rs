@@ -13,7 +13,7 @@ use crate::handler::CM_NOTE_LOAD;
 impl TodoTreeView {
     pub(super) fn handle_event(&mut self, event: &Event) -> HandleResult {
         if matches!(event, Event::Tick) {
-            if self.inner.data.reload_if_changed() {
+            if self.inner.data_mut().reload_if_changed() {
                 self.group.mark_dirty();
             }
             return HandleResult::Ignored;
@@ -42,39 +42,40 @@ impl TodoTreeView {
     }
 
     fn handle_normal_key(&mut self, key: &KeyEvent, event: &Event) -> HandleResult {
-        if key.code == KeyCode::Esc && !self.inner.data.filter_text.is_empty() {
-            self.inner.data.filter_text.clear();
-            self.inner.data.rebuild_flat();
+        if key.code() == KeyCode::Esc && !self.inner.data().filter_text.is_empty() {
+            self.inner.data_mut().filter_text.clear();
+            self.inner.data_mut().rebuild_flat();
             self.inner.set_cursor(0);
             self.group.mark_dirty();
             return HandleResult::Consumed;
         }
 
-        if key.code == KeyCode::Char('n') && self.inner.data.visible_count() == 0 {
-            self.inner.data.add_first_item();
+        if key.code() == KeyCode::Char('n') && self.inner.data().visible_count() == 0 {
+            self.inner.data_mut().add_first_item();
             self.group.mark_dirty();
             return HandleResult::Consumed;
         }
 
-        if key.code == KeyCode::Char('e') && self.inner.data.visible_count() > 0 {
+        if key.code() == KeyCode::Char('e') && self.inner.data().visible_count() > 0 {
             self.start_edit();
             return HandleResult::Consumed;
         }
 
-        if key.code == KeyCode::Char('D') {
+        if key.code() == KeyCode::Char('D') {
             self.toggle_timestamps();
             return HandleResult::Consumed;
         }
 
-        if key.code == KeyCode::Char('T') {
-            self.inner.show_connectors = !self.inner.show_connectors;
+        if key.code() == KeyCode::Char('T') {
+            self.connectors_visible = !self.connectors_visible;
+            self.inner.set_show_connectors(self.connectors_visible);
             self.group.mark_dirty();
             return HandleResult::Consumed;
         }
 
-        let cursor = self.inner.cursor;
-        if self.inner.data.visible_count() > 0
-            && let Some(action) = super::handle::handle_todo_key(key, &mut self.inner.data, cursor)
+        let cursor = self.inner.cursor();
+        if self.inner.data().visible_count() > 0
+            && let Some(action) = super::handle::handle_todo_key(key, self.inner.data_mut(), cursor)
         {
             self.apply_action(&action);
             self.emit_note_if_cursor_changed();
@@ -90,14 +91,14 @@ impl TodoTreeView {
         let _result = self.group.dispatch(event);
         // Read filter text from InputLine
         if let Some(input) = self.input_line_mut() {
-            self.inner.data.filter_text = input.text().to_string();
+            self.inner.data_mut().filter_text = input.text().to_string();
         }
-        self.inner.data.rebuild_flat();
+        self.inner.data_mut().rebuild_flat();
         self.inner.set_cursor(0);
         self.group.mark_dirty();
-        if key.code == KeyCode::Esc {
+        if key.code() == KeyCode::Esc {
             self.cancel_filter();
-        } else if key.code == KeyCode::Enter {
+        } else if key.code() == KeyCode::Enter {
             self.commit_filter();
         }
         HandleResult::Consumed
@@ -107,7 +108,7 @@ impl TodoTreeView {
         let Some(pending) = self.crypto_pending.as_mut() else {
             return HandleResult::Ignored;
         };
-        match key.code {
+        match key.code() {
             KeyCode::Esc => {
                 self.crypto_pending = None;
             }
@@ -128,7 +129,7 @@ impl TodoTreeView {
         let Some(pending) = self.crypto_pending.take() else {
             return;
         };
-        if let Some(item) = model::get_item_mut(&mut self.inner.data.file, &pending.path) {
+        if let Some(item) = model::get_item_mut(&mut self.inner.data_mut().file, &pending.path) {
             let result = match pending.mode {
                 CryptoMode::Encrypt => crypto::encrypt_item(item, &pending.passphrase),
                 CryptoMode::Decrypt => crypto::decrypt_item(item, &pending.passphrase),
@@ -137,8 +138,8 @@ impl TodoTreeView {
                 log::warn!("crypto: {e}");
             }
         }
-        self.inner.data.save();
-        self.inner.data.rebuild_flat();
+        self.inner.data_mut().save();
+        self.inner.data_mut().rebuild_flat();
     }
 
     fn commit_filter(&mut self) {
@@ -150,8 +151,8 @@ impl TodoTreeView {
     fn cancel_filter(&mut self) {
         self.remove_input_line();
         self.filter_active = false;
-        self.inner.data.filter_text.clear();
-        self.inner.data.rebuild_flat();
+        self.inner.data_mut().filter_text.clear();
+        self.inner.data_mut().rebuild_flat();
         self.inner.set_cursor(0);
         self.group.mark_dirty();
     }
@@ -166,7 +167,7 @@ impl TodoTreeView {
                             .map_or_else(String::new, |s| *s);
                         let row = self.editing_row.take().unwrap_or(0);
                         self.remove_input_line();
-                        self.inner.data.update_title(row, text);
+                        self.inner.data_mut().update_title(row, text);
                         return;
                     }
                     CM_CANCEL => {
@@ -181,17 +182,18 @@ impl TodoTreeView {
     }
 
     pub(super) fn emit_note_if_cursor_changed(&mut self) {
-        let cursor = self.inner.cursor;
+        let cursor = self.inner.cursor();
         if cursor == self.prev_cursor {
             return;
         }
         self.prev_cursor = cursor;
-        if cursor >= self.inner.data.visible_count() {
+        if cursor >= self.inner.data().visible_count() {
             return;
         }
-        let id = self.inner.data.visible_id(cursor);
-        if let Some(path) = self.inner.data.path_at(id).cloned() {
-            let note = model::get_item(&self.inner.data.file, &path).map_or_else(String::new, |item| item.note.clone());
+        let id = self.inner.data().visible_id(cursor);
+        if let Some(path) = self.inner.data_mut().path_at(id).cloned() {
+            let note =
+                model::get_item(&self.inner.data_mut().file, &path).map_or_else(String::new, |item| item.note.clone());
             self.group.put_command(CM_NOTE_LOAD, Some(Box::new((path, note))));
         }
     }

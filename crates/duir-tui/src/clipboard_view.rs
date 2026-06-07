@@ -23,28 +23,22 @@ impl View for ClipboardView {
 
     fn draw(&mut self) {
         let b = self.state.bounds();
-        if b.w == 0 || b.h == 0 {
+        if b.w() == 0 || b.h() == 0 {
             return;
         }
         let buf = self.state.buffer_mut();
         buf.fill(' ', Style::default());
 
         let Ok(ring) = self.clipboard.lock() else { return };
-        let dim = Style {
-            attrs: Attrs {
-                dim: true,
-                ..Attrs::default()
-            },
-            ..Style::default()
-        };
+        let dim = Style::default().with_attrs(Attrs::default().dim());
 
         for (i, entry) in ring.entries().iter().enumerate() {
             let y = u16::try_from(i).unwrap_or(0);
-            if y >= b.h {
+            if y >= b.h() {
                 break;
             }
             let prefix = if i == 0 { "▸ " } else { "  " };
-            let line: String = entry.text.chars().take(b.w as usize - 2).collect();
+            let line: String = entry.text().chars().take(b.w() as usize - 2).collect();
             let style = if i == 0 { Style::default() } else { dim };
             buf.print(0, y, prefix, style);
             buf.print(2, y, &line, style);

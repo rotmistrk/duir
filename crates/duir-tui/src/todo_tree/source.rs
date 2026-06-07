@@ -61,13 +61,7 @@ impl TreeTableSource for TodoTreeData {
             return Style::default();
         };
         if item.completed == Completion::Done {
-            Style {
-                attrs: Attrs {
-                    dim: true,
-                    ..Attrs::default()
-                },
-                ..Style::default()
-            }
+            Style::default().with_attrs(Attrs::default().dim())
         } else {
             Style::default()
         }
