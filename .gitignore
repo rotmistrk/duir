@@ -13,3 +13,5 @@ tarpaulin-report.json
 # already existing elements were commented out
 
 #/target
+.kairn.log
+.kairn.todo

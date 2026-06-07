@@ -72,7 +72,7 @@ fn tools_list_returns_all_tools() {
     let req = json!({"jsonrpc": "2.0", "id": 2, "method": "tools/list"});
     let resp = server.handle_request(&req).unwrap();
     let tools = resp["result"]["tools"].as_array().unwrap();
-    assert_eq!(tools.len(), 10);
+    assert_eq!(tools.len(), 20);
 }
 
 #[test]

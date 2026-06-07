@@ -1,270 +1,173 @@
-mod app;
-mod clipboard;
-mod completer;
-mod event_focus;
-mod event_helpers;
-mod event_loop;
-mod file_watcher;
-mod help;
-mod input;
-mod markdown_highlight;
-mod markdown_view;
-mod mcp_log;
-mod note_editor;
-#[allow(dead_code)]
-mod note_view;
-mod password;
-#[allow(dead_code)]
-mod pty_tab;
-mod render;
-mod render_kiro;
-mod render_note;
-mod render_resolve;
-mod syntax;
-mod tab_style;
-#[allow(dead_code)]
-mod termbuf;
-mod tree_view;
+//! duir-tui — TXV-based terminal UI for duir todo trees.
 
-use std::io;
-use std::os::unix::net::UnixStream;
+use std::fs;
 use std::path::PathBuf;
 
 use clap::Parser;
+use txv_core::prelude::*;
+use txv_core::program::Program;
+use txv_render::backend::CrosstermBackend;
+use txv_widgets::status_bar::StatusBar;
+use txv_widgets::tiled_workspace::commands::CM_TW_ZOOM;
 
-use crossterm::execute;
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode};
+mod build_desktop;
+mod handler;
+mod mcp;
+#[allow(dead_code)]
+mod mcp_permissions;
+mod note_view;
+#[allow(dead_code)]
+mod scripting;
+mod session;
+mod shell;
+mod slots;
+mod todo_tree;
 
-use ratatui::Terminal;
-use ratatui::backend::CrosstermBackend;
-
-use duir_core::{FileStorage, TodoStorage};
-
-use app::{App, FocusState};
+use build_desktop::build_workspace;
+use handler::handle_command;
 
 #[derive(Parser)]
-#[command(name = "duir", version, about = "Hierarchical todo tree manager")]
+#[command(name = "duir", about = "Hierarchical todo tree TUI")]
 struct Cli {
-    /// Directory containing .todo.json files
-    #[arg(short, long)]
-    dir: Option<PathBuf>,
+    /// Working directory (where .duir/ lives)
+    #[arg(default_value = ".")]
+    path: PathBuf,
 
-    /// Specific files to open
-    files: Vec<PathBuf>,
+    /// Log file
+    #[arg(short = 'l', long = "log", default_value = ".duir.log")]
+    log_file: PathBuf,
 
-    /// Run as stdio-to-Unix-socket bridge for MCP
-    #[arg(long)]
-    mcp_connect: bool,
+    /// Log level (error, warn, info, debug, trace)
+    #[arg(short = 'L', long = "log-level", default_value = "info")]
+    log_level: String,
 }
 
-/// Parse CLI args with proper sysexits codes.
-fn parse_cli() -> Cli {
-    use clap::error::ErrorKind;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
 
-    match Cli::try_parse() {
-        Ok(cli) => cli,
-        Err(e) => match e.kind() {
-            ErrorKind::DisplayHelp | ErrorKind::DisplayVersion => {
-                print!("{e}");
-                std::process::exit(0);
-            }
-            _ => {
-                eprint!("{e}");
-                std::process::exit(64); // EX_USAGE
-            }
-        },
-    }
-}
+    let root_dir = fs::canonicalize(&cli.path)?;
+    init_logging(&cli.log_file, &cli.log_level)?;
 
-/// stdio-to-Unix-socket bridge for MCP.
-///
-/// Design: fail fast, never hang.
-/// - No retries: the socket is created before this process is spawned.
-/// - Timeouts on all I/O: a stuck peer cannot block us forever.
-/// - Clean shutdown: when either direction closes, tear down the other.
-fn run_mcp_bridge() -> io::Result<()> {
-    use std::time::Duration;
+    let mcp_socket = mcp::start_mcp(&root_dir);
+    let saved = session::load_session(&root_dir);
 
-    // 1. Validate environment — fail immediately if misconfigured.
-    let socket_path = std::env::var("DUIR_MCP_SOCKET")
-        .map_err(|_| io::Error::new(io::ErrorKind::NotFound, "DUIR_MCP_SOCKET not set"))?;
+    let mut desktop = build_workspace(&root_dir);
+    restore_session(&mut desktop, &saved);
 
-    if socket_path.is_empty() || socket_path.starts_with("${") {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("DUIR_MCP_SOCKET has invalid value: {socket_path:?}"),
-        ));
-    }
+    // Init scripting engine and load init.tcl
+    let mut script_engine = scripting::ScriptEngine::new();
+    script_engine.load_init(&root_dir);
+    script_engine.fire_hooks(&scripting::HookEvent::Startup, "");
+    drop(script_engine); // Will be kept alive once event loop integration is added
 
-    mcp_log::log("bridge", &format!("connecting to {socket_path}"));
+    let status = build_status_bar();
+    let mut program = Program::new(Box::new(status), Box::new(desktop));
 
-    // 2. Connect — one attempt, no retries. Socket must already exist.
-    let socket =
-        UnixStream::connect(&socket_path).map_err(|e| io::Error::new(e.kind(), format!("{socket_path}: {e}")))?;
-
-    socket.set_read_timeout(Some(Duration::from_secs(300)))?;
-    socket.set_write_timeout(Some(Duration::from_secs(30)))?;
-
-    mcp_log::log("bridge", "connected, starting I/O threads");
-
-    // 3. Bridge stdin↔socket with two threads.
-    let mut sock_w = socket.try_clone()?;
-    let mut sock_r = socket.try_clone()?;
-    let shutdown = socket;
-
-    let t_in = std::thread::spawn(move || {
-        let n = io::copy(&mut io::stdin().lock(), &mut sock_w);
-        mcp_log::log("bridge", &format!("stdin→socket ended: {n:?}"));
+    let mut backend = CrosstermBackend::new(txv_render::ColorMode::TrueColor);
+    program.run(&mut backend, |ctx| {
+        handle_command(ctx);
     });
 
-    let t_out = std::thread::spawn(move || {
-        // Wrap stdout in LineWriter so it flushes after each newline.
-        let mut stdout = io::LineWriter::new(io::stdout().lock());
-        let n = io::copy(&mut sock_r, &mut stdout);
-        mcp_log::log("bridge", &format!("socket→stdout ended: {n:?}"));
-    });
+    save_session_on_exit(&mut program, &root_dir);
 
-    // 4. When stdin closes (client done), shut down the socket to
-    //    unblock the socket→stdout thread, then wait for both.
-    let _ = t_in.join();
-    mcp_log::log("bridge", "stdin→socket ended, shutting down");
-
-    let _ = shutdown.shutdown(std::net::Shutdown::Both);
-    let _ = t_out.join();
-
-    mcp_log::log("bridge", "exiting");
+    if let Some(ref path) = mcp_socket {
+        mcp::cleanup_mcp(path);
+    }
 
     Ok(())
 }
 
-fn main() -> io::Result<()> {
-    let cli = parse_cli();
+fn restore_session(ws: &mut txv_widgets::tiled_workspace::TiledWorkspace, saved: &session::SessionState) {
+    use crate::todo_tree::TodoTreeView;
 
-    // Handle MCP bridge mode
-    if cli.mcp_connect {
-        if let Err(e) = run_mcp_bridge() {
-            mcp_log::log("bridge", &format!("FATAL: {e}"));
-            eprintln!("duir mcp-bridge: {e}");
-
-            let code = match e.kind() {
-                io::ErrorKind::InvalidInput => 78,                                // EX_CONFIG
-                io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => 69, // EX_UNAVAILABLE
-                _ => 74,                                                          // EX_IOERR
-            };
-
-            std::process::exit(code);
-        }
-        return Ok(());
+    // Restore zoom
+    if saved.zoomed_panel.is_some() {
+        ws.set_zoomed(saved.zoomed_panel);
     }
+    ws.focus_panel(saved.focused_panel);
 
-    // Load configuration and determine storage directory
-    let config = duir_core::config::Config::load();
-    let storage_dir = cli.dir.clone().unwrap_or_else(|| config.storage.central.clone());
-
-    // Initialize application state
-    let mut app = App::new();
-    app.flags.set_autosave_global(config.editor.autosave);
-    app.note_panel_pct = config.ui.note_panel_pct;
-
-    // Load files from storage or CLI arguments
-    if cli.files.is_empty() {
-        let central = config.storage.central.clone();
-        for dir in &config.storage_dirs() {
-            let source = if dir == &central {
-                app::FileSource::Central
-            } else {
-                app::FileSource::Local
-            };
-            if let Ok(storage) = FileStorage::new(dir)
-                && let Ok(names) = storage.list()
-            {
-                for name in &names {
-                    match storage.load(name) {
-                        Ok(data) => {
-                            let mtime = storage.mtime(name);
-                            app.add_file_with_source(name.clone(), data, source);
-                            if let Some(f) = app.files.last_mut() {
-                                f.disk_mtime = mtime;
-                            }
-                        }
-                        Err(e) => eprintln!("Error loading {name}: {e}"),
-                    }
-                }
-            }
-        }
-    } else {
-        for path in &cli.files {
-            match duir_core::file_storage::load_path(path) {
-                Ok(data) => {
-                    let name = path
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("untitled")
-                        .to_owned();
-                    app.add_file(name, data);
-                }
-                Err(e) => eprintln!("Error loading {}: {e}", path.display()),
-            }
+    // Restore tree cursor and timestamps
+    if let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
+        && let Some(view) = panel.active_view_mut()
+        && let Some(tree) = view.as_any_mut().and_then(|a| a.downcast_mut::<TodoTreeView>())
+    {
+        tree.set_cursor(saved.tree_cursor);
+        if saved.show_timestamps {
+            tree.toggle_timestamps_on();
         }
     }
-
-    // Apply saved file order
-    if !app.files.is_empty() {
-        let state = duir_core::config::AppState::load();
-        if !state.file_order.is_empty() {
-            app.apply_file_order(&state.file_order);
-        }
-    }
-
-    // Handle first-run experience
-    let first_run = app.files.is_empty();
-
-    if first_run {
-        app.add_empty_file("todo");
-    }
-
-    if first_run {
-        app.state = FocusState::About;
-    }
-
-    // Ensure terminal is restored on panic
-    let default_panic = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |info| {
-        let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen);
-        let _ = crossterm::cursor::Show;
-        default_panic(info);
-    }));
-
-    // Set up terminal
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-
-    execute!(
-        stdout,
-        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
-        crossterm::cursor::MoveTo(0, 0),
-        EnterAlternateScreen
-    )?;
-
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-
-    // Start file watcher
-    let watcher_rx = file_watcher::spawn(&config.storage_dirs());
-
-    // Run the main event loop
-    let result = event_loop::run_loop(&mut terminal, &mut app, &storage_dir, &config, watcher_rx.as_ref());
-
-    // Restore terminal state
-    disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    terminal.show_cursor()?;
-
-    result
 }
 
-#[cfg(test)]
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::indexing_slicing)] // Tests: indices are controlled by test setup
-mod tests;
+fn save_session_on_exit(program: &mut Program, root_dir: &std::path::Path) {
+    use crate::todo_tree::TodoTreeView;
+    use txv_widgets::tiled_workspace::TiledWorkspace;
+
+    let Some(ws) = program
+        .desktop_mut()
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<TiledWorkspace>())
+    else {
+        return;
+    };
+
+    let mut state = session::SessionState {
+        zoomed_panel: ws.zoomed_panel(),
+        focused_panel: 0,
+        tree_cursor: 0,
+        show_timestamps: false,
+    };
+
+    if let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
+        && let Some(view) = panel.active_view_mut()
+        && let Some(tree) = view.as_any_mut().and_then(|a| a.downcast_mut::<TodoTreeView>())
+    {
+        state.tree_cursor = tree.cursor();
+        state.show_timestamps = tree.show_timestamps();
+    }
+
+    session::save_session(root_dir, &state);
+}
+
+fn build_status_bar() -> StatusBar {
+    use handler::{CM_FOCUS_NOTES, CM_FOCUS_TOOLS, CM_FOCUS_TREE};
+
+    let mut bar = StatusBar::new();
+
+    bar.add_item(key(KeyCode::F(2)), CM_FOCUS_TREE, "F2:Tree");
+    bar.add_item(key(KeyCode::F(3)), CM_FOCUS_NOTES, "F3:Notes");
+    bar.add_item(key(KeyCode::F(4)), CM_FOCUS_TOOLS, "F4:Tools");
+    bar.add_item(key(KeyCode::F(5)), CM_TW_ZOOM, "F5:Zoom");
+    bar.add_item(
+        KeyEvent {
+            code: KeyCode::Char('q'),
+            modifiers: KeyMod {
+                ctrl: true,
+                shift: false,
+                alt: false,
+            },
+        },
+        CM_QUIT,
+        "^Q:Quit",
+    );
+
+    bar
+}
+
+const fn key(code: KeyCode) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyMod {
+            ctrl: false,
+            shift: false,
+            alt: false,
+        },
+    }
+}
+
+fn init_logging(log_file: &std::path::Path, level: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let target = env_logger::Target::Pipe(Box::new(
+        fs::OpenOptions::new().create(true).append(true).open(log_file)?,
+    ));
+    env_logger::Builder::new().target(target).parse_filters(level).init();
+    Ok(())
+}

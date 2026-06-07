@@ -81,6 +81,37 @@ pub enum McpMutation {
         path: TreePath,
         direction: ReorderDirection,
     },
+    SetPriority {
+        path: TreePath,
+        value: u8,
+    },
+    SetEffort {
+        path: TreePath,
+        value: u8,
+    },
+    SetStatus {
+        path: TreePath,
+        status: String,
+    },
+    SetNote {
+        path: TreePath,
+        content: String,
+    },
+    Promote {
+        path: TreePath,
+    },
+    Demote {
+        path: TreePath,
+    },
+    Fold {
+        path: TreePath,
+    },
+    Unfold {
+        path: TreePath,
+    },
+    Remove {
+        path: TreePath,
+    },
 }
 
 /// Direction for the reorder tool.
@@ -136,6 +167,9 @@ fn jsonrpc_result(id: &Value, result: &Value) -> Value {
     })
 }
 
+/// Tool permission filter type.
+pub type ToolFilter = Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
 /// MCP server that holds a shared snapshot of the kiron subtree.
 ///
 /// Read operations use the snapshot directly. Mutation operations
@@ -144,11 +178,24 @@ fn jsonrpc_result(id: &Value, result: &Value) -> Value {
 pub struct McpServer {
     pub(crate) snapshot: Arc<Mutex<TodoFile>>,
     pub(crate) mutation_tx: std::sync::mpsc::Sender<McpMutation>,
+    /// Optional tool permission filter. Returns true if the tool is allowed.
+    pub tool_filter: Option<ToolFilter>,
 }
 
 impl McpServer {
-    pub const fn new(snapshot: Arc<Mutex<TodoFile>>, mutation_tx: std::sync::mpsc::Sender<McpMutation>) -> Self {
-        Self { snapshot, mutation_tx }
+    pub fn new(snapshot: Arc<Mutex<TodoFile>>, mutation_tx: std::sync::mpsc::Sender<McpMutation>) -> Self {
+        Self {
+            snapshot,
+            mutation_tx,
+            tool_filter: None,
+        }
+    }
+
+    /// Set a tool permission filter.
+    #[must_use]
+    pub fn with_filter(mut self, filter: ToolFilter) -> Self {
+        self.tool_filter = Some(filter);
+        self
     }
 
     /// Process a single JSON-RPC request and return the response.
@@ -191,6 +238,17 @@ impl McpServer {
         let tool_name = params.get("name").and_then(Value::as_str).unwrap_or("");
         let empty_map = Map::new();
         let arguments = params.get("arguments").and_then(Value::as_object).unwrap_or(&empty_map);
+
+        // Permission check
+        if let Some(ref filter) = self.tool_filter
+            && !filter(tool_name)
+        {
+            let r = json!({
+                "isError": true,
+                "content": [{"type": "text", "text": format!("Permission denied: {tool_name}")}],
+            });
+            return jsonrpc_result(id, &r);
+        }
 
         match self.handle_tool_call(tool_name, arguments) {
             Ok(result) => {

@@ -59,6 +59,17 @@ pub(super) fn definitions() -> Value {
                 "type": "object",
                 "properties": {}
             }
+        },
+        {
+            "name": "get_note",
+            "description": "Get the note content of a node",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Comma-separated indices"}
+                },
+                "required": ["path"]
+            }
         }
     ])
 }
@@ -154,5 +165,15 @@ impl McpServer {
         });
         drop(file);
         Ok(result)
+    }
+}
+
+impl McpServer {
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_get_note(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        let file = self.snapshot.lock().map_err(|e| e.to_string())?;
+        let item = tree_ops::get_item(&file, &path).ok_or("Node not found")?;
+        Ok(json!({"path": args.get("path"), "note": item.note}))
     }
 }

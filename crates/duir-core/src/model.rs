@@ -60,6 +60,17 @@ fn is_idle(v: &WorkStatus) -> bool {
     *v == WorkStatus::Idle
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_zero_u64(v: &u64) -> bool {
+    *v == 0
+}
+
+fn now_epoch() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TodoItem {
     #[serde(default = "NodeId::new")]
@@ -95,6 +106,18 @@ pub struct TodoItem {
     /// Runtime-only: true if currently decrypted in memory.
     #[serde(skip)]
     pub unlocked: bool,
+    /// When the item was created (UTC epoch seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_at: Option<u64>,
+    /// When the item was last modified (UTC epoch seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<u64>,
+    /// Accumulated time spent in in-progress state (seconds).
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub time_spent_secs: u64,
+    /// Runtime-only: when current in-progress session started.
+    #[serde(skip)]
+    pub progress_started_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,6 +161,10 @@ impl TodoItem {
             kiron: None,
             cipher: None,
             unlocked: false,
+            created_at: Some(now_epoch()),
+            updated_at: None,
+            time_spent_secs: 0,
+            progress_started_at: None,
         }
     }
 

@@ -6,6 +6,16 @@ use crate::tree_ops;
 use super::{McpMutation, McpServer, ReorderDirection};
 
 pub(super) fn definitions() -> Value {
+    let mut base = definitions_base();
+    if let Value::Array(ref mut arr) = base
+        && let Value::Array(extra) = definitions_extra()
+    {
+        arr.extend(extra);
+    }
+    base
+}
+
+fn definitions_base() -> Value {
     json!([
         {
             "name": "add_child",
@@ -58,6 +68,78 @@ pub(super) fn definitions() -> Value {
                 },
                 "required": ["path", "direction"]
             }
+        },
+        {
+            "name": "set_priority",
+            "description": "Set priority (0-9) on a node",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"},
+                "value": {"type": "integer", "description": "Priority 0-9"}
+            }, "required": ["path", "value"] }
+        },
+        {
+            "name": "set_effort",
+            "description": "Set effort estimate (fibonacci: 0,1,2,3,5,8,13,21) on a node",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"},
+                "value": {"type": "integer", "description": "Fibonacci effort value"}
+            }, "required": ["path", "value"] }
+        }
+    ])
+}
+
+fn definitions_extra() -> Value {
+    json!([
+        {
+            "name": "set_status",
+            "description": "Set work status: idle, in_progress, paused",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"},
+                "status": {"type": "string", "enum": ["idle", "in_progress", "paused"]}
+            }, "required": ["path", "status"] }
+        },
+        {
+            "name": "set_note",
+            "description": "Set the note content of a node",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"},
+                "content": {"type": "string", "description": "Note content"}
+            }, "required": ["path", "content"] }
+        },
+        {
+            "name": "promote",
+            "description": "Promote a node (move left in hierarchy)",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"}
+            }, "required": ["path"] }
+        },
+        {
+            "name": "demote",
+            "description": "Demote a node (move right in hierarchy)",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"}
+            }, "required": ["path"] }
+        },
+        {
+            "name": "fold",
+            "description": "Fold (collapse) a node",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"}
+            }, "required": ["path"] }
+        },
+        {
+            "name": "unfold",
+            "description": "Unfold (expand) a node",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"}
+            }, "required": ["path"] }
+        },
+        {
+            "name": "remove_item",
+            "description": "Remove a node and its children",
+            "inputSchema": { "type": "object", "properties": {
+                "path": {"type": "string", "description": "Comma-separated indices"}
+            }, "required": ["path"] }
         }
     ])
 }
@@ -159,6 +241,148 @@ impl McpServer {
         }
         self.mutation_tx
             .send(McpMutation::Reorder { path, direction })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+}
+
+impl McpServer {
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_set_priority(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        let value = u8::try_from(args.get("value").and_then(Value::as_u64).ok_or("Missing value")?)
+            .map_err(|e| format!("invalid value: {e}"))?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            let item = tree_ops::get_item_mut(&mut file, &path).ok_or("Node not found")?;
+            item.priority = if value == 0 { None } else { Some(value) };
+        }
+        self.mutation_tx
+            .send(McpMutation::SetPriority { path, value })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_set_effort(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        let value = u8::try_from(args.get("value").and_then(Value::as_u64).ok_or("Missing value")?)
+            .map_err(|e| format!("invalid value: {e}"))?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            let item = tree_ops::get_item_mut(&mut file, &path).ok_or("Node not found")?;
+            item.effort = if value == 0 { None } else { Some(value) };
+        }
+        self.mutation_tx
+            .send(McpMutation::SetEffort { path, value })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_set_status(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        let status = args
+            .get("status")
+            .and_then(Value::as_str)
+            .ok_or("Missing status")?
+            .to_owned();
+        let ws = match status.as_str() {
+            "idle" => crate::model::WorkStatus::Idle,
+            "in_progress" => crate::model::WorkStatus::InProgress,
+            "paused" => crate::model::WorkStatus::Paused,
+            other => return Err(format!("Invalid status: {other}")),
+        };
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            let item = tree_ops::get_item_mut(&mut file, &path).ok_or("Node not found")?;
+            item.work_status = ws;
+        }
+        self.mutation_tx
+            .send(McpMutation::SetStatus { path, status })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_set_note(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        let content = args
+            .get("content")
+            .and_then(Value::as_str)
+            .ok_or("Missing content")?
+            .to_owned();
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            let item = tree_ops::get_item_mut(&mut file, &path).ok_or("Node not found")?;
+            item.note.clone_from(&content);
+        }
+        self.mutation_tx
+            .send(McpMutation::SetNote { path, content })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    pub(super) fn tool_promote(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            tree_ops::promote(&mut file, &path).map_err(|e| e.to_string())?;
+        }
+        self.mutation_tx
+            .send(McpMutation::Promote { path })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    pub(super) fn tool_demote(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            tree_ops::demote(&mut file, &path).map_err(|e| e.to_string())?;
+        }
+        self.mutation_tx
+            .send(McpMutation::Demote { path })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_fold(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            let item = tree_ops::get_item_mut(&mut file, &path).ok_or("Node not found")?;
+            item.folded = true;
+        }
+        self.mutation_tx
+            .send(McpMutation::Fold { path })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    #[allow(clippy::significant_drop_tightening)]
+    pub(super) fn tool_unfold(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            let item = tree_ops::get_item_mut(&mut file, &path).ok_or("Node not found")?;
+            item.folded = false;
+        }
+        self.mutation_tx
+            .send(McpMutation::Unfold { path })
+            .map_err(|e| e.to_string())?;
+        Ok(json!({"success": true}))
+    }
+
+    pub(super) fn tool_remove_item(&self, args: &Map<String, Value>) -> Result<Value, String> {
+        let path = Self::require_path(args, "path")?;
+        {
+            let mut file = self.snapshot.lock().map_err(|e| e.to_string())?;
+            tree_ops::remove_item(&mut file, &path).map_err(|e| e.to_string())?;
+        }
+        self.mutation_tx
+            .send(McpMutation::Remove { path })
             .map_err(|e| e.to_string())?;
         Ok(json!({"success": true}))
     }
