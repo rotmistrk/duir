@@ -49,19 +49,32 @@ pub fn build_status_bar(desktop: &TiledWorkspace, clipboard: ClipboardHandle) ->
     );
 
     // Alt-1..9 tab select
+    // Alt-1..9 tab select (with macOS alt-digit special chars)
+    let mac_digits: &[char] = &[
+        '\u{00A1}', '\u{2122}', '\u{00A3}', '\u{00A2}', '\u{221E}', '\u{00A7}', '\u{00B6}', '\u{2022}', '\u{00AA}',
+    ];
     for i in 1..10u8 {
-        let k = KeyEvent::new(KeyCode::Char((b'0' + i) as char), KeyMod::ALT);
+        let tab_idx = u16::from(i - 1);
+        let alt_key = KeyEvent::new(KeyCode::Char((b'0' + i) as char), KeyMod::ALT);
         bar.add(StatusSlot::new(Box::new(
-            KeyLabelView::new(k, CM_TW_ACTIVATE_TAB, "").with_data(u16::from(i - 1)),
+            KeyLabelView::new(alt_key, CM_TW_ACTIVATE_TAB, "").with_data(tab_idx),
+        )));
+        let mac_key = KeyEvent::new(
+            KeyCode::Char(mac_digits.get(i as usize - 1).copied().unwrap_or('?')),
+            KeyMod::NONE,
+        );
+        bar.add(StatusSlot::new(Box::new(
+            KeyLabelView::new(mac_key, CM_TW_ACTIVATE_TAB, "").with_data(tab_idx),
         )));
     }
 
-    // Command line (M-x / :)
+    // Command line (M-x / : / \u{2248} for macOS Alt+x)
     let input = InputLine::new()
         .with_clipboard(clipboard)
         .with_command(CM_EXECUTE_COMMAND);
     let command_line = ModalKey::new("M-x", ":")
         .trigger_key(KeyEvent::new(KeyCode::Char('x'), KeyMod::ALT))
+        .trigger_key(KeyEvent::new(KeyCode::Char('\u{2248}'), KeyMod::NONE))
         .trigger_key(KeyEvent::new(KeyCode::Char(':'), KeyMod::NONE))
         .terminal_command(CM_EXECUTE_COMMAND)
         .add_child(Box::new(input));
