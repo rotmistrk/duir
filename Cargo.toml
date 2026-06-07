@@ -9,7 +9,7 @@ authors = ["CyR"]
 license = "MIT"
 
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }

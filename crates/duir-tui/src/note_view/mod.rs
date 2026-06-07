@@ -7,7 +7,7 @@ use crate::todo_tree::model::TreePath;
 mod highlight;
 
 /// Command emitted when note content changes (payload: `(TreePath, String)`).
-pub const CM_NOTE_SAVE: CommandId = 510;
+pub const CM_NOTE_SAVE: CommandId = txv_core::commands::CM_TXV_MAX + 12;
 
 /// The note editor view.
 pub struct NoteView {

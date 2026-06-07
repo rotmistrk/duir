@@ -9,13 +9,14 @@ use crate::slots::SlotId;
 use crate::todo_tree::TodoTreeView;
 use crate::todo_tree::model::{self, TreePath};
 
-/// Application command IDs.
-pub const CM_FOCUS_TREE: CommandId = 500;
-pub const CM_FOCUS_NOTES: CommandId = 501;
-pub const CM_FOCUS_TOOLS: CommandId = 502;
-pub const CM_HELP: CommandId = 503;
+/// Application command IDs (above `CM_TXV_MAX`).
+const CM_APP_BASE: CommandId = txv_core::commands::CM_TXV_MAX + 1;
+pub const CM_FOCUS_TREE: CommandId = CM_APP_BASE;
+pub const CM_FOCUS_NOTES: CommandId = CM_APP_BASE + 1;
+pub const CM_FOCUS_TOOLS: CommandId = CM_APP_BASE + 2;
+pub const CM_HELP: CommandId = CM_APP_BASE + 3;
 /// Emitted by tree when cursor moves. Payload: `(TreePath, String)`.
-pub const CM_NOTE_LOAD: CommandId = 511;
+pub const CM_NOTE_LOAD: CommandId = CM_APP_BASE + 10;
 
 /// Top-level command handler for the duir event loop.
 pub fn handle_command(ctx: &mut CommandContext) {
