@@ -193,6 +193,7 @@ impl View for TodoTreeView {
     fn select(&mut self) {
         self.group.set_focused(true);
         self.group.mark_dirty();
+        self.emit_note_if_cursor_changed();
     }
 
     fn unselect(&mut self) {

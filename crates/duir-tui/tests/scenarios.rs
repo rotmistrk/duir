@@ -185,3 +185,20 @@ fn d_key_upper_toggles_timestamps() {
     let after = h.screen_text();
     assert_ne!(before, after, "D should toggle timestamp columns");
 }
+
+#[test]
+fn note_shows_when_item_selected_and_unzoomed() {
+    let dir = temp_project(default_todo());
+    let mut h = TestHarness::new(dir.path());
+    h.run_cycles(1);
+    // Unzoom to reveal Notes panel
+    h.inject_key(KeyCode::F(5), KeyMod::NONE);
+    h.run_cycles(1);
+    // First item has note "hello" - cursor is on it from start
+    // The note should be visible in the center panel
+    assert!(
+        h.contains("hello"),
+        "note content should be visible after unzoom: {}",
+        h.screen_text()
+    );
+}

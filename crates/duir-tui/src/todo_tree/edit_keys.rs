@@ -16,6 +16,10 @@ impl TodoTreeView {
             if self.inner.data_mut().reload_if_changed() {
                 self.group.mark_dirty();
             }
+            // Emit initial note load on first tick
+            if self.prev_cursor == usize::MAX {
+                self.emit_note_if_cursor_changed();
+            }
             return HandleResult::Ignored;
         }
 
