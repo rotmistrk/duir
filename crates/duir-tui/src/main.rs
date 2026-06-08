@@ -78,9 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn restore_session(ws: &mut txv_widgets::tiled_workspace::TiledWorkspace, saved: &session::SessionState) {
     use crate::todo_tree::TodoTreeView;
-    if saved.zoomed_panel.is_some() {
-        ws.set_zoomed(saved.zoomed_panel);
-    }
+    ws.set_zoomed(saved.zoomed_panel);
     ws.focus_panel(saved.focused_panel);
     if let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
         && let Some(view) = panel.active_view_mut()
