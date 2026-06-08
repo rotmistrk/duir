@@ -55,7 +55,8 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
     // Center: note editor
     ws.insert_tab(SlotId::Center as usize, "Note", Box::new(NoteView::new()));
 
-    // Right: messages, clipboard viewer
+    // Right: shell, messages, clipboard viewer
+    ws.insert_tab(SlotId::Right as usize, "Shell:0", new_shell_terminal());
     ws.insert_tab(SlotId::Right as usize, "Messages", Box::new(MessagesView::new()));
     ws.insert_tab(
         SlotId::Right as usize,

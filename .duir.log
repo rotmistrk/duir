@@ -21,3 +21,6 @@
 [2026-06-08T03:01:15Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
 [2026-06-08T03:02:09Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
 [2026-06-08T03:03:03Z INFO  duir_tui::handler] unknown command: "close" (raw: "close")
+[2026-06-08T03:16:38Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
+[2026-06-08T04:03:56Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
+[2026-06-08T04:12:09Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock

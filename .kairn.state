@@ -1,0 +1,65 @@
+{
+  "version": 4,
+  "layout": "auto",
+  "wide_proportions": [
+    0.2,
+    0.4,
+    0.4
+  ],
+  "narrow_proportions": [
+    0.5600001,
+    0.47999996,
+    0.51999986,
+    0.4400001
+  ],
+  "hidden_panels": [],
+  "active_tab": 5,
+  "editor_tabs": [
+    {
+      "path": "/home/rotmistr/Workplace/duir/crates/duir-tui/src/todo_tree/mod.rs",
+      "line": 0,
+      "col": 0
+    },
+    {
+      "path": "/home/rotmistr/Workplace/duir/crates/duir-core/src/mcp_server/mod.rs",
+      "line": 0,
+      "col": 0
+    },
+    {
+      "path": "/home/rotmistr/Workplace/duir/crates/duir-tui/src/scripting/mod.rs",
+      "line": 0,
+      "col": 0
+    },
+    {
+      "path": "/home/rotmistr/Workplace/duir/crates/duir-tui/src/build_desktop.rs",
+      "line": 0,
+      "col": 0
+    },
+    {
+      "path": "/home/rotmistr/Workplace/duir/crates/duir-tui/src/status.rs",
+      "line": 0,
+      "col": 0
+    },
+    {
+      "path": "/home/rotmistr/Workplace/duir/crates/duir-tui/src/handler.rs",
+      "line": 0,
+      "col": 0
+    }
+  ],
+  "unfolded_dirs": [
+    "crates",
+    "crates/duir-tui",
+    "crates/duir-tui/src",
+    "crates/duir-tui/src/note_view",
+    "crates/duir-tui/src/scripting",
+    "crates/duir-tui/src/todo_tree"
+  ],
+  "kiro_sessions": [
+    {
+      "name": "Kiro:0",
+      "session_id": null
+    }
+  ],
+  "split": null,
+  "roots": []
+}

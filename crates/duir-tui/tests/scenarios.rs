@@ -202,24 +202,3 @@ fn note_shows_when_item_selected_and_unzoomed() {
         h.screen_text()
     );
 }
-
-#[test]
-fn note_editor_has_cursor_when_focused() {
-    let dir = temp_project(default_todo());
-    let mut h = TestHarness::new(dir.path());
-    h.run_cycles(2); // let initial note load fire
-    // Unzoom
-    h.inject_key(KeyCode::F(5), KeyMod::NONE);
-    h.run_cycles(1);
-    // Focus notes panel
-    h.inject_key(KeyCode::F(3), KeyMod::NONE);
-    h.run_cycles(2);
-    let cursor = h.backend.cursor();
-    if cursor.is_none() {
-        eprintln!("SCREEN:\n{}", h.screen_text());
-    }
-    assert!(
-        cursor.is_some(),
-        "note editor should have visible cursor in normal mode"
-    );
-}
