@@ -38,6 +38,7 @@ pub struct TodoTreeView {
     pub(crate) filter_active: bool,
     pub(crate) crypto_pending: Option<CryptoPending>,
     prev_cursor: usize,
+    tick_count: u32,
     connectors_visible: bool,
     pub clipboard: ClipboardHandle,
 }
@@ -54,6 +55,7 @@ impl TodoTreeView {
             filter_active: false,
             crypto_pending: None,
             prev_cursor: usize::MAX,
+            tick_count: 0,
             connectors_visible: true,
             clipboard: new_clipboard(20),
         }
