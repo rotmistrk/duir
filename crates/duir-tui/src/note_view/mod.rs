@@ -41,7 +41,11 @@ impl NoteView {
 }
 
 impl View for NoteView {
-    delegate_view!(inner, override { unselect });
+    delegate_view!(inner, override { unselect, cursor });
+
+    fn cursor(&self) -> Option<CursorRequest> {
+        self.inner.cursor()
+    }
 
     fn unselect(&mut self) {
         self.save_current();
