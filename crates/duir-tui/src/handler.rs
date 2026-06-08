@@ -59,7 +59,7 @@ fn execute_command(ctx: &mut CommandContext) {
             let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
                 return;
             };
-            let kiro_cmd = if arg.is_empty() { "kiro-cli chat --restore" } else { arg };
+            let kiro_cmd = if arg.is_empty() { "kiro-cli chat --resume" } else { arg };
             let term = crate::shell::new_kiro_terminal(kiro_cmd, std::path::Path::new("."));
             ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
             ws.focus_panel(SlotId::Right as usize);
