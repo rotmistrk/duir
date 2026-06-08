@@ -17,10 +17,15 @@ pub struct NoteView {
 
 impl NoteView {
     pub fn new() -> Self {
-        Self {
-            inner: EditorView::new(),
-            path: None,
-        }
+        let mut ev = EditorView::new();
+        // Use hardware cursor (visible blinking) instead of software cursor
+        ev.editor_mut()
+            .options_mut()
+            .set_cursor_normal(txv_edit::settings::CursorStyle::Block);
+        ev.editor_mut()
+            .options_mut()
+            .set_cursor_command(txv_edit::settings::CursorStyle::Block);
+        Self { inner: ev, path: None }
     }
 
     /// Load note content for a given tree path.
