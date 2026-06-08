@@ -76,7 +76,6 @@ pub fn build_status_bar(desktop: &TiledWorkspace, clipboard: ClipboardHandle) ->
     let command_line = ModalKey::new("M-x", ":")
         .trigger_key(KeyEvent::new(KeyCode::Char('x'), KeyMod::ALT))
         .trigger_key(KeyEvent::new(KeyCode::Char('\u{2248}'), KeyMod::NONE))
-        .trigger_key(KeyEvent::new(KeyCode::Char(':'), KeyMod::NONE))
         .terminal_command(CM_EXECUTE_COMMAND)
         .add_child(Box::new(input));
     bar.add(StatusSlot::new(Box::new(command_line)).priority(10).stretch(1));
