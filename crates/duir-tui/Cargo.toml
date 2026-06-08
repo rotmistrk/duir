@@ -6,6 +6,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[lib]
+name = "duir_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "duir-tui"
+path = "src/main.rs"
+
 [lints]
 workspace = true
 
