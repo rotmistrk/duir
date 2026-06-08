@@ -2,7 +2,7 @@
 
 use txv_core::complete::{Completer, Completion, CompletionVisitor};
 
-const COMMANDS: &[&str] = &["help", "kiro", "layout", "quit", "q", "save", "w"];
+const COMMANDS: &[&str] = &["close", "help", "kiro", "layout", "quit", "q", "save", "shell", "w"];
 
 struct SimpleCompletion(&'static str);
 

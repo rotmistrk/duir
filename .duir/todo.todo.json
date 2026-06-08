@@ -9,7 +9,7 @@
       "completed": "Open",
       "important": false,
       "folded": false,
-      "note": "# This is some example\n\n```json\n{\n    \"id\": 1,\n    \"name\": \"a name\"\n}\n```\n\noopsie\n",
+      "note": "# This is some example\n\n```json\n{\n    \"id\": 1,\n    \"name\": \"a name\"\n}\n```\n\nThis is an example of a list\n - list item one\n - list item two\n\noopsie\n",
       "items": [
         {
           "id": "41d8a038-9438-4f68-b21e-7e4cdab1a95e",

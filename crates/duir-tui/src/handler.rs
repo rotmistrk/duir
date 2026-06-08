@@ -64,7 +64,16 @@ fn execute_command(ctx: &mut CommandContext) {
             ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
             ws.focus_panel(SlotId::Right as usize);
         }
+        "close" => sink.push_command(txv_widgets::tiled_workspace::commands::CM_TW_TAB_CLOSE, None),
         "layout" => sink.push_command(txv_widgets::tiled_workspace::commands::CM_TW_LAYOUT_CYCLE, None),
+        "shell" => {
+            let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
+                return;
+            };
+            let term = crate::shell::new_shell_terminal();
+            ws.insert_tab(SlotId::Right as usize, "Shell:0", term);
+            ws.focus_panel(SlotId::Right as usize);
+        }
         _ => log::info!("unknown command: {:?} (raw: {:?})", cmd_name, cmd),
     }
 }
