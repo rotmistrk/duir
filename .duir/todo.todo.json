@@ -9,7 +9,7 @@
       "completed": "Open",
       "important": false,
       "folded": false,
-      "note": "",
+      "note": "# This is some example\n\n```json\n{\n    \"id\"",
       "items": [
         {
           "id": "41d8a038-9438-4f68-b21e-7e4cdab1a95e",
@@ -41,7 +41,9 @@
           "folded": false,
           "note": "",
           "items": [],
-          "created_at": 1780876010
+          "created_at": 1780876010,
+          "updated_at": 1780878016,
+          "time_spent_secs": 163
         }
       ],
       "created_at": 1780793765

@@ -71,7 +71,8 @@ pub fn build_status_bar(desktop: &TiledWorkspace, clipboard: ClipboardHandle) ->
     // Command line (M-x / : / \u{2248} for macOS Alt+x)
     let input = InputLine::new()
         .with_clipboard(clipboard)
-        .with_command(CM_EXECUTE_COMMAND);
+        .with_command(CM_EXECUTE_COMMAND)
+        .with_completer(Box::new(crate::completer::CommandCompleter));
     let command_line = ModalKey::new("M-x", ":")
         .trigger_key(KeyEvent::new(KeyCode::Char('x'), KeyMod::ALT))
         .trigger_key(KeyEvent::new(KeyCode::Char('\u{2248}'), KeyMod::NONE))

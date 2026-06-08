@@ -17,7 +17,7 @@ pub const CM_NOTE_LOAD: CommandId = CM_APP_BASE + 10;
 
 pub fn handle_command(ctx: &mut CommandContext) {
     match ctx.command() {
-        CM_SHOW_HELP => show_help(ctx),
+        CM_SHOW_HELP => show_help(ctx.desktop_mut()),
         CM_EXECUTE_COMMAND => execute_command(ctx),
         CM_NOTE_LOAD => handle_note_load(ctx),
         CM_NOTE_SAVE => handle_note_save(ctx),
@@ -25,17 +25,13 @@ pub fn handle_command(ctx: &mut CommandContext) {
     }
 }
 
-fn show_help(ctx: &mut CommandContext) {
-    let (_, _, _, desktop) = ctx.split();
+fn show_help(desktop: &mut dyn View) {
     let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
         return;
     };
-    if let Some(panel) = ws.panel_mut(SlotId::Center as usize)
-        && let Some(view) = panel.active_view_mut()
-        && let Some(note) = view.as_any_mut().and_then(|a| a.downcast_mut::<NoteView>())
-    {
-        note.load(vec![], HELP_TEXT);
-    }
+    let mut ta = txv_widgets::TextArea::new();
+    ta.set_content(HELP_TEXT);
+    ws.insert_tab(SlotId::Center as usize, "Help", Box::new(ta));
     ws.focus_panel(SlotId::Center as usize);
 }
 
@@ -45,9 +41,13 @@ fn execute_command(ctx: &mut CommandContext) {
     let Some(cmd) = data.downcast_ref::<String>() else {
         return;
     };
-    match cmd.trim() {
+    let args: Vec<&str> = cmd.trim().splitn(2, ' ').collect();
+    let cmd_name = args.first().copied().unwrap_or("");
+    let arg = args.get(1).copied().unwrap_or("");
+    match cmd_name {
         "quit" | "q" => sink.push_command(CM_QUIT, None),
-        "save" => {
+        "help" => show_help(desktop),
+        "save" | "w" => {
             let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
                 return;
             };
@@ -55,7 +55,17 @@ fn execute_command(ctx: &mut CommandContext) {
                 tree.data_mut().save();
             }
         }
-        _ => log::info!("unknown command: {cmd}"),
+        "kiro" => {
+            let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
+                return;
+            };
+            let kiro_cmd = if arg.is_empty() { "kiro-cli chat --restore" } else { arg };
+            let term = crate::shell::new_kiro_terminal(kiro_cmd, std::path::Path::new("."));
+            ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
+            ws.focus_panel(SlotId::Right as usize);
+        }
+        "layout" => sink.push_command(txv_widgets::tiled_workspace::commands::CM_TW_LAYOUT_CYCLE, None),
+        _ => log::info!("unknown command: {cmd_name}"),
     }
 }
 

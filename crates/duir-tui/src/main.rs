@@ -10,6 +10,7 @@ use txv_render::backend::CrosstermBackend;
 
 mod build_desktop;
 mod clipboard_view;
+mod completer;
 mod handler;
 mod mcp;
 #[allow(dead_code)]
