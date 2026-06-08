@@ -5,3 +5,5 @@
 [2026-06-07T15:37:10Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
 [2026-06-07T23:45:44Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
 [2026-06-07T23:46:34Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
+[2026-06-08T00:11:30Z INFO  duir_tui::mcp] MCP: listening on /home/rotmistr/Workplace/duir/.duir/mcp.sock
+[2026-06-08T00:13:43Z INFO  duir_tui::handler] unknown command: kiro --tui

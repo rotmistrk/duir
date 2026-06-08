@@ -90,6 +90,7 @@ fn handle_note_save(ctx: &mut CommandContext) {
             item.note.clone_from(content);
         }
         tree.data_mut().save();
+        tree.data_mut().rebuild_flat();
     }
 }
 

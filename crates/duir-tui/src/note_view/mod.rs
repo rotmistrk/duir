@@ -5,7 +5,7 @@ use txv_edit::view::EditorView;
 
 use crate::todo_tree::model::TreePath;
 
-/// Command emitted when note content changes (payload: `(TreePath, String)`).
+/// Command: save note content. Payload: `(TreePath, String)`.
 pub const CM_NOTE_SAVE: CommandId = txv_core::commands::CM_TXV_MAX + 12;
 
 /// Note editor backed by txv-edit's `EditorView`.
@@ -25,15 +25,13 @@ impl NoteView {
 
     /// Load note content for a given tree path.
     pub fn load(&mut self, path: TreePath, content: &str) {
-        self.save_if_dirty();
+        self.save_current();
         self.path = Some(path);
         self.inner.set_content(content, "md");
     }
 
-    fn save_if_dirty(&mut self) {
-        if !self.inner.is_dirty() {
-            return;
-        }
+    /// Force save current content regardless of dirty state.
+    fn save_current(&mut self) {
         let Some(path) = self.path.clone() else { return };
         let content = self.inner.content();
         self.inner
@@ -46,7 +44,7 @@ impl View for NoteView {
     delegate_view!(inner, override { unselect });
 
     fn unselect(&mut self) {
-        self.save_if_dirty();
+        self.save_current();
         self.inner.unselect();
     }
 
