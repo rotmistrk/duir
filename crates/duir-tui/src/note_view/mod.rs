@@ -43,6 +43,16 @@ impl NoteView {
             .state_mut()
             .put_command(CM_NOTE_SAVE, Some(Box::new((path, content))));
     }
+
+    /// Get current note content.
+    pub fn content(&self) -> String {
+        self.inner.content()
+    }
+
+    /// Get current path (if any).
+    pub fn path(&self) -> Option<&TreePath> {
+        self.path.as_ref()
+    }
 }
 
 impl View for NoteView {

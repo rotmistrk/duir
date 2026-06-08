@@ -68,6 +68,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         handle_command(ctx);
     });
 
+    save_note_on_exit(&mut program);
     save_session_on_exit(&mut program, &root_dir);
     if let Some(ref path) = mcp_socket {
         mcp::cleanup_mcp(path);
@@ -93,6 +94,44 @@ fn restore_session(ws: &mut txv_widgets::tiled_workspace::TiledWorkspace, saved:
     }
 }
 
+fn save_note_on_exit(program: &mut Program) {
+    use crate::note_view::NoteView;
+    use crate::todo_tree::TodoTreeView;
+    use crate::todo_tree::model;
+    use txv_widgets::tiled_workspace::TiledWorkspace;
+
+    let Some(ws) = program
+        .desktop_mut()
+        .as_any_mut()
+        .and_then(|a| a.downcast_mut::<TiledWorkspace>())
+    else {
+        return;
+    };
+
+    // Get note content + path from NoteView
+    let note_data: Option<(Vec<usize>, String)> = ws
+        .panel_mut(slots::SlotId::Center as usize)
+        .and_then(|p| p.active_view_mut())
+        .and_then(|v| v.as_any_mut()?.downcast_mut::<NoteView>())
+        .and_then(|nv| {
+            let content = nv.content();
+            let path = nv.path()?.clone();
+            Some((path, content))
+        });
+
+    // Apply to tree
+    if let Some((path, content)) = note_data {
+        if let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
+            && let Some(view) = panel.active_view_mut()
+            && let Some(tree) = view.as_any_mut().and_then(|a| a.downcast_mut::<TodoTreeView>())
+        {
+            if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, &path) {
+                item.note = content;
+            }
+            tree.data_mut().save();
+        }
+    }
+}
 fn save_session_on_exit(program: &mut Program, root_dir: &std::path::Path) {
     use crate::todo_tree::TodoTreeView;
     use txv_widgets::tiled_workspace::TiledWorkspace;
