@@ -13,13 +13,6 @@ use crate::handler::CM_NOTE_LOAD;
 impl TodoTreeView {
     pub(super) fn handle_event(&mut self, event: &Event) -> HandleResult {
         if matches!(event, Event::Tick) {
-            self.tick_count += 1;
-            // Check file every 40 ticks (~2 seconds)
-            if self.tick_count % 40 == 0 {
-                if self.inner.data_mut().reload_if_changed() {
-                    self.group.mark_dirty();
-                }
-            }
             // Emit initial note load once on first tick
             if self.prev_cursor == usize::MAX && self.inner.data().visible_count() > 0 {
                 self.prev_cursor = self.inner.cursor();

@@ -41,9 +41,9 @@ fn execute_command(ctx: &mut CommandContext) {
     let Some(cmd) = data.downcast_ref::<String>() else {
         return;
     };
-    let args: Vec<&str> = cmd.trim().splitn(2, ' ').collect();
+    let args: Vec<&str> = cmd.trim().splitn(2, char::is_whitespace).collect();
     let cmd_name = args.first().copied().unwrap_or("");
-    let arg = args.get(1).copied().unwrap_or("");
+    let arg = args.get(1).copied().unwrap_or("").trim();
     match cmd_name {
         "quit" | "q" => sink.push_command(CM_QUIT, None),
         "help" => show_help(desktop),
@@ -65,7 +65,7 @@ fn execute_command(ctx: &mut CommandContext) {
             ws.focus_panel(SlotId::Right as usize);
         }
         "layout" => sink.push_command(txv_widgets::tiled_workspace::commands::CM_TW_LAYOUT_CYCLE, None),
-        _ => log::info!("unknown command: {cmd_name}"),
+        _ => log::info!("unknown command: {:?} (raw: {:?})", cmd_name, cmd),
     }
 }
 
