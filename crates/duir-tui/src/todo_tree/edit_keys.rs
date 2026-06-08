@@ -16,9 +16,10 @@ impl TodoTreeView {
             if self.inner.data_mut().reload_if_changed() {
                 self.group.mark_dirty();
             }
-            // Emit initial note load on first tick
-            if self.prev_cursor == usize::MAX {
-                self.emit_note_if_cursor_changed();
+            // Emit initial note load once on first tick
+            if self.prev_cursor == usize::MAX && self.inner.data().visible_count() > 0 {
+                self.prev_cursor = self.inner.cursor();
+                self.emit_note_now();
             }
             return HandleResult::Ignored;
         }
@@ -191,6 +192,11 @@ impl TodoTreeView {
             return;
         }
         self.prev_cursor = cursor;
+        self.emit_note_now();
+    }
+
+    fn emit_note_now(&mut self) {
+        let cursor = self.inner.cursor();
         if cursor >= self.inner.data().visible_count() {
             return;
         }
