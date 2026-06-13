@@ -47,6 +47,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let root_dir = fs::canonicalize(&cli.path)?;
     init_logging(&cli.log_file, &cli.log_level)?;
 
+    // Initialize palette (dark theme)
+    txv_core::palette::set_palette(std::sync::Arc::new(txv_core::palette::dark::DarkPalette));
+
     let mcp_socket = mcp::start_mcp(&root_dir);
     let saved = session::load_session(&root_dir);
     let clipboard = new_clipboard(20);
