@@ -38,7 +38,7 @@ pub fn handle_todo_key(key: &KeyEvent, data: &mut TodoTreeData, cursor: usize) -
         KeyCode::Char(' ') => toggle_complete(data, id),
         KeyCode::Char('n') => new_sibling(data, id, cursor),
         KeyCode::Char('b') => new_child(data, id, cursor),
-        KeyCode::Char('d') => delete(data, id),
+        KeyCode::Char('d') => delete(data, id, cursor),
         KeyCode::Char('S') => sort(data, id),
         KeyCode::Char('/') => Some(HandleAction::EnterFilter),
         KeyCode::Char('!') => toggle_priority_5(data, id),
@@ -174,13 +174,14 @@ fn new_child(data: &mut TodoTreeData, id: usize, cursor: usize) -> Option<Handle
     Some(HandleAction::EditNew(row))
 }
 
-fn delete(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
+fn delete(data: &mut TodoTreeData, id: usize, cursor: usize) -> Option<HandleAction> {
     let path = data.path_at(id)?.clone();
     model::remove_item(&mut data.file, &path)?;
     model::propagate_completion(&mut data.file, &path);
     data.save();
     data.rebuild_flat();
-    Some(HandleAction::Stay)
+    let max = data.visible_count().saturating_sub(1);
+    Some(HandleAction::MoveTo(cursor.min(max)))
 }
 
 fn sort(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
