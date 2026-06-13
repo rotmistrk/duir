@@ -6,6 +6,7 @@ use super::data::TodoTreeData;
 
 impl TodoTreeData {
     /// Get formatted timestamp cell for a node. col: 0=created, 1=started, 2=last-action.
+    #[must_use]
     pub fn timestamp_cell(&self, id: usize, col: usize) -> &str {
         self.timestamps
             .get(id)

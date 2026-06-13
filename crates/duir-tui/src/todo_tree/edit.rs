@@ -1,4 +1,4 @@
-//! Event handling and edit/filter/crypto logic for TodoTreeView.
+//! Event handling and edit/filter/crypto logic for `TodoTreeView`.
 
 use duir_core::crypto;
 use txv_core::prelude::*;
@@ -186,7 +186,7 @@ impl TodoTreeView {
         self.layout_edit_child();
     }
 
-    /// Position InputLine (child 1) at the correct screen location.
+    /// Position `InputLine` (child 1) at the correct screen location.
     fn layout_edit_child(&mut self) {
         if self.group.child_count() <= 1 {
             return;

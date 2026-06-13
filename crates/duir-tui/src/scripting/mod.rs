@@ -5,6 +5,7 @@ mod bridge_note;
 mod bridge_system;
 mod bridge_tree;
 mod hooks;
+pub mod palette_config;
 
 pub use hooks::{HookEvent, HookRegistry};
 
@@ -50,7 +51,14 @@ pub struct ScriptEngine {
     pub hook_registry: Arc<Mutex<HookRegistry>>,
 }
 
+impl Default for ScriptEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScriptEngine {
+    #[must_use]
     pub fn new() -> Self {
         let commands: Arc<Mutex<Vec<ScriptCommand>>> = Arc::new(Mutex::new(Vec::new()));
         let hook_registry = Arc::new(Mutex::new(HookRegistry::new()));
@@ -70,6 +78,9 @@ impl ScriptEngine {
     }
 
     /// Evaluate a Tcl script.
+    ///
+    /// # Errors
+    /// Returns error message if script evaluation fails.
     pub fn eval(&mut self, script: &str) -> Result<String, String> {
         self.interp
             .eval(script)
@@ -77,13 +88,37 @@ impl ScriptEngine {
             .map_err(|e| e.message)
     }
 
-    /// Load and eval init.tcl if it exists.
+    /// Get a Tcl variable value.
+    #[must_use]
+    pub fn get_var(&self, name: &str) -> Option<String> {
+        self.interp.get_var(name).map(|v| v.as_str().into_owned())
+    }
+
+    /// Load config: XDG (~/.config/duir/init.tcl) then project (.duir/init.tcl).
     pub fn load_init(&mut self, root_dir: &Path) {
-        let init_path = root_dir.join(".duir").join("init.tcl");
-        if let Ok(content) = fs::read_to_string(&init_path)
+        // XDG global config
+        let xdg = std::env::var("XDG_CONFIG_HOME")
+            .map_or_else(
+                |_| {
+                    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                    std::path::PathBuf::from(home).join(".config")
+                },
+                std::path::PathBuf::from,
+            )
+            .join("duir")
+            .join("init.tcl");
+        if xdg.exists()
+            && let Err(e) = self.eval(&fs::read_to_string(&xdg).unwrap_or_default())
+        {
+            log::warn!("~/.config/duir/init.tcl: {e}");
+        }
+
+        // Project-local config
+        let local = root_dir.join(".duir").join("init.tcl");
+        if let Ok(content) = fs::read_to_string(&local)
             && let Err(e) = self.eval(&content)
         {
-            log::warn!("init.tcl error: {e}");
+            log::warn!(".duir/init.tcl: {e}");
         }
     }
 
@@ -102,6 +137,7 @@ impl ScriptEngine {
     }
 
     /// Drain queued commands.
+    #[must_use]
     pub fn drain_commands(&self) -> Vec<ScriptCommand> {
         self.commands
             .lock()

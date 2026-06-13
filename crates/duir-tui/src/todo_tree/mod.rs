@@ -5,7 +5,6 @@ use std::path::Path;
 use txv_core::clipboard_ring::{ClipboardHandle, new_clipboard};
 use txv_core::prelude::*;
 use txv_widgets::TreeTableView;
-use txv_widgets::input_line::InputLine;
 
 mod badges;
 pub mod data;
@@ -18,18 +17,15 @@ mod source;
 mod timestamps;
 
 use data::TodoTreeData;
-use handle::HandleAction;
-
-use crate::handler::CM_NOTE_LOAD;
 
 /// Pending crypto operation.
-pub(crate) struct CryptoPending {
+pub struct CryptoPending {
     pub path: model::TreePath,
     pub mode: handle::CryptoMode,
     pub passphrase: String,
 }
 
-/// The duir todo tree view — Group with TreeTableView as child 0.
+/// The duir todo tree view — Group with `TreeTableView` as child 0.
 pub struct TodoTreeView {
     group: GroupState,
     child_sink: EventSink,
@@ -42,6 +38,7 @@ pub struct TodoTreeView {
 }
 
 impl TodoTreeView {
+    #[must_use]
     pub fn new(root: &Path) -> Self {
         let file_path = root.join(".duir").join("todo.todo.json");
         let data = TodoTreeData::new(&file_path);
@@ -59,28 +56,31 @@ impl TodoTreeView {
         }
     }
 
-    /// Typed access to TreeTableView (always child 0).
+    /// Typed access to `TreeTableView` (always child 0).
+    #[allow(clippy::panic)]
     pub(crate) fn inner(&self) -> &TreeTableView<TodoTreeData> {
         self.group
             .child(0)
             .and_then(|c| c.as_any())
             .and_then(|a| a.downcast_ref())
-            .expect("child 0 is TreeTableView")
+            .unwrap_or_else(|| panic!("child 0 must be TreeTableView"))
     }
 
-    /// Typed mutable access to TreeTableView (always child 0).
+    /// Typed mutable access to `TreeTableView` (always child 0).
+    #[allow(clippy::panic)]
     pub(crate) fn inner_mut(&mut self) -> &mut TreeTableView<TodoTreeData> {
         self.group
             .child_mut(0)
             .and_then(|c| c.as_any_mut())
             .and_then(|a| a.downcast_mut())
-            .expect("child 0 is TreeTableView")
+            .unwrap_or_else(|| panic!("child 0 must be TreeTableView"))
     }
 
     pub fn data_mut(&mut self) -> &mut TodoTreeData {
         self.inner_mut().data_mut()
     }
 
+    #[must_use]
     pub fn cursor(&self) -> usize {
         self.inner().cursor()
     }
@@ -89,6 +89,7 @@ impl TodoTreeView {
         self.inner_mut().set_cursor(pos);
     }
 
+    #[must_use]
     pub fn show_timestamps(&self) -> bool {
         self.inner().data().show_timestamps
     }
@@ -99,6 +100,7 @@ impl TodoTreeView {
         }
     }
 
+    #[must_use]
     pub const fn show_connectors(&self) -> bool {
         self.connectors_visible
     }

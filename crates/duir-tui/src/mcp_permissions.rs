@@ -42,6 +42,7 @@ impl Default for Permissions {
 
 impl Permissions {
     /// Load from `.duir/mcp-permissions.toml`, falling back to defaults.
+    #[must_use]
     pub fn load(root_dir: &Path) -> Self {
         let path = root_dir.join(".duir").join("mcp-permissions.toml");
         fs::read_to_string(&path)
@@ -51,6 +52,7 @@ impl Permissions {
     }
 
     /// Check if a tool is allowed by name and category.
+    #[must_use]
     pub fn is_allowed(&self, tool_name: &str, category: ToolCategory) -> bool {
         // Per-tool override takes priority
         if let Some(&allowed) = self.tools.get(tool_name) {
@@ -67,6 +69,7 @@ impl Permissions {
 }
 
 /// Classify a tool name into a permission category.
+#[must_use]
 pub fn categorize_tool(name: &str) -> ToolCategory {
     match name {
         "get_tree" | "get_item" | "get_subtree" | "get_note" | "get_cursor" | "get_timestamps" | "get_badges" => {

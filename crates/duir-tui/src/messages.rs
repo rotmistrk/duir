@@ -9,7 +9,14 @@ pub struct MessagesView {
     lines: Vec<String>,
 }
 
+impl Default for MessagesView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MessagesView {
+    #[must_use]
     pub fn new() -> Self {
         let mut ta = TextArea::new();
         ta.show_line_numbers(false);

@@ -23,6 +23,7 @@ pub struct TodoTreeData {
 }
 
 impl TodoTreeData {
+    #[must_use]
     pub fn new(file_path: &Path) -> Self {
         let file = model::load_todo_file(file_path);
         let mtime = Self::read_mtime(file_path);
@@ -98,15 +99,18 @@ impl TodoTreeData {
         }
     }
 
+    #[must_use]
     pub fn path_at(&self, id: usize) -> Option<&TreePath> {
         self.nodes.get(id).map(|n| &n.path)
     }
 
+    #[must_use]
     pub fn item_at(&self, id: usize) -> Option<&TodoItem> {
         let path = self.path_at(id)?;
         model::get_item(&self.file, path)
     }
 
+    #[must_use]
     pub fn row_for_path(&self, path: &TreePath) -> Option<usize> {
         self.visible
             .iter()

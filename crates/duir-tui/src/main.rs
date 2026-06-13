@@ -57,9 +57,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut desktop = build_workspace(&root_dir, clipboard.clone());
     restore_session(&mut desktop, &saved);
 
-    // Scripting: load init.tcl, fire startup hooks
+    // Scripting: load init.tcl, apply palette, fire startup hooks
     let mut script_engine = scripting::ScriptEngine::new();
     script_engine.load_init(&root_dir);
+    scripting::palette_config::apply_palette_from_config(&script_engine);
     script_engine.fire_hooks(&scripting::HookEvent::Startup, "");
     drop(script_engine);
 
@@ -121,16 +122,15 @@ fn save_note_on_exit(program: &mut Program) {
         });
 
     // Apply to tree
-    if let Some((path, content)) = note_data {
-        if let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
-            && let Some(view) = panel.active_view_mut()
-            && let Some(tree) = view.as_any_mut().and_then(|a| a.downcast_mut::<TodoTreeView>())
-        {
-            if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, &path) {
-                item.note = content;
-            }
-            tree.data_mut().save();
+    if let Some((path, content)) = note_data
+        && let Some(panel) = ws.panel_mut(slots::SlotId::Left as usize)
+        && let Some(view) = panel.active_view_mut()
+        && let Some(tree) = view.as_any_mut().and_then(|a| a.downcast_mut::<TodoTreeView>())
+    {
+        if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, &path) {
+            item.note = content;
         }
+        tree.data_mut().save();
     }
 }
 fn save_session_on_exit(program: &mut Program, root_dir: &std::path::Path) {

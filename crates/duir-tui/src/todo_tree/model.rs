@@ -8,6 +8,7 @@ use duir_core::stats::update_completion;
 pub use duir_core::tree_ops;
 pub use duir_core::tree_ops::TreePath;
 
+#[must_use]
 pub fn get_item<'a>(file: &'a TodoFile, path: &TreePath) -> Option<&'a TodoItem> {
     tree_ops::get_item(file, path)
 }
@@ -55,6 +56,7 @@ pub fn sort_children(file: &mut TodoFile, path: &TreePath) -> bool {
 }
 
 /// Load a `TodoFile` from path, creating empty if absent.
+#[must_use]
 pub fn load_todo_file(path: &Path) -> TodoFile {
     match fs::read_to_string(path) {
         Ok(content) if !content.trim().is_empty() => {
@@ -65,6 +67,7 @@ pub fn load_todo_file(path: &Path) -> TodoFile {
 }
 
 /// Save a `TodoFile` to path.
+#[must_use]
 pub fn save_todo_file(path: &Path, file: &TodoFile) -> bool {
     let Ok(content) = serde_json::to_string_pretty(file) else {
         return false;

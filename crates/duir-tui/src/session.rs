@@ -23,6 +23,7 @@ pub struct SessionState {
 const SESSION_FILE: &str = ".duir/session.json";
 
 /// Load session state from disk.
+#[must_use]
 pub fn load_session(root_dir: &Path) -> SessionState {
     let path = root_dir.join(SESSION_FILE);
     fs::read_to_string(&path)

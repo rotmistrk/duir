@@ -6,6 +6,7 @@ use txv_core::prelude::*;
 use txv_widgets::PtyTerminal;
 
 /// Create a shell terminal view, returning a fallback on failure.
+#[must_use]
 pub fn new_shell_terminal() -> Box<dyn View> {
     match PtyTerminal::spawn_shell(80, 24) {
         Ok(term) => Box::new(term),
@@ -18,6 +19,7 @@ pub fn new_shell_terminal() -> Box<dyn View> {
 
 /// Spawn a kiro session. Command is configurable via Tcl; defaults shown.
 /// `kiro_cmd` is the full command string (e.g. "kiro-cli chat --restore").
+#[must_use]
 pub fn new_kiro_terminal(kiro_cmd: &str, cwd: &Path) -> Box<dyn View> {
     match PtyTerminal::spawn_command("sh", &["-c", kiro_cmd], cwd, 80, 24) {
         Ok(term) => Box::new(term),

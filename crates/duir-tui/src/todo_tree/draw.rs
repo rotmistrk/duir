@@ -1,5 +1,5 @@
-//! Draw logic for TodoTreeView — only draws own pixels (filter row).
-//! TreeTableView (child 0) and InputLine (child 1) are rendered by the group pipeline.
+//! Draw logic for `TodoTreeView` — only draws own pixels (filter row).
+//! `TreeTableView` (child 0) and `InputLine` (child 1) are rendered by the group pipeline.
 
 use txv_core::prelude::*;
 use txv_widgets::tree_view::TreeData;

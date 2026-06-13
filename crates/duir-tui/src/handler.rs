@@ -73,7 +73,7 @@ fn execute_command(ctx: &mut CommandContext) {
             ws.insert_tab(SlotId::Right as usize, "Shell:0", term);
             ws.focus_panel(SlotId::Right as usize);
         }
-        _ => log::info!("unknown command: {:?} (raw: {:?})", cmd_name, cmd),
+        _ => log::info!("unknown command: {cmd_name:?} (raw: {cmd:?})"),
     }
 }
 
@@ -108,14 +108,14 @@ fn save_current_note(ws: &mut TiledWorkspace) {
         .and_then(|nv| Some((nv.path()?.clone(), nv.content())));
 
     // Write to tree
-    if let Some((path, content)) = note_data {
-        if let Some(tree) = get_tree_mut(ws) {
-            if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, &path) {
-                item.note = content;
-            }
-            tree.data_mut().save();
-            tree.data_mut().rebuild_flat();
+    if let Some((path, content)) = note_data
+        && let Some(tree) = get_tree_mut(ws)
+    {
+        if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, &path) {
+            item.note = content;
         }
+        tree.data_mut().save();
+        tree.data_mut().rebuild_flat();
     }
 }
 

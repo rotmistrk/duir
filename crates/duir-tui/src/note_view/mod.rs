@@ -11,7 +11,14 @@ pub struct NoteView {
     path: Option<TreePath>,
 }
 
+impl Default for NoteView {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NoteView {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             inner: EditorView::new(),
@@ -28,7 +35,7 @@ impl NoteView {
         self.inner.content()
     }
 
-    pub fn path(&self) -> Option<&TreePath> {
+    pub const fn path(&self) -> Option<&TreePath> {
         self.path.as_ref()
     }
 

@@ -18,6 +18,7 @@ pub enum HookEvent {
 }
 
 impl HookEvent {
+    #[must_use]
     pub fn parse_name(s: &str) -> Option<Self> {
         match s {
             "focus" => Some(Self::Focus),
@@ -30,6 +31,7 @@ impl HookEvent {
         }
     }
 
+    #[must_use]
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Focus => "focus",
@@ -56,6 +58,7 @@ pub struct HookRegistry {
 }
 
 impl HookRegistry {
+    #[must_use]
     pub const fn new() -> Self {
         Self { hooks: Vec::new() }
     }
@@ -68,6 +71,7 @@ impl HookRegistry {
         });
     }
 
+    #[must_use]
     pub fn fire(&self, event: &HookEvent, context: &str) -> Vec<String> {
         self.hooks
             .iter()

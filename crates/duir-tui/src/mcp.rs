@@ -19,6 +19,7 @@ use crate::todo_tree::model;
 
 /// Start the MCP listener on `.duir/mcp.sock`.
 /// Returns the socket path (for cleanup on exit).
+#[must_use]
 pub fn start_mcp(root_dir: &Path) -> Option<PathBuf> {
     let duir_dir = root_dir.join(".duir");
     let sock_path = duir_dir.join("mcp.sock");
