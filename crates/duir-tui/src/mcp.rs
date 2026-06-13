@@ -62,8 +62,10 @@ fn accept_loop(listener: UnixListener, file: Arc<Mutex<TodoFile>>, save_path: Pa
     thread::spawn(move || {
         for mutation in rx {
             apply_mutation(&file_for_apply, &mutation);
-            if let Ok(f) = file_for_apply.lock() {
-                model::save_todo_file(&save_path, &f);
+            if let Ok(f) = file_for_apply.lock()
+                && !model::save_todo_file(&save_path, &f)
+            {
+                log::error!("MCP: failed to save after mutation");
             }
         }
     });

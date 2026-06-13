@@ -22,7 +22,7 @@ impl TodoTreeData {
                 |item| {
                     [
                         item.created_at.map_or_else(|| "     ".to_owned(), format_ts),
-                        String::from("     "), // started_at not yet tracked
+                        item.started_at.map_or_else(|| "     ".to_owned(), format_ts),
                         item.updated_at.map_or_else(|| "     ".to_owned(), format_ts),
                     ]
                 },

@@ -14,12 +14,14 @@ pub const CM_APP_QUIT: CommandId = CM_QUIT;
 pub const CM_SHOW_HELP: CommandId = CM_APP_BASE;
 pub const CM_EXECUTE_COMMAND: CommandId = CM_APP_BASE + 1;
 pub const CM_NOTE_LOAD: CommandId = CM_APP_BASE + 10;
+pub const CM_NOTE_SAVE: CommandId = CM_APP_BASE + 11;
 
 pub fn handle_command(ctx: &mut CommandContext) {
     match ctx.command() {
         CM_SHOW_HELP => show_help(ctx.desktop_mut()),
         CM_EXECUTE_COMMAND => execute_command(ctx),
         CM_NOTE_LOAD => handle_note_load(ctx),
+        CM_NOTE_SAVE => handle_note_save(ctx),
         _ => {}
     }
 }
@@ -97,6 +99,14 @@ fn handle_note_load(ctx: &mut CommandContext) {
     {
         note.load(path.clone(), content);
     }
+}
+
+fn handle_note_save(ctx: &mut CommandContext) {
+    let (_, _, _, desktop) = ctx.split();
+    let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
+        return;
+    };
+    save_current_note(ws);
 }
 
 fn save_current_note(ws: &mut TiledWorkspace) {

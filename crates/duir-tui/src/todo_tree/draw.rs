@@ -22,10 +22,6 @@ impl TodoTreeView {
             return;
         }
 
-        // Propagate focus to inner tree
-        let focused = self.group.is_focused();
-        self.inner_mut().state_mut().set_focused(focused);
-
         // Draw filter row if active
         let has_filter = self.filter_active || !self.inner().data().filter_text.is_empty();
         if has_filter {

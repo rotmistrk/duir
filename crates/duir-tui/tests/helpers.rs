@@ -1,4 +1,5 @@
 //! Test harness for duir-tui integration/scenario tests.
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 use std::path::Path;
 
@@ -9,6 +10,11 @@ use txv_core::program::Program;
 use txv_core::run::MockBackend;
 
 /// Create a temp project dir with .duir/todo.todo.json.
+///
+/// # Panics
+///
+/// Panics if temp dir creation or file writes fail.
+#[must_use]
 pub fn temp_project(items_json: &str) -> TempDir {
     let dir = TempDir::new().expect("tmp dir");
     let duir_dir = dir.path().join(".duir");
@@ -18,7 +24,8 @@ pub fn temp_project(items_json: &str) -> TempDir {
 }
 
 /// Default todo file with a few items.
-pub fn default_todo() -> &'static str {
+#[must_use]
+pub const fn default_todo() -> &'static str {
     r#"{"version":"2.0","title":"Test","items":[
         {"id":"a","title":"First item","completed":"Open","note":"hello"},
         {"id":"b","title":"Second item","completed":"Open","items":[
@@ -34,10 +41,12 @@ pub struct TestHarness {
 }
 
 impl TestHarness {
+    #[must_use]
     pub fn new(root_dir: &Path) -> Self {
         Self::with_size(root_dir, 120, 30)
     }
 
+    #[must_use]
     pub fn with_size(root_dir: &Path, width: u16, height: u16) -> Self {
         use duir_tui::build_desktop::build_workspace;
         use duir_tui::status::build_status_bar;
@@ -68,10 +77,12 @@ impl TestHarness {
         );
     }
 
+    #[must_use]
     pub fn screen_text(&self) -> String {
         self.backend.screen_text()
     }
 
+    #[must_use]
     pub fn contains(&self, text: &str) -> bool {
         self.screen_text().contains(text)
     }

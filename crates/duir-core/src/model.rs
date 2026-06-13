@@ -109,6 +109,9 @@ pub struct TodoItem {
     /// When the item was created (UTC epoch seconds).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created_at: Option<u64>,
+    /// When in-progress was first activated (UTC epoch seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started_at: Option<u64>,
     /// When the item was last modified (UTC epoch seconds).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<u64>,
@@ -162,6 +165,7 @@ impl TodoItem {
             cipher: None,
             unlocked: false,
             created_at: Some(now_epoch()),
+            started_at: None,
             updated_at: None,
             time_spent_secs: 0,
             progress_started_at: None,

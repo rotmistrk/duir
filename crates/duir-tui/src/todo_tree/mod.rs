@@ -136,11 +136,13 @@ impl View for TodoTreeView {
 
     fn select(&mut self) {
         self.group.set_focused(true);
+        self.inner_mut().state_mut().set_focused(true);
         self.group.mark_dirty();
     }
 
     fn unselect(&mut self) {
         self.group.set_focused(false);
+        self.inner_mut().state_mut().set_focused(false);
         self.group.mark_dirty();
     }
 

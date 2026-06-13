@@ -1,4 +1,5 @@
 //! Scenario tests for duir-tui — verifies user-facing behavior.
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 
 mod helpers;
 use helpers::{TestHarness, default_todo, temp_project};

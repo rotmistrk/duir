@@ -25,7 +25,7 @@ pub fn register(interp: &mut Interpreter, commands: Arc<Mutex<Vec<ScriptCommand>
     // Builds a command string that gets spawned as a PTY in the right panel.
     let cmds2 = commands;
     interp.register_fn("kiro", move |_interp, args| {
-        let mut parts = vec!["kiro-cli".to_owned(), "chat".to_owned(), "--restore".to_owned()];
+        let mut parts = vec!["kiro-cli".to_owned(), "chat".to_owned(), "--resume".to_owned()];
         for arg in args.iter().skip(1) {
             parts.push(arg.as_str().into_owned());
         }

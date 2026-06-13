@@ -8,6 +8,7 @@ pub(super) struct FlatNode {
     pub(super) path: TreePath,
     pub(super) expandable: bool,
     pub(super) expanded: bool,
-    /// Whether this node is the last child of its parent.
+    /// Whether this node is the last child of its parent (used by connector drawing).
+    #[allow(dead_code)]
     pub(super) is_last_child: bool,
 }

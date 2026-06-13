@@ -43,7 +43,9 @@ impl TodoTreeData {
     }
 
     pub fn save(&mut self) {
-        model::save_todo_file(&self.file_path, &self.file);
+        if !model::save_todo_file(&self.file_path, &self.file) {
+            log::error!("Failed to save todo file: {}", self.file_path.display());
+        }
         self.last_mtime = Self::read_mtime(&self.file_path);
     }
 

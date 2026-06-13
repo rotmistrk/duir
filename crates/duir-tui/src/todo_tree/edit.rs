@@ -18,6 +18,9 @@ impl TodoTreeView {
                 self.prev_cursor = self.inner().cursor();
                 self.emit_note_now();
             }
+            if self.inner_mut().data_mut().reload_if_changed() {
+                self.emit_note_now();
+            }
             return HandleResult::Ignored;
         }
 
@@ -204,10 +207,10 @@ impl TodoTreeView {
             if row < scroll_offset || (row - scroll_offset) >= draw_h {
                 return;
             }
-            let screen_y = (row - scroll_offset) as u16;
+            let screen_y = u16::try_from(row - scroll_offset).unwrap_or(u16::MAX);
             let id = self.inner().data().visible_id(row);
             let depth = self.inner().data().depth(id);
-            let indent = (depth * 2 + 2) as u16;
+            let indent = u16::try_from(depth * 2 + 2).unwrap_or(0);
             self.group
                 .set_child_bounds(1, Rect::new(indent, screen_y, w.saturating_sub(indent), 1));
         }
@@ -291,6 +294,7 @@ impl TodoTreeView {
         self.emit_note_now();
     }
 
+    #[allow(clippy::needless_pass_by_ref_mut)] // put_command needs &mut group
     fn emit_note_now(&mut self) {
         let cursor = self.inner().cursor();
         if cursor >= self.inner().data().visible_count() {

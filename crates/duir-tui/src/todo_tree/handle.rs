@@ -205,6 +205,9 @@ fn toggle_progress(data: &mut TodoTreeData, id: usize) -> Option<HandleAction> {
         }
         item.work_status = WorkStatus::Idle;
     } else {
+        if item.started_at.is_none() {
+            item.started_at = Some(now);
+        }
         item.progress_started_at = Some(now);
         item.work_status = WorkStatus::InProgress;
     }

@@ -145,7 +145,7 @@ fn save_session_on_exit(program: &mut Program, root_dir: &std::path::Path) {
     };
     let mut state = session::SessionState {
         zoomed_panel: ws.zoomed_panel(),
-        focused_panel: 0,
+        focused_panel: ws.focused_panel(),
         tree_cursor: 0,
         show_timestamps: false,
         show_connectors: true,

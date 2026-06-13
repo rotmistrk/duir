@@ -36,7 +36,7 @@ mod inner {
 
     fn status_char(item: &TodoItem) -> char {
         if item.is_locked() {
-            return '🔒';
+            return 'L';
         }
         match (&item.completed, &item.work_status) {
             (Completion::Done, _) => '✓',
@@ -73,9 +73,9 @@ mod inner {
 
     fn type_char(item: &TodoItem) -> char {
         match item.node_type.as_ref() {
-            Some(duir_core::model::NodeType::Kiron) => '🤖',
-            Some(duir_core::model::NodeType::Prompt) => '💬',
-            Some(duir_core::model::NodeType::Response) => '📋',
+            Some(duir_core::model::NodeType::Kiron) => 'K',
+            Some(duir_core::model::NodeType::Prompt) => 'Q',
+            Some(duir_core::model::NodeType::Response) => 'R',
             None => ' ',
         }
     }

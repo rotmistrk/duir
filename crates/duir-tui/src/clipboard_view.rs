@@ -45,11 +45,7 @@ impl View for ClipboardView {
         }
     }
 
-    fn handle(&mut self, event: &Event) -> HandleResult {
-        // Read-only view, just mark dirty on tick to refresh
-        if matches!(event, Event::Tick) {
-            self.state.mark_dirty();
-        }
+    fn handle(&mut self, _event: &Event) -> HandleResult {
         HandleResult::Ignored
     }
 }
