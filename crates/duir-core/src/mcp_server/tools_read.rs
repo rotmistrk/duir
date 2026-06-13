@@ -169,7 +169,6 @@ impl McpServer {
 }
 
 impl McpServer {
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_get_note(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         let file = self.snapshot.lock().map_err(|e| e.to_string())?;

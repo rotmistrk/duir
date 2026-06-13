@@ -110,7 +110,6 @@ impl McpServer {
 }
 
 impl McpServer {
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_set_priority(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         let value = u8::try_from(args.get("value").and_then(Value::as_u64).ok_or("Missing value")?)
@@ -126,7 +125,6 @@ impl McpServer {
         Ok(json!({"success": true}))
     }
 
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_set_effort(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         let value = u8::try_from(args.get("value").and_then(Value::as_u64).ok_or("Missing value")?)
@@ -142,7 +140,6 @@ impl McpServer {
         Ok(json!({"success": true}))
     }
 
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_set_status(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         let status = args
@@ -167,7 +164,6 @@ impl McpServer {
         Ok(json!({"success": true}))
     }
 
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_set_note(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         let content = args
@@ -210,7 +206,6 @@ impl McpServer {
         Ok(json!({"success": true}))
     }
 
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_fold(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         {
@@ -224,7 +219,6 @@ impl McpServer {
         Ok(json!({"success": true}))
     }
 
-    #[allow(clippy::significant_drop_tightening)]
     pub(super) fn tool_unfold(&self, args: &Map<String, Value>) -> Result<Value, String> {
         let path = Self::require_path(args, "path")?;
         {

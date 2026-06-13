@@ -17,7 +17,6 @@ pub enum ToolCategory {
 /// Permission configuration.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct Permissions {
     pub read: bool,
     pub write: bool,

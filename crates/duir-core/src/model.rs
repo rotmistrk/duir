@@ -60,7 +60,6 @@ fn is_idle(v: &WorkStatus) -> bool {
     *v == WorkStatus::Idle
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
 const fn is_zero_u64(v: &u64) -> bool {
     *v == 0
 }

@@ -53,7 +53,6 @@ pub fn start_mcp(root_dir: &Path) -> Option<PathBuf> {
     Some(sock_path)
 }
 
-#[allow(clippy::needless_pass_by_value)]
 fn accept_loop(listener: UnixListener, file: Arc<Mutex<TodoFile>>, save_path: PathBuf, permissions: Arc<Permissions>) {
     let (tx, rx) = mpsc::channel();
 
@@ -83,7 +82,6 @@ fn accept_loop(listener: UnixListener, file: Arc<Mutex<TodoFile>>, save_path: Pa
     }
 }
 
-#[allow(clippy::needless_pass_by_value)]
 fn handle_connection(
     stream: UnixStream,
     file: Arc<Mutex<TodoFile>>,

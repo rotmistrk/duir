@@ -203,3 +203,31 @@ fn note_shows_when_item_selected_and_unzoomed() {
         h.screen_text()
     );
 }
+
+#[test]
+fn note_autoindent_on_enter() {
+    let dir = temp_project(default_todo());
+    let mut h = TestHarness::new(dir.path());
+    h.run_cycles(1);
+    // Unzoom to reveal Notes panel
+    h.inject_key(KeyCode::F(5), KeyMod::NONE);
+    h.run_cycles(1);
+    // Focus notes panel (first item has note "hello")
+    h.inject_key(KeyCode::F(3), KeyMod::NONE);
+    h.run_cycles(1);
+    // Enter insert mode, go to end of line, add indented content
+    h.inject_str("o    indented");
+    h.inject_key(KeyCode::Enter, KeyMod::NONE);
+    // After Enter, the new line should inherit "    " indent
+    h.inject_str("next line");
+    h.inject_key(KeyCode::Esc, KeyMod::NONE);
+    h.run_cycles(1);
+    // Switch back to tree to trigger note save
+    h.inject_key(KeyCode::F(2), KeyMod::NONE);
+    h.run_cycles(2);
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    assert!(
+        content.contains("    next line"),
+        "autoindent should preserve leading spaces on Enter: {content}"
+    );
+}

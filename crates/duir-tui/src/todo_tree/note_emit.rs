@@ -41,8 +41,7 @@ impl TodoTreeView {
         self.emit_note_now();
     }
 
-    #[allow(clippy::needless_pass_by_ref_mut)] // put_command needs &mut group
-    pub(super) fn emit_note_now(&mut self) {
+    pub(super) fn emit_note_now(&self) {
         let cursor = self.inner().cursor();
         if cursor >= self.inner().data().visible_count() {
             return;

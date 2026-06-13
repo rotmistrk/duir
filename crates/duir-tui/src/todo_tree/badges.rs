@@ -2,7 +2,6 @@
 //!
 //! Layout: `[status][priority][effort][notes][type]`
 
-#[allow(clippy::missing_const_for_fn)]
 mod inner {
     use super::super::data::TodoTreeData;
     use super::super::model::{Completion, TodoItem};
@@ -34,7 +33,7 @@ mod inner {
         buf
     }
 
-    fn status_char(item: &TodoItem) -> char {
+    const fn status_char(item: &TodoItem) -> char {
         if item.is_locked() {
             return 'L';
         }
@@ -53,7 +52,7 @@ mod inner {
         BRAILLE.get(p).copied().unwrap_or(' ')
     }
 
-    fn effort_char(item: &TodoItem) -> char {
+    const fn effort_char(item: &TodoItem) -> char {
         match item.effort {
             None | Some(0) => ' ',
             Some(1) => '1',
@@ -67,11 +66,11 @@ mod inner {
         }
     }
 
-    fn notes_char(item: &TodoItem) -> char {
+    const fn notes_char(item: &TodoItem) -> char {
         if item.note.is_empty() { ' ' } else { '♪' }
     }
 
-    fn type_char(item: &TodoItem) -> char {
+    const fn type_char(item: &TodoItem) -> char {
         match item.node_type.as_ref() {
             Some(duir_core::model::NodeType::Kiron) => 'K',
             Some(duir_core::model::NodeType::Prompt) => 'Q',
