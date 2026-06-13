@@ -31,7 +31,9 @@
           "folded": false,
           "note": "",
           "items": [],
-          "created_at": 1780876000
+          "created_at": 1780876000,
+          "updated_at": 1781329571,
+          "time_spent_secs": 2
         },
         {
           "id": "6d983601-098d-4f45-a5b0-ebceb43fc480",
@@ -40,7 +42,18 @@
           "important": false,
           "folded": false,
           "note": "",
-          "items": [],
+          "items": [
+            {
+              "id": "07bb053d-e1c6-4a2e-9c56-90086ea91c82",
+              "title": "more tests",
+              "completed": "Open",
+              "important": false,
+              "folded": false,
+              "note": "",
+              "items": [],
+              "created_at": 1781329583
+            }
+          ],
           "created_at": 1780876010,
           "updated_at": 1780878016,
           "time_spent_secs": 163

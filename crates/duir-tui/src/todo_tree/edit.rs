@@ -167,6 +167,7 @@ impl TodoTreeView {
             child.select();
         }
         self.editing_row = Some(row);
+        self.layout_edit_child();
     }
 
     fn start_filter(&mut self) {
@@ -182,6 +183,34 @@ impl TodoTreeView {
             child.select();
         }
         self.filter_active = true;
+        self.layout_edit_child();
+    }
+
+    /// Position InputLine (child 1) at the correct screen location.
+    fn layout_edit_child(&mut self) {
+        if self.group.child_count() <= 1 {
+            return;
+        }
+        let b = self.group.bounds();
+        let w = b.w();
+        let h = b.h();
+        if self.filter_active {
+            let filter_row = h.saturating_sub(1);
+            self.group
+                .set_child_bounds(1, Rect::new(1, filter_row, w.saturating_sub(1), 1));
+        } else if let Some(row) = self.editing_row {
+            let scroll_offset = self.inner().scroll_offset();
+            let draw_h = h as usize;
+            if row < scroll_offset || (row - scroll_offset) >= draw_h {
+                return;
+            }
+            let screen_y = (row - scroll_offset) as u16;
+            let id = self.inner().data().visible_id(row);
+            let depth = self.inner().data().depth(id);
+            let indent = (depth * 2 + 2) as u16;
+            self.group
+                .set_child_bounds(1, Rect::new(indent, screen_y, w.saturating_sub(indent), 1));
+        }
     }
 
     fn commit_filter(&mut self) {
