@@ -4,7 +4,7 @@ use txv_core::prelude::*;
 use txv_core::program::CommandContext;
 use txv_widgets::tiled_workspace::TiledWorkspace;
 
-use crate::note_view::{CM_NOTE_SAVE, NoteView};
+use crate::note_view::NoteView;
 use crate::slots::SlotId;
 use crate::todo_tree::TodoTreeView;
 use crate::todo_tree::model::{self, TreePath};
@@ -20,7 +20,6 @@ pub fn handle_command(ctx: &mut CommandContext) {
         CM_SHOW_HELP => show_help(ctx.desktop_mut()),
         CM_EXECUTE_COMMAND => execute_command(ctx),
         CM_NOTE_LOAD => handle_note_load(ctx),
-        CM_NOTE_SAVE => handle_note_save(ctx),
         _ => {}
     }
 }
@@ -87,6 +86,11 @@ fn handle_note_load(ctx: &mut CommandContext) {
     let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
         return;
     };
+
+    // Save previous note to tree before loading new
+    save_current_note(ws);
+
+    // Load new note
     if let Some(panel) = ws.panel_mut(SlotId::Center as usize)
         && let Some(view) = panel.active_view_mut()
         && let Some(note) = view.as_any_mut().and_then(|a| a.downcast_mut::<NoteView>())
@@ -95,21 +99,23 @@ fn handle_note_load(ctx: &mut CommandContext) {
     }
 }
 
-fn handle_note_save(ctx: &mut CommandContext) {
-    let (_, data, _, desktop) = ctx.split();
-    let Some(data) = data else { return };
-    let Some((path, content)) = data.downcast_ref::<(TreePath, String)>() else {
-        return;
-    };
-    let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
-        return;
-    };
-    if let Some(tree) = get_tree_mut(ws) {
-        if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, path) {
-            item.note.clone_from(content);
+fn save_current_note(ws: &mut TiledWorkspace) {
+    // Get note content + path
+    let note_data: Option<(TreePath, String)> = ws
+        .panel_mut(SlotId::Center as usize)
+        .and_then(|p| p.active_view_mut())
+        .and_then(|v| v.as_any_mut()?.downcast_mut::<NoteView>())
+        .and_then(|nv| Some((nv.path()?.clone(), nv.content())));
+
+    // Write to tree
+    if let Some((path, content)) = note_data {
+        if let Some(tree) = get_tree_mut(ws) {
+            if let Some(item) = model::get_item_mut(&mut tree.data_mut().file, &path) {
+                item.note = content;
+            }
+            tree.data_mut().save();
+            tree.data_mut().rebuild_flat();
         }
-        tree.data_mut().save();
-        tree.data_mut().rebuild_flat();
     }
 }
 
