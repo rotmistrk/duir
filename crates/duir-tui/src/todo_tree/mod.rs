@@ -13,6 +13,7 @@ mod edit;
 mod flat_node;
 pub mod handle;
 pub mod model;
+mod note_emit;
 mod source;
 mod timestamps;
 
@@ -57,23 +58,21 @@ impl TodoTreeView {
     }
 
     /// Typed access to `TreeTableView` (always child 0).
-    #[allow(clippy::panic)]
     pub(crate) fn inner(&self) -> &TreeTableView<TodoTreeData> {
         self.group
             .child(0)
             .and_then(|c| c.as_any())
             .and_then(|a| a.downcast_ref())
-            .unwrap_or_else(|| panic!("child 0 must be TreeTableView"))
+            .unwrap_or_else(|| std::process::abort())
     }
 
     /// Typed mutable access to `TreeTableView` (always child 0).
-    #[allow(clippy::panic)]
     pub(crate) fn inner_mut(&mut self) -> &mut TreeTableView<TodoTreeData> {
         self.group
             .child_mut(0)
             .and_then(|c| c.as_any_mut())
             .and_then(|a| a.downcast_mut())
-            .unwrap_or_else(|| panic!("child 0 must be TreeTableView"))
+            .unwrap_or_else(|| std::process::abort())
     }
 
     pub fn data_mut(&mut self) -> &mut TodoTreeData {

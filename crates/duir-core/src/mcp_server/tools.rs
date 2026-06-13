@@ -5,7 +5,7 @@ use super::McpServer;
 pub(super) fn tool_definitions() -> Value {
     let mut tools = super::tools_read::definitions();
     if let Value::Array(ref mut arr) = tools
-        && let Value::Array(write) = super::tools_write::definitions()
+        && let Value::Array(write) = super::tools_write_defs::definitions()
     {
         arr.extend(write);
     }
