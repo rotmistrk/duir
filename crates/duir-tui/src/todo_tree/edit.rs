@@ -26,6 +26,10 @@ impl TodoTreeView {
             return HandleResult::Ignored;
         };
 
+        if self.confirm_delete {
+            return self.handle_confirm_delete(key);
+        }
+
         if self.crypto_pending.is_some() {
             return self.handle_crypto_key(key);
         }
@@ -83,8 +87,16 @@ impl TodoTreeView {
             self.emit_note_if_cursor_changed();
             return HandleResult::Consumed;
         }
-
-        // Forward to TreeTableView for j/k/arrows/expand/collapse
+        // 'd' on items with children requires confirmation
+        if key.code() == KeyCode::Char('d') {
+            let id = self.inner().data().visible_id(self.inner().cursor());
+            if self.inner().data().child_count(id) > 0 {
+                self.confirm_delete = true;
+                self.group.mark_dirty();
+                return HandleResult::Consumed;
+            }
+        }
+        // Forward to TreeTableView for j/k/arrows/expand/collapse/d/J/K/H/L
         let result = self.group.dispatch(event);
         self.emit_note_if_cursor_changed();
         result
@@ -187,33 +199,6 @@ impl TodoTreeView {
         }
         self.filter_active = true;
         self.layout_edit_child();
-    }
-
-    /// Position `InputLine` (child 1) at the correct screen location.
-    fn layout_edit_child(&mut self) {
-        if self.group.child_count() <= 1 {
-            return;
-        }
-        let b = self.group.bounds();
-        let w = b.w();
-        let h = b.h();
-        if self.filter_active {
-            let filter_row = h.saturating_sub(1);
-            self.group
-                .set_child_bounds(1, Rect::new(1, filter_row, w.saturating_sub(1), 1));
-        } else if let Some(row) = self.editing_row {
-            let scroll_offset = self.inner().scroll_offset();
-            let draw_h = h as usize;
-            if row < scroll_offset || (row - scroll_offset) >= draw_h {
-                return;
-            }
-            let screen_y = u16::try_from(row - scroll_offset).unwrap_or(u16::MAX);
-            let id = self.inner().data().visible_id(row);
-            let depth = self.inner().data().depth(id);
-            let indent = u16::try_from(depth * 2 + 2).unwrap_or(0);
-            self.group
-                .set_child_bounds(1, Rect::new(indent, screen_y, w.saturating_sub(indent), 1));
-        }
     }
 
     fn commit_filter(&mut self) {

@@ -33,6 +33,7 @@ pub struct TodoTreeView {
     pub(crate) editing_row: Option<usize>,
     pub(crate) filter_active: bool,
     pub(crate) crypto_pending: Option<CryptoPending>,
+    pub(crate) confirm_delete: bool,
     prev_cursor: usize,
     connectors_visible: bool,
     pub clipboard: ClipboardHandle,
@@ -41,13 +42,7 @@ pub struct TodoTreeView {
 impl TodoTreeView {
     #[must_use]
     pub fn new(root: &Path) -> Self {
-        let duir_dir = root.join(".duir");
-        let file_path = if duir_dir.join("todo.todo.json").exists() {
-            duir_dir.join("todo.todo.json")
-        } else {
-            // Fallback: legacy filename
-            duir_dir.join("todo.json")
-        };
+        let file_path = root.join(".duir").join("todo.json");
         let data = TodoTreeData::new(&file_path);
         let mut group = GroupState::default();
         group.insert(Box::new(TreeTableView::new(data, &[5])));
@@ -57,6 +52,7 @@ impl TodoTreeView {
             editing_row: None,
             filter_active: false,
             crypto_pending: None,
+            confirm_delete: false,
             prev_cursor: usize::MAX,
             connectors_visible: true,
             clipboard: new_clipboard(20),

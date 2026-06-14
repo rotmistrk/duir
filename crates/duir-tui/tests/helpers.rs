@@ -9,7 +9,7 @@ use txv_core::event::{KeyCode, KeyMod};
 use txv_core::program::Program;
 use txv_core::run::MockBackend;
 
-/// Create a temp project dir with .duir/todo.todo.json.
+/// Create a temp project dir with .duir/todo.json.
 ///
 /// # Panics
 ///
@@ -19,7 +19,7 @@ pub fn temp_project(items_json: &str) -> TempDir {
     let dir = TempDir::new().expect("tmp dir");
     let duir_dir = dir.path().join(".duir");
     std::fs::create_dir_all(&duir_dir).expect("create .duir");
-    std::fs::write(duir_dir.join("todo.todo.json"), items_json).expect("write todo");
+    std::fs::write(duir_dir.join("todo.json"), items_json).expect("write todo");
     dir
 }
 

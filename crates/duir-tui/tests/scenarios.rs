@@ -70,7 +70,7 @@ fn space_toggles_completion() {
     h.run_cycles(1);
     // Should now have a ✓ on first item
     // Check file was saved
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(content.contains("Done"), "space should toggle to Done");
 }
 
@@ -85,7 +85,7 @@ fn n_adds_sibling() {
     h.inject_str("New task");
     h.inject_key(KeyCode::Enter, KeyMod::NONE);
     h.run_cycles(1);
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(content.contains("New task"), "n should add sibling with typed title");
 }
 
@@ -97,7 +97,7 @@ fn d_deletes_item() {
     // Move to "Done item" (j j j) and delete it
     h.inject_str("jjjd");
     h.run_cycles(1);
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(!content.contains("Done item"), "d should delete the item");
 }
 
@@ -108,7 +108,7 @@ fn plus_minus_changes_priority() {
     h.run_cycles(1);
     h.inject_str("+++");
     h.run_cycles(1);
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(
         content.contains("\"priority\": 3"),
         "+ three times should set priority 3"
@@ -122,7 +122,7 @@ fn i_toggles_in_progress() {
     h.run_cycles(1);
     h.inject_str("i");
     h.run_cycles(1);
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(content.contains("InProgress"), "i should set work_status to InProgress");
 }
 
@@ -150,7 +150,7 @@ fn note_persists_on_panel_switch() {
     h.inject_key(KeyCode::F(2), KeyMod::NONE);
     h.run_cycles(2);
     // Check file
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(
         content.contains("New note content"),
         "note should be saved on panel switch"
@@ -225,7 +225,7 @@ fn note_autoindent_on_enter() {
     // Switch back to tree to trigger note save
     h.inject_key(KeyCode::F(2), KeyMod::NONE);
     h.run_cycles(2);
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     assert!(
         content.contains("    next line"),
         "autoindent should preserve leading spaces on Enter: {content}"
@@ -249,7 +249,7 @@ fn note_yank_appears_in_clipboard_ring() {
     // Switch back to tree to save
     h.inject_key(KeyCode::F(2), KeyMod::NONE);
     h.run_cycles(2);
-    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.json")).unwrap();
     // "hello" yanked+pasted should produce "hello\nhello"
     assert!(
         content.contains("hello\\nhello"),

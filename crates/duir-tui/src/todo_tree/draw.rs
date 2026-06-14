@@ -44,5 +44,17 @@ impl TodoTreeView {
             let display = format!("Passphrase: {}", "*".repeat(mask_len));
             self.group.buffer_mut().print(0, y, &display, style);
         }
+
+        // Delete confirmation
+        if self.confirm_delete {
+            let y = h.saturating_sub(1);
+            let style = Style::default().with_attrs(Attrs::default().bold());
+            self.group.buffer_mut().hline(0, y, w, ' ', style);
+            let cursor = self.inner().cursor();
+            let id = self.inner().data().visible_id(cursor);
+            let count = self.inner().data().child_count(id);
+            let msg = format!("Delete subtree ({count} children)? y/N");
+            self.group.buffer_mut().print(0, y, &msg, style);
+        }
     }
 }

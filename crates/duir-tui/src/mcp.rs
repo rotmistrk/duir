@@ -23,7 +23,7 @@ use crate::todo_tree::model;
 pub fn start_mcp(root_dir: &Path) -> Option<PathBuf> {
     let duir_dir = root_dir.join(".duir");
     let sock_path = duir_dir.join("mcp.sock");
-    let file_path = duir_dir.join("todo.todo.json");
+    let file_path = duir_dir.join("todo.json");
     let permissions = Arc::new(Permissions::load(root_dir));
 
     // Clean up stale socket

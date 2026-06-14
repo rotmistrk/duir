@@ -189,7 +189,7 @@ fn run_lifecycle(root_dir: &std::path::Path, engine: &scripting::ScriptEngine) {
     }
     let lc = duir_core::lifecycle::Lifecycle::new(hours, days);
     let duir_dir = root_dir.join(".duir");
-    let main_path = duir_dir.join("todo.todo.json");
+    let main_path = duir_dir.join("todo.json");
     let archive_path = duir_dir.join("archive.json");
     let trash_path = duir_dir.join("trash.json");
 

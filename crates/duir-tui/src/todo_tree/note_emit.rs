@@ -54,3 +54,50 @@ impl TodoTreeView {
         }
     }
 }
+
+impl TodoTreeView {
+    pub(super) fn handle_confirm_delete(&mut self, key: &txv_core::event::KeyEvent) -> txv_core::view::HandleResult {
+        use txv_core::event::KeyCode;
+        use txv_core::view::HandleResult;
+        self.confirm_delete = false;
+        if let KeyCode::Char('y' | 'Y') = key.code() {
+            let cursor = self.inner().cursor();
+            let data = self.inner_mut().data_mut();
+            if let Some(new_pos) = txv_widgets::tree_table_source::TreeTableSource::delete(data, cursor) {
+                self.inner_mut().set_cursor(new_pos);
+            }
+        }
+        self.group.mark_dirty();
+        HandleResult::Consumed
+    }
+}
+
+impl TodoTreeView {
+    /// Position `InputLine` (child 1) at the correct screen location.
+    pub(super) fn layout_edit_child(&mut self) {
+        use txv_core::geometry::Rect;
+        if self.group.child_count() <= 1 {
+            return;
+        }
+        let b = self.group.bounds();
+        let w = b.w();
+        let h = b.h();
+        if self.filter_active {
+            let filter_row = h.saturating_sub(1);
+            self.group
+                .set_child_bounds(1, Rect::new(1, filter_row, w.saturating_sub(1), 1));
+        } else if let Some(row) = self.editing_row {
+            let scroll_offset = self.inner().scroll_offset();
+            let draw_h = h as usize;
+            if row < scroll_offset || (row - scroll_offset) >= draw_h {
+                return;
+            }
+            let screen_y = u16::try_from(row - scroll_offset).unwrap_or(u16::MAX);
+            let id = self.inner().data().visible_id(row);
+            let depth = self.inner().data().depth(id);
+            let indent = u16::try_from(depth * 2 + 2).unwrap_or(0);
+            self.group
+                .set_child_bounds(1, Rect::new(indent, screen_y, w.saturating_sub(indent), 1));
+        }
+    }
+}
