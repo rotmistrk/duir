@@ -4315,7 +4315,6 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 [[package]]
 name = "txv-core"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#b0d21afd5d897189cef8047315e302abdbaa96c5"
 dependencies = [
  "libc",
  "log",
@@ -4325,7 +4324,6 @@ dependencies = [
 [[package]]
 name = "txv-edit"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#b0d21afd5d897189cef8047315e302abdbaa96c5"
 dependencies = [
  "regex",
  "syntect",
@@ -4336,7 +4334,6 @@ dependencies = [
 [[package]]
 name = "txv-render"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#b0d21afd5d897189cef8047315e302abdbaa96c5"
 dependencies = [
  "crossterm",
  "libc",
@@ -4349,7 +4346,6 @@ dependencies = [
 [[package]]
 name = "txv-widgets"
 version = "0.1.0"
-source = "git+https://github.com/rotmistrk/txv.git#b0d21afd5d897189cef8047315e302abdbaa96c5"
 dependencies = [
  "ignore",
  "libc",

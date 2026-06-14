@@ -20,10 +20,10 @@ workspace = true
 [dependencies]
 duir-core = { path = "../duir-core", default-features = false, features = ["crypto"] }
 rusticle = { git = "https://github.com/rotmistrk/rusticle.git" }
-txv-core = { git = "https://github.com/rotmistrk/txv.git" }
-txv-edit = { git = "https://github.com/rotmistrk/txv.git" }
-txv-render = { git = "https://github.com/rotmistrk/txv.git" }
-txv-widgets = { git = "https://github.com/rotmistrk/txv.git" }
+txv-core = { path = "../../../kairn/txv/txv-core" }
+txv-edit = { path = "../../../kairn/txv/txv-edit" }
+txv-render = { path = "../../../kairn/txv/txv-render" }
+txv-widgets = { path = "../../../kairn/txv/txv-widgets" }
 crossterm = "0.28"
 clap = { version = "4", features = ["derive"] }
 log = "0.4"

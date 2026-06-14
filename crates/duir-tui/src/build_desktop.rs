@@ -4,6 +4,7 @@ use std::path::Path;
 
 use txv_core::clipboard_ring::ClipboardHandle;
 use txv_core::prelude::*;
+use txv_edit::shared_register::new_register;
 use txv_widgets::tiled_workspace::TiledWorkspace;
 use txv_widgets::tiled_workspace::types::{PanelConfig, PanelPosition, SplitNode};
 
@@ -52,9 +53,10 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
     tree.clipboard = clipboard.clone();
     ws.insert_tab(SlotId::Left as usize, "Todo", Box::new(tree));
 
-    // Center: note editor
+    // Center: note editor (shared register for yank/paste across views)
+    let register = new_register();
     let mut note = NoteView::new();
-    note.set_clipboard(clipboard.clone());
+    note.set_shared_state(register.clone(), clipboard.clone());
     ws.insert_tab(SlotId::Center as usize, "Note", Box::new(note));
 
     // Right: shell, messages, clipboard viewer
@@ -63,7 +65,7 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
     ws.insert_tab(
         SlotId::Right as usize,
         "Clipboard",
-        Box::new(ClipboardView::new(clipboard)),
+        Box::new(ClipboardView::new(clipboard, register)),
     );
 
     ws.focus_panel(SlotId::Left as usize);

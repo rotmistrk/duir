@@ -5,7 +5,7 @@
 
 use txv_core::clipboard_ring::ClipboardHandle;
 use txv_core::prelude::*;
-use txv_edit::shared_register::new_register;
+use txv_edit::shared_register::RegisterHandle;
 use txv_edit::view::EditorView;
 
 use crate::handler::CM_NOTE_SAVE;
@@ -34,9 +34,9 @@ impl NoteView {
         }
     }
 
-    /// Wire the shared clipboard ring into the editor.
-    pub fn set_clipboard(&mut self, clipboard: ClipboardHandle) {
-        self.editor.editor_mut().set_shared_state(new_register(), clipboard);
+    /// Wire the shared clipboard ring and register into the editor.
+    pub fn set_shared_state(&mut self, register: RegisterHandle, clipboard: ClipboardHandle) {
+        self.editor.editor_mut().set_shared_state(register, clipboard);
     }
 
     pub fn load(&mut self, path: TreePath, content: &str) {

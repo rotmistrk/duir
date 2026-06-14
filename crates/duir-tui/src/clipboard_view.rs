@@ -2,21 +2,24 @@
 
 use txv_core::clipboard_ring::ClipboardHandle;
 use txv_core::prelude::*;
+use txv_edit::shared_register::RegisterHandle;
 
 /// Clipboard ring viewer.
 pub struct ClipboardView {
     state: ViewState,
     clipboard: ClipboardHandle,
+    register: RegisterHandle,
     selected: usize,
     last_len: usize,
     last_top: String,
 }
 
 impl ClipboardView {
-    pub fn new(clipboard: ClipboardHandle) -> Self {
+    pub fn new(clipboard: ClipboardHandle, register: RegisterHandle) -> Self {
         Self {
             state: ViewState::default(),
             clipboard,
+            register,
             selected: 0,
             last_len: 0,
             last_top: String::new(),
@@ -119,9 +122,15 @@ impl View for ClipboardView {
                 HandleResult::Consumed
             }
             KeyCode::Enter => {
-                // Move selected entry to top of ring (makes it the active paste target)
-                if let Ok(mut ring) = self.clipboard.lock() {
-                    ring.select(self.selected);
+                // Move selected entry to top of ring and update paste register
+                if let Ok(mut ring) = self.clipboard.lock()
+                    && let Some(text) = ring.select(self.selected)
+                {
+                    let text = text.to_owned();
+                    let linewise = text.ends_with('\n');
+                    if let Ok(mut reg) = self.register.lock() {
+                        reg.set(text, linewise);
+                    }
                 }
                 self.selected = 0;
                 self.state.mark_dirty();
