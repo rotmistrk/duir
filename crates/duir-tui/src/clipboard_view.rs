@@ -8,6 +8,8 @@ pub struct ClipboardView {
     state: ViewState,
     clipboard: ClipboardHandle,
     selected: usize,
+    last_len: usize,
+    last_top: String,
 }
 
 impl ClipboardView {
@@ -16,6 +18,8 @@ impl ClipboardView {
             state: ViewState::default(),
             clipboard,
             selected: 0,
+            last_len: 0,
+            last_top: String::new(),
         }
     }
 }
@@ -82,6 +86,18 @@ impl View for ClipboardView {
     }
 
     fn handle(&mut self, event: &Event) -> HandleResult {
+        if matches!(event, Event::Tick) {
+            if let Ok(ring) = self.clipboard.lock() {
+                let current_len = ring.len();
+                let top = ring.peek().unwrap_or("");
+                if current_len != self.last_len || top != self.last_top {
+                    self.last_len = current_len;
+                    self.last_top = top.to_owned();
+                    self.state.mark_dirty();
+                }
+            }
+            return HandleResult::Ignored;
+        }
         let Event::Key(key) = event else {
             return HandleResult::Ignored;
         };
