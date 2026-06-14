@@ -70,7 +70,7 @@
               "completed": "Open",
               "important": false,
               "folded": false,
-              "note": "# This is example text\n\n\n3: where is it?\n7: ok, may be it is here?\n10: no, here it is not\n12. Here it is",
+              "note": "# This is example text\n\nThis is a test\n\n3: where is it?\n7: ok, may be it is here?\n10: no, here it is not\n12. Here it is",
               "items": [],
               "created_at": 1781329867
             },
