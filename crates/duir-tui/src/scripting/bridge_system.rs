@@ -22,10 +22,13 @@ pub fn register(interp: &mut Interpreter, commands: Arc<Mutex<Vec<ScriptCommand>
     });
 
     // kiro command: `kiro ?--agent=name? ?--tui? ?args...?`
-    // Builds a command string that gets spawned as a PTY in the right panel.
+    // Reads kiro.cmd variable for base command, appends any extra args.
     let cmds2 = commands;
-    interp.register_fn("kiro", move |_interp, args| {
-        let mut parts = vec!["kiro-cli".to_owned(), "chat".to_owned(), "--resume".to_owned()];
+    interp.register_fn("kiro", move |interp, args| {
+        let base = interp
+            .get_var("kiro.cmd")
+            .map_or_else(|| "kiro-cli chat --resume".to_owned(), |v| v.as_str().into_owned());
+        let mut parts: Vec<String> = base.split_whitespace().map(String::from).collect();
         for arg in args.iter().skip(1) {
             parts.push(arg.as_str().into_owned());
         }

@@ -62,6 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     script_engine.load_init(&root_dir);
     scripting::palette_config::apply_palette_from_config(&script_engine);
     script_engine.fire_hooks(&scripting::HookEvent::Startup, "");
+    if let Some(cmd) = script_engine.get_var("kiro.cmd") {
+        handler::set_kiro_cmd(cmd);
+    }
     drop(script_engine);
 
     let bar = status::build_status_bar(&desktop, clipboard);
