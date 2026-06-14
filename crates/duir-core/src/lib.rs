@@ -13,6 +13,7 @@ pub mod file_storage;
 pub mod filter;
 #[cfg(feature = "yaml")]
 pub mod legacy_import;
+pub mod lifecycle;
 #[cfg(feature = "markdown")]
 pub mod markdown_export;
 #[cfg(feature = "markdown")]
