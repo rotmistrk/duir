@@ -47,10 +47,29 @@ pub fn build_workspace(root_dir: &Path, clipboard: ClipboardHandle) -> TiledWork
         }
     }
 
-    // Left: todo tree
+    // Left: todo tree + archive + trash
     let mut tree = TodoTreeView::new(root_dir);
     tree.clipboard = clipboard.clone();
     ws.insert_tab(SlotId::Left as usize, "Todo", Box::new(tree));
+
+    let archive_path = root_dir.join(".duir").join("archive.json");
+    ws.insert_tab(
+        SlotId::Left as usize,
+        "Archive",
+        Box::new(crate::archive_view::ArchiveView::new(&archive_path, "Archive")),
+    );
+
+    let trash_path = root_dir.join(".duir").join("trash.json");
+    ws.insert_tab(
+        SlotId::Left as usize,
+        "Trash",
+        Box::new(crate::archive_view::ArchiveView::new(&trash_path, "Trash")),
+    );
+
+    // Ensure Todo tab is active (index 0)
+    if let Some(panel) = ws.panel_mut(SlotId::Left as usize) {
+        panel.activate_by_number(0);
+    }
 
     // Center: note editor
     let mut note = NoteView::new();

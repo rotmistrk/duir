@@ -8,6 +8,7 @@ use txv_core::clipboard_ring::new_clipboard;
 use txv_core::program::Program;
 use txv_render::backend::CrosstermBackend;
 
+mod archive_view;
 mod build_desktop;
 mod clipboard_view;
 mod completer;
@@ -65,6 +66,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(cmd) = script_engine.get_var("kiro.cmd") {
         handler::set_kiro_cmd(cmd);
     }
+    run_lifecycle(&root_dir, &script_engine);
     drop(script_engine);
 
     let bar = status::build_status_bar(&desktop, clipboard);
@@ -170,4 +172,39 @@ fn init_logging(log_file: &std::path::Path, level: &str) -> Result<(), Box<dyn s
     ));
     env_logger::Builder::new().target(target).parse_filters(level).init();
     Ok(())
+}
+
+fn run_lifecycle(root_dir: &std::path::Path, engine: &scripting::ScriptEngine) {
+    let hours: u64 = engine
+        .get_var("lifecycle.archive_after_hours")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let days: u64 = engine
+        .get_var("lifecycle.delete_after_days")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    if hours == 0 && days == 0 {
+        return;
+    }
+    let lc = duir_core::lifecycle::Lifecycle::new(hours, days);
+    let duir_dir = root_dir.join(".duir");
+    let main_path = duir_dir.join("todo.todo.json");
+    let archive_path = duir_dir.join("archive.json");
+    let trash_path = duir_dir.join("trash.json");
+
+    let mut main = crate::todo_tree::model::load_todo_file(&main_path);
+    let mut archive = crate::todo_tree::model::load_todo_file(&archive_path);
+    let mut trash = crate::todo_tree::model::load_todo_file(&trash_path);
+
+    lc.run(&mut main, &mut archive, &mut trash);
+
+    if !crate::todo_tree::model::save_todo_file(&main_path, &main) {
+        log::error!("lifecycle: failed to save main");
+    }
+    if !crate::todo_tree::model::save_todo_file(&archive_path, &archive) {
+        log::error!("lifecycle: failed to save archive");
+    }
+    if !crate::todo_tree::model::save_todo_file(&trash_path, &trash) {
+        log::error!("lifecycle: failed to save trash");
+    }
 }

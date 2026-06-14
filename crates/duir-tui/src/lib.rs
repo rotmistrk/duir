@@ -1,5 +1,6 @@
 //! duir-tui library — exposed for integration tests.
 
+pub mod archive_view;
 pub mod build_desktop;
 pub mod clipboard_view;
 pub mod completer;

@@ -28,6 +28,7 @@ pub const CM_SHOW_HELP: CommandId = CM_APP_BASE;
 pub const CM_EXECUTE_COMMAND: CommandId = CM_APP_BASE + 1;
 pub const CM_NOTE_LOAD: CommandId = CM_APP_BASE + 10;
 pub const CM_NOTE_SAVE: CommandId = CM_APP_BASE + 11;
+pub const CM_RESTORE_ITEM: CommandId = CM_APP_BASE + 12;
 
 pub fn handle_command(ctx: &mut CommandContext) {
     match ctx.command() {
@@ -35,6 +36,7 @@ pub fn handle_command(ctx: &mut CommandContext) {
         CM_EXECUTE_COMMAND => execute_command(ctx),
         CM_NOTE_LOAD => handle_note_load(ctx),
         CM_NOTE_SAVE => handle_note_save(ctx),
+        CM_RESTORE_ITEM => handle_restore(ctx),
         _ => {}
     }
 }
@@ -120,6 +122,25 @@ fn handle_note_save(ctx: &mut CommandContext) {
         return;
     };
     save_current_note(ws);
+}
+
+fn handle_restore(ctx: &mut CommandContext) {
+    let (_, data, _, desktop) = ctx.split();
+    let Some(item) = data
+        .as_ref()
+        .and_then(|d| d.downcast_ref::<duir_core::TodoItem>())
+        .cloned()
+    else {
+        return;
+    };
+    let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
+        return;
+    };
+    if let Some(tree) = get_tree_mut(ws) {
+        tree.data_mut().file.items.push(item);
+        tree.data_mut().save();
+        tree.data_mut().rebuild_flat();
+    }
 }
 
 fn save_current_note(ws: &mut TiledWorkspace) {
