@@ -80,7 +80,15 @@ fn execute_command(ctx: &mut CommandContext) {
             ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
             ws.focus_panel(SlotId::Right as usize);
         }
-        "close" => sink.push_command(txv_widgets::tiled_workspace::commands::CM_TW_TAB_CLOSE, None),
+        "close" => {
+            let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
+                return;
+            };
+            let focused = ws.focused_panel();
+            if let Some(panel) = ws.panel_mut(focused) {
+                panel.close_active();
+            }
+        }
         "layout" => sink.push_command(txv_widgets::tiled_workspace::commands::CM_TW_LAYOUT_CYCLE, None),
         "shell" => {
             let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
