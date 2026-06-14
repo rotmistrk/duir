@@ -231,3 +231,28 @@ fn note_autoindent_on_enter() {
         "autoindent should preserve leading spaces on Enter: {content}"
     );
 }
+
+#[test]
+fn note_yank_appears_in_clipboard_ring() {
+    let dir = temp_project(default_todo());
+    let mut h = TestHarness::new(dir.path());
+    h.run_cycles(1);
+    // Unzoom
+    h.inject_key(KeyCode::F(5), KeyMod::NONE);
+    h.run_cycles(1);
+    // Focus notes panel — first item has note "hello"
+    h.inject_key(KeyCode::F(3), KeyMod::NONE);
+    h.run_cycles(2);
+    // Yank line with yy, then paste with p (duplicates the line)
+    h.inject_str("yyp");
+    h.run_cycles(1);
+    // Switch back to tree to save
+    h.inject_key(KeyCode::F(2), KeyMod::NONE);
+    h.run_cycles(2);
+    let content = std::fs::read_to_string(dir.path().join(".duir/todo.todo.json")).unwrap();
+    // "hello" yanked+pasted should produce "hello\nhello"
+    assert!(
+        content.contains("hello\\nhello"),
+        "yank+paste should duplicate the line in note: {content}"
+    );
+}
