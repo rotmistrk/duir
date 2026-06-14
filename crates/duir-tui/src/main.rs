@@ -47,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let root_dir = fs::canonicalize(&cli.path)?;
     init_logging(&cli.log_file, &cli.log_level)?;
+    handler::set_root_dir(root_dir.clone());
 
     // Initialize palette (dark theme)
     txv_core::palette::set_palette(std::sync::Arc::new(txv_core::palette::dark::DarkPalette));

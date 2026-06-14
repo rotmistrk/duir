@@ -12,14 +12,26 @@ use crate::todo_tree::TodoTreeView;
 use crate::todo_tree::model::{self, TreePath};
 
 static KIRO_CMD: OnceLock<String> = OnceLock::new();
+static ROOT_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
 
 /// Set the default kiro command (called during startup from Tcl config).
 pub fn set_kiro_cmd(cmd: String) {
     let _ = KIRO_CMD.set(cmd);
 }
 
+/// Set the project root directory.
+pub fn set_root_dir(dir: std::path::PathBuf) {
+    let _ = ROOT_DIR.set(dir);
+}
+
 fn default_kiro_cmd() -> &'static str {
     KIRO_CMD.get().map_or("kiro-cli chat --resume", String::as_str)
+}
+
+fn root_dir() -> &'static std::path::Path {
+    ROOT_DIR
+        .get()
+        .map_or_else(|| std::path::Path::new("."), |p| p.as_path())
 }
 
 const CM_APP_BASE: CommandId = txv_core::commands::CM_TXV_MAX + 1;
@@ -76,7 +88,7 @@ fn execute_command(ctx: &mut CommandContext) {
                 return;
             };
             let kiro_cmd = if arg.is_empty() { default_kiro_cmd() } else { arg };
-            let term = crate::shell::new_kiro_terminal(kiro_cmd, std::path::Path::new("."));
+            let term = crate::shell::new_kiro_terminal(kiro_cmd, root_dir());
             ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
             ws.focus_panel(SlotId::Right as usize);
         }

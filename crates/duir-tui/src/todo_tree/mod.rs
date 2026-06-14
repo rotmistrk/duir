@@ -41,7 +41,13 @@ pub struct TodoTreeView {
 impl TodoTreeView {
     #[must_use]
     pub fn new(root: &Path) -> Self {
-        let file_path = root.join(".duir").join("todo.todo.json");
+        let duir_dir = root.join(".duir");
+        let file_path = if duir_dir.join("todo.todo.json").exists() {
+            duir_dir.join("todo.todo.json")
+        } else {
+            // Fallback: legacy filename
+            duir_dir.join("todo.json")
+        };
         let data = TodoTreeData::new(&file_path);
         let mut group = GroupState::default();
         group.insert(Box::new(TreeTableView::new(data, &[5])));

@@ -3,15 +3,18 @@
 use txv_core::complete::{Completer, Completion, CompletionVisitor};
 
 const COMMANDS: &[&str] = &["close", "help", "kiro", "layout", "quit", "q", "save", "shell", "w"];
+const KIRO_ARGS: &[&str] = &["--agent=", "--resume", "--tui"];
 
-struct SimpleCompletion(&'static str);
+struct SimpleCompletion {
+    text: String,
+}
 
 impl Completion for SimpleCompletion {
-    fn text(&self) -> &'static str {
-        self.0
+    fn text(&self) -> &str {
+        &self.text
     }
-    fn display(&self) -> &'static str {
-        self.0
+    fn display(&self) -> &str {
+        &self.text
     }
     fn kind(&self) -> &'static str {
         "command"
@@ -27,9 +30,21 @@ impl Completer for CommandCompleter {
         _cursor: usize,
         visitor: &mut CompletionVisitor<'_>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        for &cmd in COMMANDS {
-            if cmd.starts_with(input) && !visitor(&SimpleCompletion(cmd))? {
-                break;
+        if let Some(rest) = input.strip_prefix("kiro ") {
+            // Complete kiro subargs
+            for &arg in KIRO_ARGS {
+                if arg.starts_with(rest) {
+                    let full = format!("kiro {arg}");
+                    if !visitor(&SimpleCompletion { text: full })? {
+                        break;
+                    }
+                }
+            }
+        } else {
+            for &cmd in COMMANDS {
+                if cmd.starts_with(input) && !visitor(&SimpleCompletion { text: cmd.to_owned() })? {
+                    break;
+                }
             }
         }
         Ok(())

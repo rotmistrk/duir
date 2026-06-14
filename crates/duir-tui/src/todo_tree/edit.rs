@@ -53,6 +53,8 @@ impl TodoTreeView {
 
         if key.code() == KeyCode::Char('n') && self.inner().data().visible_count() == 0 {
             self.inner_mut().data_mut().add_first_item();
+            self.inner_mut().set_cursor(0);
+            self.start_edit();
             return HandleResult::Consumed;
         }
 
