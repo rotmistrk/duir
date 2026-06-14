@@ -137,7 +137,15 @@ impl TreeTableSource for TodoTreeData {
     fn delete(&mut self, row: usize) -> Option<usize> {
         let id = self.visible_id(row);
         let path = self.path_at(id)?.clone();
-        model::remove_item(&mut self.file, &path)?;
+        let item = model::remove_item(&mut self.file, &path)?;
+        // Move to trash instead of permanent delete
+        if let Some(ref trash_path) = self.trash_path {
+            let mut trash = model::load_todo_file(trash_path);
+            trash.items.push(item);
+            if !model::save_todo_file(trash_path, &trash) {
+                log::error!("Failed to save trash");
+            }
+        }
         model::propagate_completion(&mut self.file, &path);
         self.save();
         self.rebuild_flat();

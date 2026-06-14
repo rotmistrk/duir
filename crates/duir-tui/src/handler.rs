@@ -87,8 +87,12 @@ fn execute_command(ctx: &mut CommandContext) {
             let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
                 return;
             };
-            let kiro_cmd = if arg.is_empty() { default_kiro_cmd() } else { arg };
-            let term = crate::shell::new_kiro_terminal(kiro_cmd, root_dir());
+            let kiro_cmd = if arg.is_empty() {
+                default_kiro_cmd().to_owned()
+            } else {
+                format!("{} {arg}", default_kiro_cmd())
+            };
+            let term = crate::shell::new_kiro_terminal(&kiro_cmd, root_dir());
             ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
             ws.focus_panel(SlotId::Right as usize);
         }

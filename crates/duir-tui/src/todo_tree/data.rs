@@ -13,6 +13,7 @@ use super::model::{self, Completion, TodoFile, TodoItem, TreePath};
 pub struct TodoTreeData {
     pub(crate) file: TodoFile,
     file_path: PathBuf,
+    pub(crate) trash_path: Option<PathBuf>,
     pub(super) nodes: Vec<FlatNode>,
     visible: Vec<usize>,
     pub(crate) filter_text: String,
@@ -27,9 +28,11 @@ impl TodoTreeData {
     pub fn new(file_path: &Path) -> Self {
         let file = model::load_todo_file(file_path);
         let mtime = Self::read_mtime(file_path);
+        let trash_path = file_path.parent().map(|p| p.join("trash.json"));
         let mut data = Self {
             file,
             file_path: file_path.to_path_buf(),
+            trash_path,
             nodes: Vec::new(),
             visible: Vec::new(),
             filter_text: String::new(),

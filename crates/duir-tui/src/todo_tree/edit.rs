@@ -96,6 +96,17 @@ impl TodoTreeView {
                 return HandleResult::Consumed;
             }
         }
+        // Enter on leaf node → focus Note panel
+        if key.code() == KeyCode::Enter || key.code() == KeyCode::Right {
+            let id = self.inner().data().visible_id(self.inner().cursor());
+            if !self.inner().data().is_expandable(id) {
+                use crate::slots::SlotId;
+                use txv_widgets::tiled_workspace::commands::CM_TW_FOCUS_PANEL;
+                self.group
+                    .put_command(CM_TW_FOCUS_PANEL, Some(Box::new(SlotId::Center as u16)));
+                return HandleResult::Consumed;
+            }
+        }
         // Forward to TreeTableView for j/k/arrows/expand/collapse/d/J/K/H/L
         let result = self.group.dispatch(event);
         self.emit_note_if_cursor_changed();
