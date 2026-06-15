@@ -1,9 +1,10 @@
 //! stdio ↔ Unix socket bridge for MCP.
 //!
 //! When duir is invoked with `--mcp-connect`, this runs instead of the TUI.
-//! Bridges stdin ↔ socket using two threads.
+//! Bridges stdin ↔ socket using two threads with `io::copy`.
 
-use std::io::{self, BufRead, BufReader, Error, ErrorKind, Write};
+use std::io::{self, Error, ErrorKind, LineWriter};
+use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::thread;
 use std::time::Duration;
@@ -25,38 +26,21 @@ pub fn run() -> io::Result<()> {
     let socket = UnixStream::connect(&socket_path).map_err(|e| Error::new(e.kind(), format!("{socket_path}: {e}")))?;
     socket.set_write_timeout(Some(Duration::from_secs(30)))?;
 
-    let mut writer = socket.try_clone()?;
-    let reader = BufReader::new(socket);
+    let mut sock_w = socket.try_clone()?;
+    let mut sock_r = socket.try_clone()?;
+    let shutdown = socket;
 
-    // Thread: socket → stdout
-    let handle = thread::spawn(move || {
-        let stdout = io::stdout();
-        let mut out = stdout.lock();
-        for line in reader.lines() {
-            match line {
-                Ok(l) => {
-                    if writeln!(out, "{l}").is_err() || out.flush().is_err() {
-                        break;
-                    }
-                }
-                Err(_) => break,
-            }
-        }
+    let t_in = thread::spawn(move || {
+        let _ = io::copy(&mut io::stdin().lock(), &mut sock_w);
     });
 
-    // Main thread: stdin → socket
-    let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        match line {
-            Ok(l) => {
-                if writeln!(writer, "{l}").is_err() || writer.flush().is_err() {
-                    break;
-                }
-            }
-            Err(_) => break,
-        }
-    }
+    let t_out = thread::spawn(move || {
+        let mut stdout = LineWriter::new(io::stdout().lock());
+        let _ = io::copy(&mut sock_r, &mut stdout);
+    });
 
-    let _ = handle.join();
+    let _ = t_in.join();
+    let _ = shutdown.shutdown(Shutdown::Both);
+    let _ = t_out.join();
     Ok(())
 }
