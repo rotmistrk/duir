@@ -54,6 +54,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     txv_core::palette::set_palette(std::sync::Arc::new(txv_core::palette::dark::DarkPalette));
 
     let mcp_socket = mcp::start_mcp(&root_dir);
+    if mcp_socket.is_some() {
+        let sock = root_dir.join(".duir").join("mcp.sock");
+        agent_patch::ensure_agent_patched(&root_dir, "duir", &sock).ok();
+    }
     let saved = session::load_session(&root_dir);
     let clipboard = new_clipboard(20);
 
