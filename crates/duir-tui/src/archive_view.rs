@@ -75,6 +75,7 @@ impl View for ArchiveView {
     fn select(&mut self) {
         self.group.set_focused(true);
         self.group.mark_dirty();
+        self.reload_if_changed();
         if let Some(child) = self.group.focused_child_mut() {
             child.select();
         }
