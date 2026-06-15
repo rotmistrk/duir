@@ -87,11 +87,7 @@ fn execute_command(ctx: &mut CommandContext) {
             let Some(ws) = desktop.as_any_mut().and_then(|a| a.downcast_mut::<TiledWorkspace>()) else {
                 return;
             };
-            let kiro_cmd = if arg.is_empty() {
-                default_kiro_cmd().to_owned()
-            } else {
-                format!("{} {arg}", default_kiro_cmd())
-            };
+            let kiro_cmd = build_kiro_cmd(arg);
             let term = crate::shell::new_kiro_terminal(&kiro_cmd, root_dir());
             ws.insert_tab(SlotId::Right as usize, "Kiro:0", term);
             ws.focus_panel(SlotId::Right as usize);
@@ -185,6 +181,41 @@ fn save_current_note(ws: &mut TiledWorkspace) {
         tree.data_mut().save();
         tree.data_mut().rebuild_flat();
     }
+}
+
+fn build_kiro_cmd(arg: &str) -> String {
+    let base = default_kiro_cmd();
+    if arg.is_empty() {
+        return base.to_owned();
+    }
+    // Check for --agent=NAME and patch the agent file
+    let mut parts: Vec<&str> = arg.split_whitespace().collect();
+    let mut patched_agent = None;
+    for part in &mut parts {
+        if let Some(name) = part.strip_prefix("--agent=") {
+            let socket = root_dir().join(".duir").join("mcp.sock");
+            match crate::agent_patch::ensure_agent_patched(root_dir(), name, &socket) {
+                Ok(patched_name) => patched_agent = Some(patched_name),
+                Err(e) => log::error!("agent patch: {e}"),
+            }
+        }
+    }
+    patched_agent.as_ref().map_or_else(
+        || format!("{base} {arg}"),
+        |name| {
+            let fixed_args: Vec<String> = parts
+                .iter()
+                .map(|p| {
+                    if p.starts_with("--agent=") {
+                        format!("--agent={name}")
+                    } else {
+                        (*p).to_owned()
+                    }
+                })
+                .collect();
+            format!("{base} {}", fixed_args.join(" "))
+        },
+    )
 }
 
 fn get_tree_mut(ws: &mut TiledWorkspace) -> Option<&mut TodoTreeView> {

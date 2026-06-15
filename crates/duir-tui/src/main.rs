@@ -8,6 +8,7 @@ use txv_core::clipboard_ring::new_clipboard;
 use txv_core::program::Program;
 use txv_render::backend::CrosstermBackend;
 
+mod agent_patch;
 mod archive_view;
 mod build_desktop;
 mod clipboard_view;
