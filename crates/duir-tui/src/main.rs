@@ -15,6 +15,7 @@ mod clipboard_view;
 mod completer;
 mod handler;
 mod mcp;
+mod mcp_bridge;
 #[allow(dead_code)]
 mod mcp_permissions;
 mod messages;
@@ -42,10 +43,16 @@ struct Cli {
     /// Log level
     #[arg(short = 'L', long = "log-level", default_value = "info")]
     log_level: String,
+    /// Run as MCP stdio bridge (connects to `DUIR_MCP_SOCKET`)
+    #[arg(long = "mcp-connect")]
+    mcp_connect: bool,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
+    if cli.mcp_connect {
+        return mcp_bridge::run().map_err(Into::into);
+    }
     let root_dir = fs::canonicalize(&cli.path)?;
     init_logging(&cli.log_file, &cli.log_level)?;
     handler::set_root_dir(root_dir.clone());
@@ -54,10 +61,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     txv_core::palette::set_palette(std::sync::Arc::new(txv_core::palette::dark::DarkPalette));
 
     let mcp_socket = mcp::start_mcp(&root_dir);
-    if mcp_socket.is_some() {
-        let sock = root_dir.join(".duir").join("mcp.sock");
-        agent_patch::ensure_agent_patched(&root_dir, "duir", &sock).ok();
-    }
     let saved = session::load_session(&root_dir);
     let clipboard = new_clipboard(20);
 
