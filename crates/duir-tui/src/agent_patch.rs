@@ -19,6 +19,7 @@ use serde_json::{Map, Value};
 /// Returns error if agent not found or file I/O fails.
 pub fn ensure_agent_patched(root: &Path, agent_name: &str, socket_path: &Path) -> Result<String, String> {
     if agent_name == "duir" {
+        write_duir_agent(root, socket_path);
         return Ok("duir".into());
     }
 
@@ -154,4 +155,26 @@ fn write_patched(root: &Path, local: &Path, val: &Value) -> Result<(), String> {
     fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
     let json = serde_json::to_string_pretty(val).map_err(|e| format!("serialize: {e}"))?;
     fs::write(local, json).map_err(|e| format!("write {}: {e}", local.display()))
+}
+
+/// Write `.kiro/agents/duir.json` — the default duir agent with MCP server.
+fn write_duir_agent(root: &Path, socket_path: &Path) {
+    let agents_dir = root.join(".kiro/agents");
+    if fs::create_dir_all(&agents_dir).is_err() {
+        return;
+    }
+    let config = serde_json::json!({
+        "name": "duir",
+        "mcpServers": {
+            "duir": duir_mcp_server_def(socket_path)
+        },
+        "includeMcpJson": true,
+        "tools": ["*"],
+        "allowedTools": ["*"],
+        "prompt": "You have access to the duir task tree via MCP tools. Use get_context to understand the tree first."
+    });
+    let json = serde_json::to_string_pretty(&config).unwrap_or_default();
+    if let Err(e) = fs::write(agents_dir.join("duir.json"), json) {
+        log::error!("agent: write duir.json: {e}");
+    }
 }
