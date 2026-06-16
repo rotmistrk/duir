@@ -241,7 +241,8 @@ const HELP_TEXT: &str = r"# duir - Keybindings
 
 ## Other
   /               Filter mode
-  Ctrl-L          Encrypt/decrypt
+  Ctrl-L          Redraw screen
+  Alt-L           Encrypt/decrypt
   M-x, :          Command line
   F1              This help
 ";

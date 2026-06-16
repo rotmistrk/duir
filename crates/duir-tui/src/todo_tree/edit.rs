@@ -1,13 +1,10 @@
 //! Event handling and edit/filter/crypto logic for `TodoTreeView`.
 
-use duir_core::crypto;
 use txv_core::prelude::*;
 use txv_widgets::input_line::InputLine;
 use txv_widgets::tree_view::TreeData;
 
 use super::TodoTreeView;
-use super::handle::CryptoMode;
-use super::model;
 
 impl TodoTreeView {
     pub(super) fn handle_event(&mut self, event: &Event) -> HandleResult {
@@ -65,6 +62,10 @@ impl TodoTreeView {
 
         if key.code() == KeyCode::Char('e') && self.inner().data().visible_count() > 0 {
             self.start_edit();
+            return HandleResult::Consumed;
+        }
+        if key.code() == KeyCode::Char('l') && key.modifiers().ctrl() {
+            self.group.mark_dirty(); // force redraw
             return HandleResult::Consumed;
         }
 
@@ -156,31 +157,6 @@ impl TodoTreeView {
         }
         self.group.mark_dirty();
         HandleResult::Consumed
-    }
-
-    fn commit_crypto(&mut self) {
-        let Some(pending) = self.crypto_pending.take() else {
-            return;
-        };
-        if let Some(item) = model::get_item_mut(&mut self.inner_mut().data_mut().file, &pending.path) {
-            let result = match pending.mode {
-                CryptoMode::Encrypt => crypto::encrypt_item(item, &pending.passphrase),
-                CryptoMode::Decrypt => {
-                    let r = crypto::decrypt_item(item, &pending.passphrase);
-                    if r.is_ok() {
-                        use std::time::{SystemTime, UNIX_EPOCH};
-                        item.unlocked_at =
-                            Some(SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()));
-                    }
-                    r
-                }
-            };
-            if let Err(e) = result {
-                log::warn!("crypto: {e}");
-            }
-        }
-        self.inner_mut().data_mut().save();
-        self.inner_mut().data_mut().rebuild_flat();
     }
 
     // --- Edit ---

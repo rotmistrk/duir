@@ -139,3 +139,31 @@ fn auto_lock_recursive(item: &mut super::model::TodoItem, now: u64) -> bool {
     }
     changed
 }
+
+impl TodoTreeView {
+    pub(super) fn commit_crypto(&mut self) {
+        use super::handle::CryptoMode;
+        let Some(pending) = self.crypto_pending.take() else {
+            return;
+        };
+        if let Some(item) = model::get_item_mut(&mut self.inner_mut().data_mut().file, &pending.path) {
+            let result = match pending.mode {
+                CryptoMode::Encrypt => duir_core::crypto::encrypt_item(item, &pending.passphrase),
+                CryptoMode::Decrypt => {
+                    let r = duir_core::crypto::decrypt_item(item, &pending.passphrase);
+                    if r.is_ok() {
+                        use std::time::{SystemTime, UNIX_EPOCH};
+                        item.unlocked_at =
+                            Some(SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()));
+                    }
+                    r
+                }
+            };
+            if let Err(e) = result {
+                log::warn!("crypto: {e}");
+            }
+        }
+        self.inner_mut().data_mut().save();
+        self.inner_mut().data_mut().rebuild_flat();
+    }
+}

@@ -47,7 +47,7 @@ pub fn handle_todo_key(key: &KeyEvent, data: &mut TodoTreeData, cursor: usize) -
         KeyCode::Char('<') => loe_down(data, id),
         KeyCode::Char('i' | '=') => toggle_progress(data, id),
         KeyCode::Char('\\') => toggle_pause(data, id),
-        KeyCode::Char('l') if key.modifiers().ctrl() => crypto_prompt(data, id),
+        KeyCode::Char('l') if key.modifiers().alt() => crypto_prompt(data, id),
         _ => None,
     }
 }
