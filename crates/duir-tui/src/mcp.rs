@@ -26,6 +26,11 @@ pub fn start_mcp(root_dir: &Path) -> Option<PathBuf> {
     let file_path = duir_dir.join("todo.json");
     let permissions = Arc::new(Permissions::load(root_dir));
 
+    if let Err(e) = fs::create_dir_all(&duir_dir) {
+        log::error!("MCP: cannot create {}: {e}", duir_dir.display());
+        return None;
+    }
+
     // Clean up stale socket
     if sock_path.exists() {
         if UnixStream::connect(&sock_path).is_ok() {
@@ -38,6 +43,7 @@ pub fn start_mcp(root_dir: &Path) -> Option<PathBuf> {
     let listener = match UnixListener::bind(&sock_path) {
         Ok(l) => l,
         Err(e) => {
+            eprintln!("duir: MCP socket bind failed: {}: {e}", sock_path.display());
             log::error!("MCP: failed to bind {}: {e}", sock_path.display());
             return None;
         }

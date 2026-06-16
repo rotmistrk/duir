@@ -178,3 +178,37 @@ fn write_duir_agent(root: &Path, socket_path: &Path) {
         log::error!("agent: write duir.json: {e}");
     }
 }
+
+/// Build the full kiro command string, patching agent if needed.
+#[must_use]
+pub fn build_kiro_cmd(base_cmd: &str, arg: &str, root: &Path, socket_path: &Path) -> String {
+    if arg.is_empty() {
+        return base_cmd.to_owned();
+    }
+    let mut parts: Vec<&str> = arg.split_whitespace().collect();
+    let mut patched_agent = None;
+    for part in &mut parts {
+        if let Some(name) = part.strip_prefix("--agent=") {
+            match ensure_agent_patched(root, name, socket_path) {
+                Ok(patched_name) => patched_agent = Some(patched_name),
+                Err(e) => log::error!("agent patch: {e}"),
+            }
+        }
+    }
+    patched_agent.as_ref().map_or_else(
+        || format!("{base_cmd} {arg}"),
+        |name| {
+            let fixed_args: Vec<String> = parts
+                .iter()
+                .map(|p| {
+                    if p.starts_with("--agent=") {
+                        format!("--agent={name}")
+                    } else {
+                        (*p).to_owned()
+                    }
+                })
+                .collect();
+            format!("{base_cmd} {}", fixed_args.join(" "))
+        },
+    )
+}

@@ -60,7 +60,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize palette (dark theme)
     txv_core::palette::set_palette(std::sync::Arc::new(txv_core::palette::dark::DarkPalette));
 
-    let mcp_socket = mcp::start_mcp(&root_dir);
     let saved = session::load_session(&root_dir);
     let clipboard = new_clipboard(20);
 
@@ -88,9 +87,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     save_note_on_exit(&mut program);
     save_session_on_exit(&mut program, &root_dir);
-    if let Some(ref path) = mcp_socket {
-        mcp::cleanup_mcp(path);
-    }
+    handler::cleanup_mcp();
     Ok(())
 }
 

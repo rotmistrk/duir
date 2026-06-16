@@ -1,5 +1,4 @@
 //! Command handler — dispatches application-specific commands only.
-
 use std::sync::OnceLock;
 
 use txv_core::prelude::*;
@@ -13,6 +12,7 @@ use crate::todo_tree::model::{self, TreePath};
 
 static KIRO_CMD: OnceLock<String> = OnceLock::new();
 static ROOT_DIR: OnceLock<std::path::PathBuf> = OnceLock::new();
+static MCP_STARTED: OnceLock<Option<std::path::PathBuf>> = OnceLock::new();
 
 /// Set the default kiro command (called during startup from Tcl config).
 pub fn set_kiro_cmd(cmd: String) {
@@ -32,6 +32,17 @@ fn root_dir() -> &'static std::path::Path {
     ROOT_DIR
         .get()
         .map_or_else(|| std::path::Path::new("."), |p| p.as_path())
+}
+
+/// Ensure MCP server is running (starts on first call).
+fn ensure_mcp() {
+    MCP_STARTED.get_or_init(|| crate::mcp::start_mcp(root_dir()));
+}
+/// Clean up MCP socket on exit.
+pub fn cleanup_mcp() {
+    if let Some(Some(p)) = MCP_STARTED.get() {
+        crate::mcp::cleanup_mcp(p);
+    }
 }
 
 const CM_APP_BASE: CommandId = txv_core::commands::CM_TXV_MAX + 1;
@@ -184,38 +195,9 @@ fn save_current_note(ws: &mut TiledWorkspace) {
 }
 
 fn build_kiro_cmd(arg: &str) -> String {
-    let base = default_kiro_cmd();
-    if arg.is_empty() {
-        return base.to_owned();
-    }
-    // Check for --agent=NAME and patch the agent file
-    let mut parts: Vec<&str> = arg.split_whitespace().collect();
-    let mut patched_agent = None;
-    for part in &mut parts {
-        if let Some(name) = part.strip_prefix("--agent=") {
-            let socket = root_dir().join(".duir").join("mcp.sock");
-            match crate::agent_patch::ensure_agent_patched(root_dir(), name, &socket) {
-                Ok(patched_name) => patched_agent = Some(patched_name),
-                Err(e) => log::error!("agent patch: {e}"),
-            }
-        }
-    }
-    patched_agent.as_ref().map_or_else(
-        || format!("{base} {arg}"),
-        |name| {
-            let fixed_args: Vec<String> = parts
-                .iter()
-                .map(|p| {
-                    if p.starts_with("--agent=") {
-                        format!("--agent={name}")
-                    } else {
-                        (*p).to_owned()
-                    }
-                })
-                .collect();
-            format!("{base} {}", fixed_args.join(" "))
-        },
-    )
+    ensure_mcp();
+    let socket = root_dir().join(".duir").join("mcp.sock");
+    crate::agent_patch::build_kiro_cmd(default_kiro_cmd(), arg, root_dir(), &socket)
 }
 
 fn get_tree_mut(ws: &mut TiledWorkspace) -> Option<&mut TodoTreeView> {
