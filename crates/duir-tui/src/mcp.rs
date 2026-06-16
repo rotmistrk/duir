@@ -71,6 +71,8 @@ fn accept_loop(listener: UnixListener, file: Arc<Mutex<TodoFile>>, save_path: Pa
 
     for stream in listener.incoming() {
         let Ok(stream) = stream else { break };
+        let _ = stream.set_read_timeout(None);
+        let _ = stream.set_write_timeout(Some(std::time::Duration::from_secs(30)));
         let file = Arc::clone(&file);
         let tx = tx.clone();
         let perms = Arc::clone(&permissions);
