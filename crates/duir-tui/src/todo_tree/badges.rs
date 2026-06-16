@@ -37,6 +37,9 @@ mod inner {
         if item.is_locked() {
             return 'L';
         }
+        if item.is_encrypted() && item.unlocked {
+            return 'U';
+        }
         match (&item.completed, &item.work_status) {
             (Completion::Done, _) => '✓',
             (Completion::Partial, _) => '◐',

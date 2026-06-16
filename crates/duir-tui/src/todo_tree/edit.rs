@@ -19,6 +19,7 @@ impl TodoTreeView {
             if self.inner_mut().data_mut().reload_if_changed() {
                 self.emit_note_now();
             }
+            self.check_auto_lock();
             return HandleResult::Ignored;
         }
 
@@ -87,9 +88,12 @@ impl TodoTreeView {
             self.emit_note_if_cursor_changed();
             return HandleResult::Consumed;
         }
-        // 'd' on items with children requires confirmation
+        // 'd' — block if encrypted anywhere in subtree, confirm if has children
         if key.code() == KeyCode::Char('d') {
             let id = self.inner().data().visible_id(self.inner().cursor());
+            if self.inner().data().has_encrypted(id) {
+                return HandleResult::Consumed; // silently block
+            }
             if self.inner().data().child_count(id) > 0 {
                 self.confirm_delete = true;
                 self.group.mark_dirty();
@@ -161,7 +165,15 @@ impl TodoTreeView {
         if let Some(item) = model::get_item_mut(&mut self.inner_mut().data_mut().file, &pending.path) {
             let result = match pending.mode {
                 CryptoMode::Encrypt => crypto::encrypt_item(item, &pending.passphrase),
-                CryptoMode::Decrypt => crypto::decrypt_item(item, &pending.passphrase),
+                CryptoMode::Decrypt => {
+                    let r = crypto::decrypt_item(item, &pending.passphrase);
+                    if r.is_ok() {
+                        use std::time::{SystemTime, UNIX_EPOCH};
+                        item.unlocked_at =
+                            Some(SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs()));
+                    }
+                    r
+                }
             };
             if let Err(e) = result {
                 log::warn!("crypto: {e}");

@@ -198,3 +198,19 @@ impl TreeData for TodoTreeData {
         }
     }
 }
+
+impl TodoTreeData {
+    /// Check if item or any of its children has encryption (cipher set).
+    #[must_use]
+    pub fn has_encrypted(&self, id: usize) -> bool {
+        let Some(item) = self.item_at(id) else { return false };
+        has_encrypted_recursive(item)
+    }
+}
+
+fn has_encrypted_recursive(item: &super::model::TodoItem) -> bool {
+    if item.cipher.is_some() {
+        return true;
+    }
+    item.items.iter().any(has_encrypted_recursive)
+}

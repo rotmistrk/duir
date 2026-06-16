@@ -101,3 +101,41 @@ impl TodoTreeView {
         }
     }
 }
+
+/// Default auto-lock timeout in seconds (5 minutes).
+const AUTO_LOCK_SECS: u64 = 300;
+
+impl TodoTreeView {
+    /// Re-lock items whose unlock timer has expired.
+    pub(super) fn check_auto_lock(&mut self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let mut changed = false;
+        for item in &mut self.inner_mut().data_mut().file.items {
+            changed |= auto_lock_recursive(item, now);
+        }
+        if changed {
+            self.inner_mut().data_mut().save();
+            self.inner_mut().data_mut().rebuild_flat();
+        }
+    }
+}
+
+fn auto_lock_recursive(item: &mut super::model::TodoItem, now: u64) -> bool {
+    let mut changed = item.unlocked
+        && item.cipher.is_some()
+        && item
+            .unlocked_at
+            .is_some_and(|at| now.saturating_sub(at) >= AUTO_LOCK_SECS);
+    if changed {
+        item.unlocked = false;
+        item.unlocked_at = None;
+        item.items.clear();
+        item.note.clear();
+    }
+    for child in &mut item.items {
+        changed |= auto_lock_recursive(child, now);
+    }
+    changed
+}

@@ -120,6 +120,9 @@ pub struct TodoItem {
     /// Runtime-only: when current in-progress session started.
     #[serde(skip)]
     pub progress_started_at: Option<u64>,
+    /// Runtime-only: when item was unlocked (epoch secs, for auto-lock).
+    #[serde(skip)]
+    pub unlocked_at: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -168,6 +171,7 @@ impl TodoItem {
             updated_at: None,
             time_spent_secs: 0,
             progress_started_at: None,
+            unlocked_at: None,
         }
     }
 
